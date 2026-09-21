@@ -167,7 +167,7 @@ class EscenaJuego extends Phaser.Scene {
       yMax: alto - 130, // arriba del servidor
     };
 
-    this.temporizadorSpawn = null;
+    this.temporizadorSiguienteVirus = null;
 
     this.actualizarHUD();
     this.iniciarNivelActual();
@@ -192,18 +192,31 @@ class EscenaJuego extends Phaser.Scene {
     this.limpiarVirusActivos();
     this.actualizarHUD();
 
-    const configuracionNivel = NIVELES[estado.indiceNivel];
+    // El juego trabaja con UN virus a la vez: aparece el primero, y cada
+    // vez que ese virus se resuelve (clic o tiempo agotado) se programa
+    // automáticamente la aparición del siguiente.
+    this.programarSiguienteVirus();
+  }
 
-    // Genera un virus nuevo cada "tiempoAparicion" milisegundos (generación procedural)
-    this.temporizadorSpawn = this.time.addEvent({
-      delay: configuracionNivel.tiempoAparicion,
-      callback: this.generarVirus,
-      callbackScope: this,
-      loop: true,
-    });
+  // Programa la aparición del próximo virus tras "tiempoAparicion" ms
+  // (generación procedural: posición y apariencia aleatorias en generarVirus()).
+  programarSiguienteVirus() {
+    if (!estado.juegoActivo) return;
+
+    const configuracionNivel = NIVELES[estado.indiceNivel];
+    this.temporizadorSiguienteVirus = this.time.delayedCall(
+      configuracionNivel.tiempoAparicion,
+      this.generarVirus,
+      [],
+      this
+    );
   }
 
   limpiarVirusActivos() {
+    if (this.temporizadorSiguienteVirus) {
+      this.temporizadorSiguienteVirus.remove();
+      this.temporizadorSiguienteVirus = null;
+    }
     estado.virusActivos.forEach((virus) => {
       if (virus.temporizador) virus.temporizador.remove();
       virus.contenedor.destroy();
@@ -309,6 +322,12 @@ class EscenaJuego extends Phaser.Scene {
 
     this.actualizarHUD();
     this.verificarEstadoJuego();
+
+    // Si el juego sigue activo (no hubo derrota ni se completó el nivel),
+    // se genera automáticamente el siguiente virus.
+    if (estado.juegoActivo) {
+      this.programarSiguienteVirus();
+    }
   }
 
   // Pequeño texto que sube y se desvanece, como retroalimentación visual
@@ -357,7 +376,6 @@ class EscenaJuego extends Phaser.Scene {
 
   finalizarPorDerrota() {
     estado.juegoActivo = false;
-    if (this.temporizadorSpawn) this.temporizadorSpawn.remove();
     this.limpiarVirusActivos();
     reproducirSonido('derrota');
 
@@ -368,7 +386,6 @@ class EscenaJuego extends Phaser.Scene {
 
   finalizarPorNivelCompletado() {
     estado.juegoActivo = false;
-    if (this.temporizadorSpawn) this.temporizadorSpawn.remove();
     this.limpiarVirusActivos();
 
     const esUltimoNivel = estado.indiceNivel === NIVELES.length - 1;

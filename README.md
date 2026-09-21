@@ -77,10 +77,11 @@ y visita `http://localhost:8000`.
 
 ## Integrantes
 
-- Nombre Apellido 1
-- Nombre Apellido 2
-- Nombre Apellido 3
+| # | Nombre |
+|---|--------|
+| 1 | Cesar del Angel |
+| 2 | Jean Barrera |
 
 ## Enlace público
 
-Pendiente de publicar en GitHub Pages.
+https://cesarau90.github.io/videojuego/

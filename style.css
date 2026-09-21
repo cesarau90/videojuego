@@ -182,6 +182,37 @@ body {
   margin-bottom: 8px;
 }
 
+.tabla-integrantes {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.tabla-integrantes th,
+.tabla-integrantes td {
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid var(--color-borde);
+}
+
+.tabla-integrantes th {
+  color: var(--color-azul);
+  background: rgba(30, 144, 255, 0.08);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tabla-integrantes td {
+  color: var(--color-texto);
+}
+
+.tabla-integrantes td:first-child {
+  color: var(--color-verde);
+  font-weight: bold;
+  width: 36px;
+}
+
 /* ============ BOTONES ============ */
 .boton {
   display: block;
