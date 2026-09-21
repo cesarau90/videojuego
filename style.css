@@ -195,18 +195,44 @@ body {
   border: none;
   cursor: pointer;
   box-shadow: 0 0 0 rgba(0, 217, 155, 0);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  filter: brightness(1);
+  translate: 0 0;
+  transition: translate 220ms ease, box-shadow 220ms ease, filter 220ms ease;
   opacity: 0;
   animation: aparecer 0.6s ease 0.32s forwards;
 }
 
-.boton-primario:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 24px rgba(0, 217, 155, 0.25);
+/* Nota: los estados de interacción usan la propiedad "translate"
+   (independiente de "transform") para no chocar con la animación
+   de entrada, que ya anima "transform" y fijaría su valor final. */
+
+.boton-flecha {
+  transition: transform 220ms ease;
 }
 
+/* Los efectos hover solo se activan en dispositivos con cursor real */
+@media (hover: hover) {
+  .boton-primario:hover {
+    translate: 0 -2px;
+    filter: brightness(1.08);
+    box-shadow: 0 10px 24px rgba(0, 217, 155, 0.32);
+  }
+
+  .boton-primario:hover .boton-flecha {
+    transform: translateX(5px);
+  }
+}
+
+/* Al presionar baja 1px respecto a su posición elevada en hover
+   (o dá una ligera respuesta táctil si no hubo hover previo, como en celular) */
 .boton-primario:active {
-  transform: translateY(0);
+  translate: 0 -1px;
+  filter: brightness(1.05);
+}
+
+.boton-primario:focus-visible {
+  outline: 2px solid var(--verde);
+  outline-offset: 3px;
 }
 
 .hero-indicadores {
@@ -355,6 +381,9 @@ body {
   gap: 10px;
   opacity: 0;
   animation: tarjeta-aparecer 0.55s ease forwards;
+  translate: 0 0;
+  transition: translate 250ms ease, border-color 250ms ease,
+    box-shadow 250ms ease, background-color 250ms ease;
 }
 
 .tarjeta:nth-child(1) { animation-delay: 0.15s; }
@@ -365,12 +394,38 @@ body {
   width: 30px;
   height: 30px;
   color: var(--azul);
+  transition: transform 250ms ease;
 }
 
 .tarjeta-titulo {
   font-family: var(--fuente-display);
   font-weight: 600;
   font-size: 1.02rem;
+  transition: color 250ms ease;
+}
+
+/* Los efectos hover solo se activan en dispositivos con cursor real */
+@media (hover: hover) {
+  .tarjeta:hover {
+    translate: 0 -5px;
+    border-color: var(--verde);
+    box-shadow: 0 14px 28px rgba(0, 217, 155, 0.12);
+    background-color: #10241f;
+  }
+
+  .tarjeta:hover .tarjeta-icono {
+    transform: scale(1.08);
+  }
+
+  .tarjeta:hover .tarjeta-titulo {
+    color: var(--verde);
+  }
+}
+
+/* Respuesta visual breve al tocar en pantallas táctiles */
+.tarjeta:active {
+  translate: 0 -2px;
+  border-color: var(--verde);
 }
 
 .tarjeta-texto {
