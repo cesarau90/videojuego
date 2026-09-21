@@ -1,0 +1,261 @@
+/* ==================================================
+   ELIMINA EL MALWARE - HOJA DE ESTILOS
+   Diseño oscuro estilo ciberseguridad (verde, azul, rojo)
+   ================================================== */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --color-fondo: #0a0e14;
+  --color-panel: #0f1720;
+  --color-verde: #00ff9c;
+  --color-verde-oscuro: #00b36b;
+  --color-azul: #1e90ff;
+  --color-rojo: #ff3b3b;
+  --color-texto: #d7f5e9;
+  --color-borde: #1c3a34;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: 'Consolas', 'Courier New', monospace;
+  background: radial-gradient(circle at 50% 0%, #10221c 0%, var(--color-fondo) 70%);
+  color: var(--color-texto);
+  min-height: 100vh;
+}
+
+/* ============ SISTEMA DE PANTALLAS ============ */
+/* Cada pantalla ocupa toda la ventana. Solo la que tiene
+   la clase "activa" se muestra; el resto está oculto. */
+.pantalla {
+  display: none;
+  width: 100%;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.pantalla.activa {
+  display: flex;
+}
+
+/* ============ PANEL / TARJETA ============ */
+.panel {
+  width: 100%;
+  max-width: 720px;
+  background: linear-gradient(180deg, #0d1a16 0%, #0b1512 100%);
+  border: 1px solid var(--color-borde);
+  border-radius: 14px;
+  padding: 30px;
+  box-shadow: 0 0 25px rgba(0, 255, 156, 0.15), inset 0 0 40px rgba(0, 0, 0, 0.4);
+}
+
+.panel-centrado {
+  text-align: center;
+}
+
+/* ============ TÍTULOS Y TEXTOS ============ */
+/* ============ LOGOTIPO (creado solo con CSS, sin imágenes) ============ */
+.logo {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.logo-escudo {
+  width: 64px;
+  height: 72px;
+  background: linear-gradient(160deg, var(--color-verde) 0%, var(--color-azul) 100%);
+  clip-path: polygon(50% 0%, 100% 20%, 100% 60%, 50% 100%, 0% 60%, 0% 20%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 18px rgba(0, 255, 156, 0.55);
+  position: relative;
+}
+
+.logo-escudo::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  background: var(--color-panel);
+  clip-path: polygon(50% 0%, 100% 20%, 100% 60%, 50% 100%, 0% 60%, 0% 20%);
+}
+
+.logo-letras {
+  position: relative;
+  z-index: 1;
+  font-weight: bold;
+  font-size: 1.3rem;
+  color: var(--color-verde);
+  text-shadow: 0 0 8px rgba(0, 255, 156, 0.8);
+}
+
+.titulo {
+  font-size: 2.2rem;
+  color: var(--color-verde);
+  text-shadow: 0 0 12px rgba(0, 255, 156, 0.6);
+  text-align: center;
+  letter-spacing: 1px;
+}
+
+.subtitulo {
+  text-align: center;
+  color: var(--color-azul);
+  margin-top: 6px;
+  margin-bottom: 20px;
+  font-size: 1rem;
+}
+
+.titulo-exito {
+  font-size: 2rem;
+  color: var(--color-verde);
+  text-shadow: 0 0 15px rgba(0, 255, 156, 0.7);
+  margin-bottom: 16px;
+}
+
+.titulo-derrota {
+  font-size: 2rem;
+  color: var(--color-rojo);
+  text-shadow: 0 0 15px rgba(255, 59, 59, 0.7);
+  margin-bottom: 16px;
+}
+
+.texto-grande {
+  font-size: 1.2rem;
+  margin-bottom: 20px;
+  color: var(--color-texto);
+}
+
+.puntaje-final {
+  font-size: 1.6rem;
+  color: var(--color-azul);
+  margin-bottom: 26px;
+  font-weight: bold;
+}
+
+.bloque-texto {
+  margin-bottom: 18px;
+  padding: 14px;
+  background: rgba(0, 255, 156, 0.04);
+  border-left: 3px solid var(--color-verde-oscuro);
+  border-radius: 6px;
+}
+
+.bloque-texto h2 {
+  color: var(--color-azul);
+  font-size: 1.05rem;
+  margin-bottom: 8px;
+}
+
+.bloque-texto p,
+.bloque-texto li {
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--color-texto);
+}
+
+.bloque-texto ul {
+  padding-left: 20px;
+}
+
+.bloque-integrantes {
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--color-borde);
+  font-size: 0.9rem;
+}
+
+.bloque-integrantes h2 {
+  color: var(--color-verde);
+  font-size: 1rem;
+  margin-bottom: 8px;
+}
+
+/* ============ BOTONES ============ */
+.boton {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 18px auto 0 auto;
+  padding: 14px 20px;
+  font-family: inherit;
+  font-size: 1.1rem;
+  font-weight: bold;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  letter-spacing: 0.5px;
+}
+
+.boton:hover {
+  transform: translateY(-2px) scale(1.02);
+}
+
+.boton:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.boton-principal {
+  background: linear-gradient(180deg, var(--color-verde) 0%, var(--color-verde-oscuro) 100%);
+  color: #012a1c;
+  box-shadow: 0 0 18px rgba(0, 255, 156, 0.45);
+}
+
+.boton-peligro {
+  background: linear-gradient(180deg, #ff6b6b 0%, var(--color-rojo) 100%);
+  color: #2a0000;
+  box-shadow: 0 0 18px rgba(255, 59, 59, 0.45);
+}
+
+/* ============ PANTALLA DE JUEGO ============ */
+#pantalla-juego {
+  padding: 0;
+  flex-direction: column;
+}
+
+#contenedor-phaser {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  line-height: 0;
+}
+
+#contenedor-phaser canvas {
+  width: 100% !important;
+  height: auto !important;
+  display: block;
+  border: 2px solid var(--color-verde-oscuro);
+  box-shadow: 0 0 30px rgba(0, 255, 156, 0.2);
+}
+
+/* ============ RESPONSIVE: TELÉFONOS ============ */
+@media (max-width: 600px) {
+  .panel {
+    padding: 18px;
+  }
+
+  .titulo {
+    font-size: 1.6rem;
+  }
+
+  .texto-grande {
+    font-size: 1rem;
+  }
+
+  .boton {
+    font-size: 1rem;
+    padding: 12px 16px;
+  }
+}

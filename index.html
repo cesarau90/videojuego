@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Elimina el Malware</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ============================================= -->
+  <!-- PANTALLA 1: PANTALLA INICIAL                   -->
+  <!-- ============================================= -->
+  <div id="pantalla-inicio" class="pantalla activa">
+    <div class="panel">
+      <div class="logo" aria-hidden="true">
+        <div class="logo-escudo">
+          <span class="logo-letras">EM</span>
+        </div>
+      </div>
+      <h1 class="titulo">Elimina el Malware</h1>
+      <p class="subtitulo">Un desafío de ciberseguridad</p>
+
+      <div class="bloque-texto">
+        <h2>📖 Historia</h2>
+        <p>
+          Eres un/a analista de ciberseguridad recién contratado/a en una empresa de
+          Ingeniería en Sistemas y Negocios Digitales. El servidor central de la compañía
+          ha sido infectado por una oleada de virus informáticos que aparecen sin previo
+          aviso. Tu misión es detectarlos y eliminarlos con un clic antes de que se
+          propaguen y comprometan la seguridad del sistema.
+        </p>
+      </div>
+
+      <div class="bloque-texto">
+        <h2>🎮 Instrucciones</h2>
+        <ul>
+          <li>Los virus (🦠) aparecerán en posiciones aleatorias sobre el servidor.</li>
+          <li>Haz clic o toca cada virus antes de que desaparezca.</li>
+          <li>Cada virus eliminado suma <strong>10 puntos</strong>.</li>
+          <li>Si un virus no es eliminado a tiempo, pierdes <strong>1 vida</strong>.</li>
+          <li>Tienes <strong>3 vidas</strong>. Si las pierdes todas, el juego termina.</li>
+          <li>Supera los 3 niveles para proteger el servidor por completo.</li>
+        </ul>
+      </div>
+
+      <button id="btn-jugar" class="boton boton-principal">▶ Jugar</button>
+
+      <div class="bloque-integrantes">
+        <h2>👥 Integrantes</h2>
+        <p>
+          - Nombre Apellido 1<br />
+          - Nombre Apellido 2<br />
+          - Nombre Apellido 3
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- PANTALLA 2: PANTALLA DEL JUEGO                 -->
+  <!-- ============================================= -->
+  <div id="pantalla-juego" class="pantalla">
+    <div id="contenedor-phaser"></div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- PANTALLA 3: NIVEL COMPLETADO                   -->
+  <!-- ============================================= -->
+  <div id="pantalla-nivel-completado" class="pantalla">
+    <div class="panel panel-centrado">
+      <h1 class="titulo-exito">✅ ¡Nivel Superado!</h1>
+      <p id="texto-nivel-completado" class="texto-grande"></p>
+      <button id="btn-siguiente-nivel" class="boton boton-principal">Continuar ▶</button>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- PANTALLA 4: DERROTA                            -->
+  <!-- ============================================= -->
+  <div id="pantalla-derrota" class="pantalla">
+    <div class="panel panel-centrado">
+      <h1 class="titulo-derrota">☠️ Servidor Comprometido</h1>
+      <p class="texto-grande">El malware ha vencido tus defensas.</p>
+      <p id="texto-puntaje-derrota" class="puntaje-final"></p>
+      <button id="btn-reintentar" class="boton boton-peligro">🔄 Volver a Intentar</button>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- PANTALLA 5: VICTORIA FINAL                     -->
+  <!-- ============================================= -->
+  <div id="pantalla-victoria" class="pantalla">
+    <div class="panel panel-centrado">
+      <h1 class="titulo-exito">🏆 ¡Servidor Protegido!</h1>
+      <p class="texto-grande">Eliminaste todos los virus de los 3 niveles.</p>
+      <p id="texto-puntaje-victoria" class="puntaje-final"></p>
+      <button id="btn-jugar-de-nuevo" class="boton boton-principal">🔄 Volver a Intentar</button>
+    </div>
+  </div>
+
+  <!-- Librería Phaser 3 desde CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js"></script>
+  <!-- Lógica del juego -->
+  <script src="game.js"></script>
+</body>
+</html>
