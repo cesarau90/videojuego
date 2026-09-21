@@ -4,6 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Elimina el Malware</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap"
+    rel="stylesheet"
+  />
+
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -12,61 +20,121 @@
   <!-- PANTALLA 1: PANTALLA INICIAL                   -->
   <!-- ============================================= -->
   <div id="pantalla-inicio" class="pantalla activa">
-    <div class="panel">
-      <div class="logo" aria-hidden="true">
-        <div class="logo-escudo">
-          <span class="logo-letras">EM</span>
+    <div class="marco">
+
+      <!-- Encabezado -->
+      <header class="encabezado">
+        <div class="marca">
+          <span class="logo-escudo" aria-hidden="true">
+            <svg viewBox="0 0 24 28" fill="none">
+              <path d="M12 1.6 L21.4 5.3 V12.9 C21.4 19.1 16.9 23.8 12 26.4 C7.1 23.8 2.6 19.1 2.6 12.9 V5.3 Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+              <path d="M8 13.6 L10.8 16.6 L16.2 10.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+          <span class="marca-nombre">Elimina el Malware</span>
         </div>
-      </div>
-      <h1 class="titulo">Elimina el Malware</h1>
-      <p class="subtitulo">Un desafío de ciberseguridad</p>
+        <span class="etiqueta-proyecto">Proyecto ISND</span>
+      </header>
 
-      <div class="bloque-texto">
-        <h2>📖 Historia</h2>
-        <p>
-          Eres un/a analista de ciberseguridad recién contratado/a en una empresa de
-          Ingeniería en Sistemas y Negocios Digitales. El servidor central de la compañía
-          ha sido infectado por una oleada de virus informáticos que aparecen sin previo
-          aviso. Tu misión es detectarlos y eliminarlos con un clic antes de que se
-          propaguen y comprometan la seguridad del sistema.
-        </p>
-      </div>
+      <!-- Sección principal en dos columnas -->
+      <section class="hero">
+        <div class="hero-texto">
+          <p class="hero-eyebrow">
+            <span class="punto-alerta" aria-hidden="true"></span>
+            Incidente 001 · Nivel crítico
+          </p>
 
-      <div class="bloque-texto">
-        <h2>🎮 Instrucciones</h2>
-        <ul>
-          <li>Los virus (🦠) aparecerán en posiciones aleatorias sobre el servidor.</li>
-          <li>Haz clic o toca cada virus antes de que desaparezca.</li>
-          <li>Cada virus eliminado suma <strong>10 puntos</strong>.</li>
-          <li>Si un virus no es eliminado a tiempo, pierdes <strong>1 vida</strong>.</li>
-          <li>Tienes <strong>3 vidas</strong>. Si las pierdes todas, el juego termina.</li>
-          <li>Supera los 3 niveles para proteger el servidor por completo.</li>
-        </ul>
-      </div>
+          <h1 class="hero-titulo">El servidor está bajo ataque</h1>
 
-      <button id="btn-jugar" class="boton boton-principal">▶ Jugar</button>
+          <p class="hero-descripcion">
+            Forma parte del equipo de respuesta. Detecta y elimina las amenazas
+            antes de que comprometan la red.
+          </p>
 
-      <div class="bloque-integrantes">
-        <h2>👥 Integrantes</h2>
-        <table class="tabla-integrantes">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Nombre</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>1</td>
-              <td>Cesar del Angel</td>
-            </tr>
-            <tr>
-              <td>2</td>
-              <td>Jean Barrera</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+          <button id="btn-jugar" class="boton-primario">
+            Iniciar defensa
+            <svg viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden="true">
+              <path d="M4 2.5 L12 8 L4 13.5 Z" fill="currentColor" />
+            </svg>
+          </button>
+
+          <div class="hero-indicadores">
+            <div class="indicador">
+              <span class="indicador-valor">3</span>
+              <span class="indicador-etiqueta">Niveles</span>
+            </div>
+            <div class="indicador">
+              <span class="indicador-valor">3</span>
+              <span class="indicador-etiqueta">Vidas</span>
+            </div>
+            <div class="indicador">
+              <span class="indicador-valor">10</span>
+              <span class="indicador-etiqueta">Puntos / amenaza</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hero-ilustracion">
+          <div class="servidor-panel">
+            <div class="servidor-linea-escaneo" aria-hidden="true"></div>
+
+            <div class="servidor-bahias" aria-hidden="true">
+              <div class="bahia">
+                <span class="bahia-led verde"></span>
+                <span class="bahia-texto">NODO-A1 · ESTABLE</span>
+              </div>
+              <div class="bahia">
+                <span class="bahia-led azul"></span>
+                <span class="bahia-texto">NODO-A2 · ANALIZANDO</span>
+              </div>
+              <div class="bahia">
+                <span class="bahia-led apagado"></span>
+                <span class="bahia-texto">NODO-A3 · EN ESPERA</span>
+              </div>
+            </div>
+
+            <div class="servidor-estado">
+              <span class="estado-punto" aria-hidden="true"></span>
+              Red: monitoreando
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Instrucciones -->
+      <section class="tarjetas">
+        <article class="tarjeta">
+          <svg class="tarjeta-icono" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" />
+            <circle cx="12" cy="12" r="2.4" stroke="currentColor" stroke-width="1.5" />
+            <path d="M12 1.5V4M12 20V22.5M1.5 12H4M20 12H22.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+          <h2 class="tarjeta-titulo">Detecta</h2>
+          <p class="tarjeta-texto">Localiza las amenazas que aparecen en la red.</p>
+        </article>
+
+        <article class="tarjeta">
+          <svg class="tarjeta-icono" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M5 3 L19 12 L12.5 13.2 L15.5 19.5 L13 20.5 L10 14.3 L6.5 17.5 Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+          </svg>
+          <h2 class="tarjeta-titulo">Elimina</h2>
+          <p class="tarjeta-texto">Haz clic antes de que termine el tiempo.</p>
+        </article>
+
+        <article class="tarjeta">
+          <svg class="tarjeta-icono" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 2 L20.5 5.2 V11.8 C20.5 17 16.8 20.9 12 22.8 C7.2 20.9 3.5 17 3.5 11.8 V5.2 Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+          </svg>
+          <h2 class="tarjeta-titulo">Sobrevive</h2>
+          <p class="tarjeta-texto">Protege tus vidas y supera los tres niveles.</p>
+        </article>
+      </section>
+
+      <!-- Integrantes -->
+      <footer class="footer-integrantes">
+        <span class="footer-etiqueta">Equipo</span>
+        <span class="footer-nombres">Cesar del Angel <span class="sep">·</span> Jean Barrera</span>
+      </footer>
     </div>
   </div>
 
@@ -81,10 +149,19 @@
   <!-- PANTALLA 3: NIVEL COMPLETADO                   -->
   <!-- ============================================= -->
   <div id="pantalla-nivel-completado" class="pantalla">
-    <div class="panel panel-centrado">
-      <h1 class="titulo-exito">✅ ¡Nivel Superado!</h1>
-      <p id="texto-nivel-completado" class="texto-grande"></p>
-      <button id="btn-siguiente-nivel" class="boton boton-principal">Continuar ▶</button>
+    <div class="panel">
+      <svg class="panel-icono icono-verde" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5" />
+        <path d="M7.5 12.5 L10.3 15.3 L16.5 8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <h1 class="panel-titulo">Nivel superado</h1>
+      <p id="texto-nivel-completado" class="panel-texto"></p>
+      <button id="btn-siguiente-nivel" class="boton-primario">
+        Continuar
+        <svg viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden="true">
+          <path d="M4 2.5 L12 8 L4 13.5 Z" fill="currentColor" />
+        </svg>
+      </button>
     </div>
   </div>
 
@@ -92,11 +169,15 @@
   <!-- PANTALLA 4: DERROTA                            -->
   <!-- ============================================= -->
   <div id="pantalla-derrota" class="pantalla">
-    <div class="panel panel-centrado">
-      <h1 class="titulo-derrota">☠️ Servidor Comprometido</h1>
-      <p class="texto-grande">El malware ha vencido tus defensas.</p>
-      <p id="texto-puntaje-derrota" class="puntaje-final"></p>
-      <button id="btn-reintentar" class="boton boton-peligro">🔄 Volver a Intentar</button>
+    <div class="panel">
+      <svg class="panel-icono icono-peligro" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5" />
+        <path d="M8.5 8.5 L15.5 15.5 M15.5 8.5 L8.5 15.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+      </svg>
+      <h1 class="panel-titulo">Servidor comprometido</h1>
+      <p class="panel-texto">El malware ha vencido tus defensas.</p>
+      <p id="texto-puntaje-derrota" class="panel-puntaje"></p>
+      <button id="btn-reintentar" class="boton-primario">Volver a intentar</button>
     </div>
   </div>
 
@@ -104,11 +185,15 @@
   <!-- PANTALLA 5: VICTORIA FINAL                     -->
   <!-- ============================================= -->
   <div id="pantalla-victoria" class="pantalla">
-    <div class="panel panel-centrado">
-      <h1 class="titulo-exito">🏆 ¡Servidor Protegido!</h1>
-      <p class="texto-grande">Eliminaste todos los virus de los 3 niveles.</p>
-      <p id="texto-puntaje-victoria" class="puntaje-final"></p>
-      <button id="btn-jugar-de-nuevo" class="boton boton-principal">🔄 Volver a Intentar</button>
+    <div class="panel">
+      <svg class="panel-icono icono-verde" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M12 2 L20.5 5.2 V11.8 C20.5 17 16.8 20.9 12 22.8 C7.2 20.9 3.5 17 3.5 11.8 V5.2 Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+        <path d="M8.5 12.3 L11 14.8 L15.8 9.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <h1 class="panel-titulo">Servidor protegido</h1>
+      <p class="panel-texto">Eliminaste todas las amenazas de los 3 niveles.</p>
+      <p id="texto-puntaje-victoria" class="panel-puntaje"></p>
+      <button id="btn-jugar-de-nuevo" class="boton-primario">Volver a intentar</button>
     </div>
   </div>
 

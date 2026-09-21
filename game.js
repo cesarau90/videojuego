@@ -23,8 +23,21 @@ const NIVELES = [
 const VIDAS_INICIALES = 3;
 const PUNTOS_POR_VIRUS = 10;
 
-// Emojis usados para representar virus de forma sencilla (sin imágenes externas)
-const EMOJIS_VIRUS = ['🦠', '🐛', '☣️', '💀'];
+// Paleta visual (debe coincidir con las variables de style.css)
+const PALETA = {
+  fondo: 0x07110f,
+  superficie: 0x0d1b18,
+  borde: 0x19362f,
+  texto: '#e7f5ef',
+  textoSecundario: '#91a8a0',
+  verde: 0x00d99b,
+  azul: 0x38bdf8,
+  peligro: 0xff5c70,
+};
+
+// Colores posibles para el aro de cada virus (el verde se reserva para
+// el logotipo, el botón principal y la retroalimentación de éxito)
+const COLORES_VIRUS = [PALETA.azul, PALETA.peligro];
 
 /* ------------------------------------------------------------------
    2. ESTADO GLOBAL DEL JUEGO
@@ -139,24 +152,25 @@ class EscenaJuego extends Phaser.Scene {
     const alto = this.scale.height;
 
     // Fondo tipo "servidor" con líneas de circuito decorativas
-    this.add.rectangle(ancho / 2, alto / 2, ancho, alto, 0x0a1410);
+    this.add.rectangle(ancho / 2, alto / 2, ancho, alto, PALETA.fondo);
     this.dibujarFondoCircuito(ancho, alto);
 
     // Representación del servidor en la parte inferior de la pantalla
-    this.add.rectangle(ancho / 2, alto - 40, ancho - 40, 60, 0x0f2a22)
-      .setStrokeStyle(2, 0x00ff9c, 0.6);
-    this.add.text(ancho / 2, alto - 40, '🖥️ SERVIDOR CENTRAL', {
-      fontFamily: 'Consolas, monospace',
-      fontSize: '18px',
-      color: '#00ff9c',
+    this.add.rectangle(ancho / 2, alto - 40, ancho - 40, 60, PALETA.superficie)
+      .setStrokeStyle(1, PALETA.borde, 1);
+    this.add.text(ancho / 2, alto - 40, 'SERVIDOR CENTRAL', {
+      fontFamily: "'JetBrains Mono', Consolas, monospace",
+      fontSize: '15px',
+      color: PALETA.textoSecundario,
+      letterSpacing: 1,
     }).setOrigin(0.5);
 
     // Texto del HUD (parte superior): puntuación, vidas, nivel, progreso
     this.textoHUD = this.add.text(16, 12, '', {
-      fontFamily: 'Consolas, monospace',
-      fontSize: '16px',
-      color: '#d7f5e9',
-      lineSpacing: 6,
+      fontFamily: "'JetBrains Mono', Consolas, monospace",
+      fontSize: '15px',
+      color: PALETA.texto,
+      lineSpacing: 8,
     });
 
     // Guardamos las medidas útiles para calcular posiciones aleatorias de virus
@@ -176,7 +190,7 @@ class EscenaJuego extends Phaser.Scene {
   // Dibuja unas líneas simples de "circuito" para ambientar el fondo
   dibujarFondoCircuito(ancho, alto) {
     const graficos = this.add.graphics();
-    graficos.lineStyle(1, 0x1e90ff, 0.15);
+    graficos.lineStyle(1, PALETA.borde, 0.5);
     for (let x = 0; x < ancho; x += 60) {
       graficos.lineBetween(x, 0, x, alto);
     }
@@ -236,19 +250,26 @@ class EscenaJuego extends Phaser.Scene {
     const x = Phaser.Math.Between(area.xMin, area.xMax);
     const y = Phaser.Math.Between(area.yMin, area.yMax);
 
-    // Emoji y color de aro aleatorios, para variar el aspecto de cada virus
-    const emoji = Phaser.Utils.Array.GetRandom(EMOJIS_VIRUS);
-    const colorAro = Phaser.Utils.Array.GetRandom([0x00ff9c, 0x1e90ff, 0xff3b3b]);
+    // Color de aro aleatorio, para variar el aspecto de cada virus
+    const colorAro = Phaser.Utils.Array.GetRandom(COLORES_VIRUS);
 
-    // Un contenedor agrupa el círculo de fondo + el emoji, para moverlos/destruirlos juntos
+    // Un contenedor agrupa el círculo de fondo + el ícono, para moverlos/destruirlos juntos
     const contenedor = this.add.container(x, y);
 
-    const circuloFondo = this.add.circle(0, 0, 30, 0x102018, 0.9);
-    circuloFondo.setStrokeStyle(3, colorAro, 1);
+    const circuloFondo = this.add.circle(0, 0, 30, PALETA.superficie, 0.95);
+    circuloFondo.setStrokeStyle(2, colorAro, 1);
 
-    const textoEmoji = this.add.text(0, 0, emoji, { fontSize: '34px' }).setOrigin(0.5);
+    // Ícono de amenaza dibujado como vector simple (una "X"), sin emojis ni imágenes
+    const iconoAmenaza = this.add.graphics();
+    iconoAmenaza.lineStyle(2.5, colorAro, 1);
+    iconoAmenaza.beginPath();
+    iconoAmenaza.moveTo(-8, -8);
+    iconoAmenaza.lineTo(8, 8);
+    iconoAmenaza.moveTo(8, -8);
+    iconoAmenaza.lineTo(-8, 8);
+    iconoAmenaza.strokePath();
 
-    contenedor.add([circuloFondo, textoEmoji]);
+    contenedor.add([circuloFondo, iconoAmenaza]);
     contenedor.setSize(60, 60);
     contenedor.setScale(0);
 
@@ -303,7 +324,7 @@ class EscenaJuego extends Phaser.Scene {
         onComplete: () => virus.contenedor.destroy(),
       });
 
-      this.mostrarTextoFlotante(virus.contenedor.x, virus.contenedor.y, '+10', '#00ff9c');
+      this.mostrarTextoFlotante(virus.contenedor.x, virus.contenedor.y, '+10', PALETA.verde);
     } else {
       // El virus no fue eliminado a tiempo: el jugador pierde una vida
       estado.vidas -= 1;
@@ -317,7 +338,7 @@ class EscenaJuego extends Phaser.Scene {
         onComplete: () => virus.contenedor.destroy(),
       });
 
-      this.mostrarTextoFlotante(virus.contenedor.x, virus.contenedor.y, '-1 Vida', '#ff3b3b');
+      this.mostrarTextoFlotante(virus.contenedor.x, virus.contenedor.y, '-1 VIDA', PALETA.peligro);
     }
 
     this.actualizarHUD();
@@ -333,8 +354,8 @@ class EscenaJuego extends Phaser.Scene {
   // Pequeño texto que sube y se desvanece, como retroalimentación visual
   mostrarTextoFlotante(x, y, mensaje, color) {
     const texto = this.add.text(x, y, mensaje, {
-      fontFamily: 'Consolas, monospace',
-      fontSize: '18px',
+      fontFamily: "'JetBrains Mono', Consolas, monospace",
+      fontSize: '16px',
       color: color,
       fontStyle: 'bold',
     }).setOrigin(0.5);
@@ -352,11 +373,14 @@ class EscenaJuego extends Phaser.Scene {
 
   actualizarHUD() {
     const configuracionNivel = NIVELES[estado.indiceNivel];
+    const vidasActuales = Math.max(estado.vidas, 0);
+    const vidasPerdidas = VIDAS_INICIALES - vidasActuales;
+
     this.textoHUD.setText(
-      `🏆 Puntuación: ${estado.puntuacion}\n` +
-      `❤️ Vidas: ${'❤️'.repeat(Math.max(estado.vidas, 0))}${'🖤'.repeat(VIDAS_INICIALES - Math.max(estado.vidas, 0))}\n` +
-      `📶 Nivel: ${configuracionNivel.numero} / ${NIVELES.length}\n` +
-      `🦠 Virus eliminados: ${estado.virusEliminados} / ${configuracionNivel.virusRequeridos}`
+      `PUNTOS    ${estado.puntuacion}\n` +
+      `VIDAS     ${'●'.repeat(vidasActuales)}${'○'.repeat(vidasPerdidas)}\n` +
+      `NIVEL     ${configuracionNivel.numero} / ${NIVELES.length}\n` +
+      `AMENAZAS  ${estado.virusEliminados} / ${configuracionNivel.virusRequeridos}`
     );
   }
 
@@ -413,7 +437,7 @@ const configuracionPhaser = {
   parent: 'contenedor-phaser',
   width: 800,
   height: 600,
-  backgroundColor: '#0a1410',
+  backgroundColor: '#07110f',
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_HORIZONTALLY,
