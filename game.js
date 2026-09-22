@@ -549,6 +549,10 @@ class EscenaJuego extends Phaser.Scene {
     // devicePixelRatio (máx. 2): el canvas físico tiene más píxeles que
     // el mundo lógico, así que este contenedor "amplía" el dibujo para
     // llenarlo, dando nitidez sin cambiar ninguna coordenada del juego.
+    // (Phaser 3.70, la versión cargada por CDN, no soporta una propiedad
+    // "resolution" nativa en su configuración -verificado directamente en
+    // su código fuente-, así que este es el método correcto y estándar
+    // para lograr un canvas nítido en pantallas de alta densidad.)
     this.factorResolucion = Math.min(window.devicePixelRatio || 1, 2);
     this.mundo = this.add.container(0, 0);
     this.mundo.setScale(this.factorResolucion);
@@ -800,6 +804,9 @@ class EscenaJuego extends Phaser.Scene {
     const factor = Math.min(window.devicePixelRatio || 1, 2);
     dimensionesLogicasActuales = nuevasDimensiones;
     if (this.sys.game) {
+      // El tamaño físico del canvas es el lógico multiplicado por el
+      // mismo factor que usa "mundo" (this.mundo.setScale), para que las
+      // coordenadas sigan siendo nítidas tras el reajuste.
       this.sys.game.scale.resize(
         Math.round(nuevasDimensiones.ancho * factor),
         Math.round(nuevasDimensiones.alto * factor)
@@ -1215,6 +1222,7 @@ class EscenaJuego extends Phaser.Scene {
     const overlay = this.add.rectangle(
       this.anchoLogico / 2, this.altoLogico / 2, this.anchoLogico, this.altoLogico, 0x000000, 0.72
     ).setAlpha(0);
+    this.mundo.add(overlay);
     const titulo = this.crearTexto(this.anchoLogico / 2, this.altoLogico / 2 - 22, `NIVEL ${nivel.numero}`, {
       tamano: this.esVistaMovilActual ? 34 : 42, mono: true, negrita: true,
       origenX: 0.5, origenY: 0.5, alinear: 'center',
@@ -2631,9 +2639,12 @@ class EscenaJuego extends Phaser.Scene {
 // antes), para que el tamaño lógico del canvas refleje la pantalla real en
 // ese instante: 1280x720 fijo en escritorio, o el tamaño vertical calculado
 // por calcularDimensionesLogicas() en vista móvil. El canvas físico siempre
-// es más grande que el mundo lógico; la escena compensa con el contenedor
-// "mundo" escalado para que las coordenadas del juego no cambien, dando
-// nitidez sin pixelado tanto en pantallas normales como de alta densidad.
+// es más grande que el mundo lógico (ancho/alto x factor); la escena
+// compensa con el contenedor "mundo" escalado para que las coordenadas del
+// juego no cambien, dando nitidez sin pixelado en pantallas de alta
+// densidad. (Phaser 3.70 no soporta una propiedad "resolution" nativa en
+// su configuración -verificado directamente en su código fuente-, así que
+// este método manual es el correcto para esta versión.)
 function construirConfiguracionPhaser() {
   dimensionesLogicasActuales = calcularDimensionesLogicas();
   const factor = Math.min(window.devicePixelRatio || 1, 2);
