@@ -23,28 +23,44 @@ const NIVELES = [
     numero: 1, virusRequeridos: 10, tiempoAparicion: 1800, tiempoVidaVirus: 4000, probabilidadSeguro: 0.15,
     maxElementos: 2, probabilidadMovimiento: 0.15, probabilidadCritica: 0.08, probabilidadResistente: 0,
     velocidadMin: 0.4, velocidadMax: 0.7,
+    probabilidadDuplicador: 0,
   },
   {
     numero: 2, virusRequeridos: 15, tiempoAparicion: 1300, tiempoVidaVirus: 3400, probabilidadSeguro: 0.25,
     maxElementos: 3, probabilidadMovimiento: 0.4, probabilidadCritica: 0.12, probabilidadResistente: 0.1,
     velocidadMin: 0.6, velocidadMax: 1.0,
+    probabilidadDuplicador: 0.12,
   },
   {
-    numero: 3, virusRequeridos: 20, tiempoAparicion: 900, tiempoVidaVirus: 3000, probabilidadSeguro: 0.35,
+    numero: 3, virusRequeridos: 25, tiempoAparicion: 900, tiempoVidaVirus: 3000, probabilidadSeguro: 0.35,
     maxElementos: 4, probabilidadMovimiento: 0.7, probabilidadCritica: 0.15, probabilidadResistente: 0.15,
     velocidadMin: 0.9, velocidadMax: 1.4,
+    probabilidadDuplicador: 0.18,
   },
 ];
 
 const VIDAS_INICIALES = 3;
 
+// Probabilidad de que aparezca el elemento de reparación cuando hay al
+// menos un servidor fuera de línea (máximo una vez por nivel)
+const PROBABILIDAD_REPARACION = 0.22;
+
+// Umbrales de progreso (proporción de amenazas eliminadas) en los que se
+// activa la sobrecarga de red, por nivel: el nivel 1 no la tiene, el nivel 2
+// la activa una vez a la mitad, y el nivel 3 la activa dos veces.
+const UMBRALES_SOBRECARGA = [[], [0.5], [0.4, 0.75]];
+
 // Puntos base por tipo de amenaza real (antes de aplicar el multiplicador de combo)
-const PUNTOS_POR_TIPO = { amenaza: 10, critica: 20, resistente: 15 };
+const PUNTOS_POR_TIPO = {
+  amenaza: 10, critica: 20, resistente: 15,
+  duplicado_pequeno: 5,
+};
 
 // Una amenaza "real" es cualquier tipo que cuenta para el objetivo del nivel
-// y que, si escapa, cuesta un servidor. Los archivos seguros no lo son.
+// y que, si escapa, cuesta un servidor. Los archivos seguros y los elementos
+// especiales que no se "eliminan" directamente (reparación, duplicador) no lo son.
 function esAmenazaReal(tipo) {
-  return tipo === 'amenaza' || tipo === 'critica' || tipo === 'resistente';
+  return tipo === 'amenaza' || tipo === 'critica' || tipo === 'resistente' || tipo === 'duplicado_pequeno';
 }
 
 // Multiplicador de combo: x1 (0-2 aciertos), x2 (3-5), x3 (6 o más)
@@ -80,12 +96,15 @@ const PALETA = {
   peligroTexto: '#ff5c70',
   naranjaTexto: '#ff9f45',
   moradoTexto: '#a855f7',
+  magentaTexto: '#ec4899',
 };
 
 // Color de cada tipo de elemento (usado en el aro, el ícono, la línea
 // de objetivo y las partículas de retroalimentación)
 function colorPorTipo(tipo) {
-  if (tipo === 'amenaza') return PALETA.peligro;
+  if (tipo === 'amenaza' || tipo === 'duplicado_pequeno') return PALETA.peligro;
+  if (tipo === 'duplicador') return PALETA.magenta;
+  if (tipo === 'reparacion') return PALETA.verde;
   if (tipo === 'critica') return PALETA.naranja;
   if (tipo === 'resistente') return PALETA.morado;
   return PALETA.azul; // 'seguro'
@@ -423,6 +442,36 @@ function dibujarIconoSeguro(g, color) {
   g.strokePath();
 }
 
+// Malware duplicador: un punto se divide en dos (representa su división al recibir el clic)
+function dibujarIconoDuplicador(g, color) {
+  g.lineStyle(3.5, color, 1);
+  g.lineBetween(0, -17, 0, -3);
+  g.lineBetween(0, -3, -13, 15);
+  g.lineBetween(0, -3, 13, 15);
+  g.fillStyle(color, 1);
+  g.fillCircle(0, -17, 3.2);
+  g.fillCircle(-13, 15, 3.2);
+  g.fillCircle(13, 15, 3.2);
+}
+
+// Reparación de servidor: cruz de herramienta/mantenimiento
+function dibujarIconoReparacion(g, color) {
+  g.lineStyle(4, color, 1);
+  g.lineBetween(0, -15, 0, 15);
+  g.lineBetween(-15, 0, 15, 0);
+}
+
+// Selecciona la función de dibujo según el tipo de elemento (usada tanto al
+// crearlo como al redibujarlo, por ejemplo al recuperar su color original)
+function dibujarIconoPorTipo(g, tipo, color) {
+  if (tipo === 'amenaza' || tipo === 'duplicado_pequeno') dibujarIconoAmenaza(g, color);
+  else if (tipo === 'critica') dibujarIconoCritico(g, color);
+  else if (tipo === 'resistente') dibujarIconoResistente(g, color);
+  else if (tipo === 'duplicador') dibujarIconoDuplicador(g, color);
+  else if (tipo === 'reparacion') dibujarIconoReparacion(g, color);
+  else dibujarIconoSeguro(g, color);
+}
+
 /* ------------------------------------------------------------------
    6. ESCENA PRINCIPAL DE PHASER
    Aquí ocurre toda la generación procedural de elementos y el
@@ -480,6 +529,14 @@ class EscenaJuego extends Phaser.Scene {
     this.escanerActivo = false;
     this.escanerActivoHasta = 0;
     this.temporizadorEscaner = null;
+
+    // Mecánicas nuevas: reparación de servidor, malware duplicador y
+    // sobrecarga de red (se reinician también en iniciarNivelActual)
+    this.reparacionUsadaNivel = false;
+    this.sobrecargaIndice = 0;
+    this.sobrecargaActiva = false;
+    this.limiteElementosExtra = 0;
+    this.temporizadorSobrecarga = null;
 
     this.actualizarHUD();
     this.actualizarBotonEscaner();
@@ -692,6 +749,21 @@ class EscenaJuego extends Phaser.Scene {
     this.crearTexto(ancho - 32, 140, 'Rojo·Naranja·Morado: eliminar · Azul: ignorar', {
       tamano: 14, origenX: 1, origenY: 0, color: PALETA.textoSecundario,
     });
+
+    // Segunda línea de leyenda para las mecánicas nuevas (se completa en
+    // actualizarLeyendaExtra según el nivel, sin saturar el HUD)
+    this.textoLeyendaExtra = this.crearTexto(ancho - 32, 164, '', {
+      tamano: 13, origenX: 1, origenY: 0, color: PALETA.textoSecundario,
+    });
+  }
+
+  // Actualiza la segunda línea de leyenda según las mecánicas disponibles
+  // en el nivel actual (la reparación existe desde el nivel 1, el
+  // duplicador se agrega a partir del nivel 2)
+  actualizarLeyendaExtra() {
+    let texto = 'Verde: reparación';
+    if (estado.indiceNivel >= 1) texto += ' · Magenta: duplicador';
+    this.textoLeyendaExtra.setText(texto);
   }
 
   /* ---------------- SERVIDORES INFERIORES (sistema de vidas) ---------------- */
@@ -789,10 +861,18 @@ class EscenaJuego extends Phaser.Scene {
     this.puntuacionInicioNivel = estado.puntuacion;
     this.escanerCargas = 2;
     this.escanerActivo = false;
+
+    // Reinicia las mecánicas nuevas al comenzar cada nivel
+    this.reparacionUsadaNivel = false;
+    this.sobrecargaIndice = 0;
+    this.sobrecargaActiva = false;
+    this.limiteElementosExtra = 0;
+
     this.limpiarVirusActivos();
     this.limpiarJefe();
     this.actualizarHUD();
     this.actualizarBotonEscaner();
+    this.actualizarLeyendaExtra();
 
     // Arranca el generador de elementos (ver iniciarGeneracionElementos).
     this.iniciarGeneracionElementos();
@@ -804,12 +884,29 @@ class EscenaJuego extends Phaser.Scene {
   // en el siguiente intervalo (generación procedural continua).
   iniciarGeneracionElementos() {
     const configuracionNivel = NIVELES[estado.indiceNivel];
+    this.reiniciarTemporizadorSpawn(configuracionNivel.tiempoAparicion);
+  }
+
+  // Sustituye el temporizador de generación por uno nuevo con otro
+  // intervalo (usado por la sobrecarga de red), sin dejar timers duplicados:
+  // siempre elimina el anterior antes de crear el nuevo.
+  reiniciarTemporizadorSpawn(delay) {
+    if (this.temporizadorSpawn) {
+      this.temporizadorSpawn.remove();
+      this.temporizadorSpawn = null;
+    }
     this.temporizadorSpawn = this.time.addEvent({
-      delay: configuracionNivel.tiempoAparicion,
+      delay,
       loop: true,
       callback: this.intentarGenerarElemento,
       callbackScope: this,
     });
+  }
+
+  // Máximo de elementos simultáneos permitido ahora mismo: el del nivel,
+  // más uno mientras la sobrecarga de red está activa.
+  maxElementosActual() {
+    return NIVELES[estado.indiceNivel].maxElementos + (this.limiteElementosExtra || 0);
   }
 
   intentarGenerarElemento() {
@@ -818,7 +915,12 @@ class EscenaJuego extends Phaser.Scene {
     // Ya se alcanzó el objetivo del nivel: se detiene la generación
     // (el jefe se encarga de retirar lo que quede en pantalla).
     if (estado.virusEliminados >= configuracionNivel.virusRequeridos) return;
-    if (estado.virusActivos.length >= configuracionNivel.maxElementos) return;
+
+    // La reparación de servidor tiene prioridad y no cuenta contra el
+    // máximo de elementos simultáneos (aparece como mucho una vez por nivel).
+    if (this.intentarGenerarReparacion()) return;
+
+    if (estado.virusActivos.length >= this.maxElementosActual()) return;
     this.generarVirus();
   }
 
@@ -834,6 +936,16 @@ class EscenaJuego extends Phaser.Scene {
       this.temporizadorEscaner = null;
     }
     this.escanerActivo = false;
+
+    // Cancela cualquier sobrecarga de red pendiente (por ejemplo, al
+    // iniciar el jefe, perder o cambiar de nivel) sin dejar timers activos
+    if (this.temporizadorSobrecarga) {
+      this.temporizadorSobrecarga.remove();
+      this.temporizadorSobrecarga = null;
+    }
+    this.sobrecargaActiva = false;
+    this.limiteElementosExtra = 0;
+
     estado.virusActivos.forEach((elemento) => {
       if (elemento.temporizador) elemento.temporizador.remove();
       if (elemento.lineaObjetivo) elemento.lineaObjetivo.destroy();
@@ -857,18 +969,40 @@ class EscenaJuego extends Phaser.Scene {
 
     // Decide el tipo de elemento. En el nivel 1, las primeras 3 amenazas
     // nunca son falsos positivos. Entre las amenazas reales, se sortea
-    // además si es crítica o resistente según la configuración del nivel.
+    // además si es crítica, resistente o duplicadora según el nivel.
     let tipo = 'amenaza';
     const protegerInicioNivel1 = estado.indiceNivel === 0 && this.contadorElementosNivel < 3;
     if (!protegerInicioNivel1 && Math.random() < configuracionNivel.probabilidadSeguro) {
       tipo = 'seguro';
     } else {
       const sorteo = Math.random();
-      if (sorteo < configuracionNivel.probabilidadResistente) tipo = 'resistente';
-      else if (sorteo < configuracionNivel.probabilidadResistente + configuracionNivel.probabilidadCritica) tipo = 'critica';
+      const pResistente = configuracionNivel.probabilidadResistente;
+      const pCritica = pResistente + configuracionNivel.probabilidadCritica;
+      const pDuplicador = pCritica + (configuracionNivel.probabilidadDuplicador || 0);
+      if (sorteo < pResistente) tipo = 'resistente';
+      else if (sorteo < pCritica) tipo = 'critica';
+      else if (sorteo < pDuplicador) tipo = 'duplicador';
     }
     this.contadorElementosNivel += 1;
 
+    const servidorObjetivo = esAmenazaReal(tipo) || tipo === 'duplicador' ? this.elegirServidorObjetivo() : null;
+    const tiempoVida = tipo === 'critica'
+      ? Math.round(configuracionNivel.tiempoVidaVirus * 0.75)
+      : tipo === 'resistente'
+        ? Math.round(configuracionNivel.tiempoVidaVirus * 1.15)
+        : configuracionNivel.tiempoVidaVirus;
+
+    this.crearElementoVisual(tipo, x, y, { duracionVida: tiempoVida, servidorObjetivo });
+  }
+
+  // Construye la parte visual e interactiva de un elemento (círculo, anillo
+  // de tiempo, ícono, línea de objetivo, temporizador de expiración) y lo
+  // registra en estado.virusActivos. La usan tanto la generación normal
+  // (generarVirus) como las mecánicas nuevas: reparación de servidor y las
+  // dos amenazas pequeñas en las que se divide el malware duplicador.
+  crearElementoVisual(tipo, x, y, opciones = {}) {
+    const configuracionNivel = NIVELES[estado.indiceNivel];
+    const escalaVisual = opciones.escalaVisual || 1;
     const color = colorPorTipo(tipo);
 
     // Un contenedor agrupa el círculo, el anillo de tiempo y el ícono
@@ -881,12 +1015,22 @@ class EscenaJuego extends Phaser.Scene {
     const anilloTiempo = this.add.graphics();
 
     const icono = this.add.graphics();
-    if (tipo === 'amenaza') dibujarIconoAmenaza(icono, color);
-    else if (tipo === 'critica') dibujarIconoCritico(icono, color);
-    else if (tipo === 'resistente') dibujarIconoResistente(icono, color);
-    else dibujarIconoSeguro(icono, color);
+    dibujarIconoPorTipo(icono, tipo, color);
 
     contenedor.add([circuloFondo, anilloTiempo, icono]);
+
+    // Etiqueta permanente "REPARACIÓN" (a diferencia del resto de tipos,
+    // que solo revelan su identidad al usar el escáner)
+    if (tipo === 'reparacion') {
+      const etiquetaFija = this.add.text(0, 36, 'REPARACIÓN', {
+        fontFamily: FUENTE_MONO,
+        fontSize: '11px',
+        color: PALETA.verdeTexto,
+        fontStyle: 'bold',
+      }).setOrigin(0.5);
+      etiquetaFija.setResolution(this.factorResolucion);
+      contenedor.add(etiquetaFija);
+    }
 
     // El malware resistente muestra además un escudo exterior: el primer
     // golpe solo lo rompe, el segundo elimina el elemento.
@@ -903,7 +1047,7 @@ class EscenaJuego extends Phaser.Scene {
     // Animación de aparición: aumenta de tamaño suavemente
     this.tweens.add({
       targets: contenedor,
-      scale: 1,
+      scale: escalaVisual,
       duration: this.movimientoReducido ? 1 : 180,
       ease: 'Sine.Out',
     });
@@ -913,7 +1057,9 @@ class EscenaJuego extends Phaser.Scene {
 
     // Objetivo móvil: una fracción de los elementos (según el nivel) se
     // desplaza lentamente y rebota dentro del área de juego.
-    const movil = !this.movimientoReducido && Math.random() < configuracionNivel.probabilidadMovimiento;
+    const movil = opciones.movilForzado !== undefined
+      ? opciones.movilForzado
+      : !this.movimientoReducido && Math.random() < configuracionNivel.probabilidadMovimiento;
     const velocidad = Phaser.Math.FloatBetween(configuracionNivel.velocidadMin, configuracionNivel.velocidadMax);
     const anguloMovimiento = Math.random() * Math.PI * 2;
 
@@ -927,33 +1073,29 @@ class EscenaJuego extends Phaser.Scene {
       lineaObjetivo: null,
       servidorObjetivoX: null,
       colorLinea: color,
+      grupo: opciones.grupo || null,
     };
 
     // Línea/etiqueta que indica a qué servidor apunta una amenaza real
-    if (esAmenazaReal(tipo)) {
-      const servidorObjetivo = this.elegirServidorObjetivo();
-      if (servidorObjetivo) {
-        elemento.servidorObjetivoX = servidorObjetivo.x;
-        const linea = this.add.graphics();
-        this.mundo.add(linea);
-        this.mundo.moveBelow(linea, contenedor);
-        elemento.lineaObjetivo = linea;
-      }
+    // (también se muestra para el malware duplicador, antes de dividirse)
+    if (opciones.servidorObjetivo) {
+      elemento.servidorObjetivoX = opciones.servidorObjetivo.x;
+      const linea = this.add.graphics();
+      this.mundo.add(linea);
+      this.mundo.moveBelow(linea, contenedor);
+      elemento.lineaObjetivo = linea;
     }
 
+    // El comportamiento al hacer clic depende del tipo de elemento
     circuloFondo.on('pointerdown', () => {
-      this.eliminarVirus(elemento, true);
+      if (tipo === 'reparacion') this.repararServidor(elemento);
+      else if (tipo === 'duplicador') this.dividirDuplicador(elemento);
+      else this.eliminarVirus(elemento, true);
     });
 
-    // Temporizador: si expira sin clic, se resuelve como "no atendido".
-    // El malware crítico dura el 75% del tiempo de una amenaza normal.
-    const tiempoVida = tipo === 'critica'
-      ? Math.round(configuracionNivel.tiempoVidaVirus * 0.75)
-      : tipo === 'resistente'
-        ? Math.round(configuracionNivel.tiempoVidaVirus * 1.15)
-        : configuracionNivel.tiempoVidaVirus;
-
-    elemento.temporizador = this.time.delayedCall(tiempoVida, () => {
+    // Temporizador: si expira sin clic, se resuelve como "no atendido"
+    const duracionVida = opciones.duracionVida || configuracionNivel.tiempoVidaVirus;
+    elemento.temporizador = this.time.delayedCall(duracionVida, () => {
       this.eliminarVirus(elemento, false);
     });
 
@@ -969,6 +1111,8 @@ class EscenaJuego extends Phaser.Scene {
         elemento.temporizador.timeScale = this.factorEscaner;
       }
     }
+
+    return elemento;
   }
 
   /* ---------------- RESOLVER UN ELEMENTO (clic o expiración) ---------------- */
@@ -1023,7 +1167,30 @@ class EscenaJuego extends Phaser.Scene {
 
       this.mostrarTextoFlotante(elemento.contenedor.x, elemento.contenedor.y, `+${puntosGanados}`, color);
     } else if (esAmenazaReal(elemento.tipo) && !fueEliminadoPorClic) {
-      // Amenaza real no eliminada a tiempo: se pierde un servidor y el combo
+      // Amenaza real no eliminada a tiempo: se pierde un servidor y el combo.
+      // Si el elemento pertenece a un grupo (las dos amenazas pequeñas del
+      // duplicador), solo se descuenta un servidor por todo el grupo,
+      // aunque las dos escapen.
+      estado.combo = 0;
+      reproducirSonido('perderVida');
+      if (!elemento.grupo || !elemento.grupo.perdidoServidor) {
+        this.desactivarServidorAleatorio();
+        if (elemento.grupo) elemento.grupo.perdidoServidor = true;
+      }
+      this.animarComboHUD();
+
+      this.tweens.add({
+        targets: elemento.contenedor,
+        alpha: 0,
+        duration: duracionSalida,
+        onComplete: () => elemento.contenedor.destroy(),
+      });
+
+      this.mostrarTextoFlotante(elemento.contenedor.x, elemento.contenedor.y, '-1 SERVIDOR', PALETA.peligro);
+    } else if (elemento.tipo === 'duplicador' && !fueEliminadoPorClic) {
+      // El malware duplicador expiró sin que le dieran clic: se pierde un
+      // servidor, pero no entrega puntos ni cuenta para el objetivo (nunca
+      // llegó a "eliminarse", solo se hubiera dividido con un clic).
       estado.combo = 0;
       reproducirSonido('perderVida');
       this.desactivarServidorAleatorio();
@@ -1073,6 +1240,165 @@ class EscenaJuego extends Phaser.Scene {
 
     this.actualizarHUD();
     this.verificarEstadoJuego();
+    this.verificarSobrecargaPorProgreso();
+  }
+
+  /* ---------------- REPARACIÓN DE SERVIDOR ---------------- */
+
+  // Intenta generar el elemento de reparación: solo si hay al menos un
+  // servidor fuera de línea, como máximo una vez por nivel, y con una
+  // probabilidad moderada en cada intento de generación.
+  intentarGenerarReparacion() {
+    if (this.reparacionUsadaNivel) return false;
+    if (!this.servidores.some((s) => !s.activo)) return false;
+    if (estado.virusActivos.some((e) => e.tipo === 'reparacion')) return false;
+    if (Math.random() >= PROBABILIDAD_REPARACION) return false;
+
+    this.reparacionUsadaNivel = true;
+    const area = this.areaJuego;
+    const x = Phaser.Math.Between(area.xMin, area.xMax);
+    const y = Phaser.Math.Between(area.yMin, area.yMax);
+    this.crearElementoVisual('reparacion', x, y, { duracionVida: 4000, movilForzado: false });
+    return true;
+  }
+
+  // Clic sobre el elemento de reparación: recupera un servidor fuera de
+  // línea (si ya no queda ninguno, no hace nada más que desaparecer) y no
+  // entrega puntos ni cuenta como amenaza eliminada.
+  repararServidor(elemento) {
+    if (elemento.procesado) return;
+    elemento.procesado = true;
+    if (elemento.temporizador) elemento.temporizador.remove();
+    if (elemento.lineaObjetivo) elemento.lineaObjetivo.destroy();
+
+    const indice = estado.virusActivos.indexOf(elemento);
+    if (indice !== -1) estado.virusActivos.splice(indice, 1);
+
+    const servidorCaido = this.servidores.find((s) => !s.activo);
+    if (servidorCaido) {
+      servidorCaido.activo = true;
+      estado.vidas = this.servidores.filter((s) => s.activo).length;
+      this.dibujarEstadoServidor(servidorCaido);
+      this.crearOndaExpansiva(servidorCaido.rect.x, this.servidorY, PALETA.verde);
+      reproducirSonido('combo');
+      this.mostrarTextoFlotante(elemento.contenedor.x, elemento.contenedor.y, 'SERVIDOR RESTAURADO', PALETA.verde);
+    }
+
+    const duracionSalida = this.movimientoReducido ? 1 : 220;
+    this.tweens.add({
+      targets: elemento.contenedor,
+      scale: 1.15,
+      alpha: 0,
+      duration: duracionSalida,
+      onComplete: () => elemento.contenedor.destroy(),
+    });
+
+    this.actualizarHUD();
+  }
+
+  /* ---------------- MALWARE DUPLICADOR ---------------- */
+
+  // Clic sobre el malware duplicador: en vez de eliminarse, se divide en
+  // dos amenazas pequeñas (5 puntos cada una) con la misma duración de
+  // vida. Si una o las dos escapan, solo se pierde un servidor entre las
+  // dos (ver el grupo compartido y la rama de escape en eliminarVirus).
+  dividirDuplicador(elemento) {
+    if (elemento.procesado) return;
+    elemento.procesado = true;
+    if (elemento.temporizador) elemento.temporizador.remove();
+    if (elemento.lineaObjetivo) elemento.lineaObjetivo.destroy();
+
+    const indice = estado.virusActivos.indexOf(elemento);
+    if (indice !== -1) estado.virusActivos.splice(indice, 1);
+
+    const x = elemento.contenedor.x;
+    const y = elemento.contenedor.y;
+    reproducirSonido('eliminar');
+    this.crearParticulas(x, y, PALETA.magenta);
+
+    const duracionSalida = this.movimientoReducido ? 1 : 200;
+    this.tweens.add({
+      targets: elemento.contenedor,
+      scale: 1.3,
+      alpha: 0,
+      duration: duracionSalida,
+      onComplete: () => elemento.contenedor.destroy(),
+    });
+
+    const configuracionNivel = NIVELES[estado.indiceNivel];
+    const grupo = { perdidoServidor: false };
+    const duracionPequenas = Math.round(configuracionNivel.tiempoVidaVirus * 0.9);
+    const area = this.areaJuego;
+    const offsets = [[-46, -18], [46, 18]];
+    offsets.forEach(([dx, dy]) => {
+      const nx = Phaser.Math.Clamp(x + dx, area.xMin, area.xMax);
+      const ny = Phaser.Math.Clamp(y + dy, area.yMin, area.yMax);
+      this.crearElementoVisual('duplicado_pequeno', nx, ny, {
+        grupo,
+        escalaVisual: 0.68,
+        movilForzado: false,
+        duracionVida: duracionPequenas,
+        servidorObjetivo: this.elegirServidorObjetivo(),
+      });
+    });
+
+    this.actualizarHUD();
+  }
+
+  /* ---------------- SOBRECARGA DE RED ---------------- */
+
+  // Se activa en los umbrales de progreso definidos en UMBRALES_SOBRECARGA
+  // (una vez en el nivel 2, dos veces en el nivel 3): acelera la aparición
+  // de elementos durante 5s y permite un elemento simultáneo más de lo
+  // normal. Al terminar, restaura exactamente la velocidad y el máximo
+  // originales. Nunca se activa durante el combate contra el jefe, ni
+  // mientras ya hay una sobrecarga en curso.
+  verificarSobrecargaPorProgreso() {
+    if (estado.jefeActivo || this.sobrecargaActiva) return;
+    const umbrales = UMBRALES_SOBRECARGA[estado.indiceNivel] || [];
+    if (this.sobrecargaIndice >= umbrales.length) return;
+    const configuracionNivel = NIVELES[estado.indiceNivel];
+    const progreso = estado.virusEliminados / configuracionNivel.virusRequeridos;
+    if (progreso < umbrales[this.sobrecargaIndice]) return;
+    this.activarSobrecarga(configuracionNivel);
+  }
+
+  activarSobrecarga(configuracionNivel) {
+    this.sobrecargaIndice += 1;
+    this.sobrecargaActiva = true;
+    this.limiteElementosExtra = 1;
+    this.mostrarAvisoEvento('SOBRECARGA DE RED', PALETA.naranjaTexto);
+    this.reiniciarTemporizadorSpawn(Math.round(configuracionNivel.tiempoAparicion * 0.55));
+
+    this.temporizadorSobrecarga = this.time.delayedCall(5000, () => {
+      this.temporizadorSobrecarga = null;
+      this.sobrecargaActiva = false;
+      this.limiteElementosExtra = 0;
+      if (estado.juegoActivo && !estado.jefeActivo) {
+        this.reiniciarTemporizadorSpawn(configuracionNivel.tiempoAparicion);
+      }
+    });
+  }
+
+  // Aviso breve en la parte superior del área de juego (no cubre el HUD,
+  // los servidores ni el botón del escáner, que ahora está fuera del canvas)
+  mostrarAvisoEvento(texto, color) {
+    const aviso = this.crearTexto(ANCHO_JUEGO / 2, this.areaJuego.yMin + 16, texto, {
+      tamano: 22, mono: true, negrita: true, color, origenX: 0.5, origenY: 0.5, alinear: 'center',
+    });
+    aviso.setAlpha(0);
+    this.mundo.bringToTop(aviso);
+
+    const duracionFade = this.movimientoReducido ? 30 : 260;
+    const espera = this.movimientoReducido ? 60 : 1100;
+    this.tweens.add({
+      targets: aviso,
+      alpha: { from: 0, to: 1 },
+      duration: duracionFade,
+      yoyo: true,
+      hold: espera,
+      onComplete: () => aviso.destroy(),
+    });
   }
 
   // Breve efecto de escudo roto: la amenaza resistente pierde su anillo
@@ -1298,11 +1624,23 @@ class EscenaJuego extends Phaser.Scene {
   }
 
   mostrarEtiquetaEscaner(elemento, duracion) {
-    const esSeguro = elemento.tipo === 'seguro';
-    const etiqueta = this.add.text(0, -74, esSeguro ? 'SEGURO' : 'AMENAZA', {
+    // La reparación ya muestra su etiqueta "REPARACIÓN" de forma permanente
+    if (elemento.tipo === 'reparacion') return;
+
+    let texto = 'AMENAZA';
+    let color = PALETA.peligroTexto;
+    if (elemento.tipo === 'seguro') {
+      texto = 'SEGURO';
+      color = PALETA.azulTexto;
+    } else if (elemento.tipo === 'duplicador') {
+      texto = 'DUPLICADOR';
+      color = PALETA.magentaTexto;
+    }
+
+    const etiqueta = this.add.text(0, -74, texto, {
       fontFamily: FUENTE_MONO,
       fontSize: '14px',
-      color: esSeguro ? PALETA.azulTexto : PALETA.peligroTexto,
+      color,
       fontStyle: 'bold',
     }).setOrigin(0.5);
     etiqueta.setResolution(this.factorResolucion);

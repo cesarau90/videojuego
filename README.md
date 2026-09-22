@@ -26,6 +26,19 @@ el nivel), algunos quietos y otros en movimiento lento que rebota dentro del
 Cada amenaza real dibuja una línea tenue hacia el servidor que está
 "atacando", para que el jugador sepa qué está en riesgo.
 
+## Mecánicas adicionales
+
+Desde el nivel 1 puede aparecer, además de las amenazas normales, un
+elemento especial de **reparación**; desde el nivel 2 se suma el **malware
+duplicador**. Ambos usan el mismo círculo y las mismas reglas de clic/toque
+que el resto de elementos.
+
+| Mecánica | Nivel | Color | Detalle |
+|---|---|---|---|
+| Reparación de servidor | 1, 2 y 3 | Verde (ícono de cruz, etiqueta "REPARACIÓN") | Solo aparece si al menos un servidor está fuera de línea, como máximo **una vez por nivel**. Un clic recupera un servidor caído; no entrega puntos ni cuenta como amenaza eliminada. Si expira sin que le den clic, no hay penalización. |
+| Malware duplicador | 2 y 3 | Magenta (ícono de división; el escáner revela "DUPLICADOR") | Al hacer clic, en vez de eliminarse se **divide en dos amenazas pequeñas** (5 puntos cada una, con la misma duración de vida). Si una o ambas escapan sin ser eliminadas, solo se pierde **un servidor** por esa pareja, nunca dos. |
+| Sobrecarga de red | 2 y 3 | Aviso "SOBRECARGA DE RED" | Se activa **una sola vez por nivel**, al llegar aproximadamente a la mitad del objetivo de amenazas. Durante 5 segundos los elementos aparecen con más frecuencia y se permite un elemento simultáneo más de lo normal; al terminar, todo vuelve exactamente a la velocidad y el máximo originales. Nunca se activa durante el combate contra el jefe, y se cancela automáticamente si el jefe aparece antes de que termine. |
+
 ## Combo
 
 Eliminar amenazas reales de forma consecutiva aumenta un contador de combo
