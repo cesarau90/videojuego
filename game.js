@@ -465,151 +465,6 @@ function animarConteoPuntos(desde, hasta, duracion = 650) {
 }
 
 /* ------------------------------------------------------------------
-   4B. TABLA LOCAL DE GAMERTAGS
-   Los registros se guardan unicamente en este navegador. No se necesita
-   cuenta, servidor ni base de datos externa para conservarlos al recargar.
-   ------------------------------------------------------------------ */
-const CLAVE_REGISTROS = 'eliminaMalware.registros.v1';
-const CLAVE_ULTIMO_GAMERTAG = 'eliminaMalware.ultimoGamertag';
-const MAXIMO_REGISTROS = 10;
-let partidaVictoriaGuardada = false;
-let idRegistroActual = null;
-
-function normalizarGamertag(valor) {
-  return String(valor || '')
-    .replace(/[\u0000-\u001f\u007f]/g, '')
-    .replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 _.-]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 16);
-}
-
-function leerRegistros() {
-  try {
-    const datos = JSON.parse(localStorage.getItem(CLAVE_REGISTROS) || '[]');
-    if (!Array.isArray(datos)) return [];
-    return datos
-      .filter((registro) => registro && typeof registro.gamertag === 'string' && Number.isFinite(registro.puntos))
-      .map((registro) => ({
-        id: String(registro.id || ''),
-        gamertag: normalizarGamertag(registro.gamertag),
-        puntos: Math.max(0, Math.round(registro.puntos)),
-        fecha: typeof registro.fecha === 'string' ? registro.fecha : '',
-      }))
-      .filter((registro) => registro.gamertag.length >= 2)
-      .sort((a, b) => b.puntos - a.puntos || b.fecha.localeCompare(a.fecha))
-      .slice(0, MAXIMO_REGISTROS);
-  } catch (error) {
-    console.warn('No se pudieron leer los registros locales:', error);
-    return [];
-  }
-}
-
-function formatearFechaRegistro(fecha) {
-  const valor = new Date(fecha);
-  if (Number.isNaN(valor.getTime())) return '—';
-  return new Intl.DateTimeFormat('es-MX', {
-    day: '2-digit', month: '2-digit', year: '2-digit',
-  }).format(valor);
-}
-
-function mostrarTablaRegistros() {
-  const cuerpo = document.getElementById('tabla-registros-cuerpo');
-  if (!cuerpo) return;
-  cuerpo.replaceChildren();
-
-  const registros = leerRegistros();
-  if (registros.length === 0) {
-    const fila = document.createElement('tr');
-    const celda = document.createElement('td');
-    celda.colSpan = 4;
-    celda.className = 'tabla-vacia';
-    celda.textContent = 'Aún no hay registros';
-    fila.appendChild(celda);
-    cuerpo.appendChild(fila);
-    return;
-  }
-
-  registros.forEach((registro, indice) => {
-    const fila = document.createElement('tr');
-    if (registro.id === idRegistroActual) fila.classList.add('registro-actual');
-    [indice + 1, registro.gamertag, registro.puntos, formatearFechaRegistro(registro.fecha)]
-      .forEach((valor) => {
-        const celda = document.createElement('td');
-        celda.textContent = valor;
-        fila.appendChild(celda);
-      });
-    cuerpo.appendChild(fila);
-  });
-}
-
-function prepararRegistroVictoria() {
-  const formulario = document.getElementById('formulario-gamertag');
-  const campo = document.getElementById('campo-gamertag');
-  const boton = document.getElementById('btn-guardar-gamertag');
-  const mensaje = document.getElementById('mensaje-gamertag');
-  if (!formulario || !campo || !boton || !mensaje) return;
-
-  partidaVictoriaGuardada = false;
-  idRegistroActual = null;
-  formulario.reset();
-  try {
-    campo.value = normalizarGamertag(localStorage.getItem(CLAVE_ULTIMO_GAMERTAG));
-  } catch (error) {
-    // El modo privado puede bloquear localStorage; el formulario sigue usable.
-  }
-  campo.disabled = false;
-  boton.disabled = false;
-  boton.textContent = 'Guardar';
-  mensaje.textContent = 'Usa de 2 a 16 letras, números, espacios, puntos, guiones o guion bajo.';
-  mensaje.className = 'mensaje-gamertag';
-  mostrarTablaRegistros();
-  setTimeout(() => campo.focus({ preventScroll: true }), 500);
-}
-
-function guardarRegistroVictoria(evento) {
-  evento.preventDefault();
-  if (partidaVictoriaGuardada) return;
-
-  const campo = document.getElementById('campo-gamertag');
-  const boton = document.getElementById('btn-guardar-gamertag');
-  const mensaje = document.getElementById('mensaje-gamertag');
-  const gamertag = normalizarGamertag(campo.value);
-  campo.value = gamertag;
-
-  if (gamertag.length < 2) {
-    mensaje.textContent = 'Escribe un gamertag de al menos 2 caracteres.';
-    mensaje.className = 'mensaje-gamertag error';
-    campo.focus();
-    return;
-  }
-
-  const fecha = new Date().toISOString();
-  idRegistroActual = `${fecha}-${Math.random().toString(36).slice(2, 8)}`;
-  const nuevoRegistro = { id: idRegistroActual, gamertag, puntos: estado.puntuacion, fecha };
-
-  try {
-    const registros = [...leerRegistros(), nuevoRegistro]
-      .sort((a, b) => b.puntos - a.puntos || b.fecha.localeCompare(a.fecha))
-      .slice(0, MAXIMO_REGISTROS);
-    localStorage.setItem(CLAVE_REGISTROS, JSON.stringify(registros));
-    localStorage.setItem(CLAVE_ULTIMO_GAMERTAG, gamertag);
-    partidaVictoriaGuardada = true;
-    campo.disabled = true;
-    boton.disabled = true;
-    boton.textContent = 'Guardado';
-    mensaje.textContent = 'Gamertag registrado correctamente.';
-    mensaje.className = 'mensaje-gamertag exito';
-    mostrarTablaRegistros();
-  } catch (error) {
-    idRegistroActual = null;
-    mensaje.textContent = 'El navegador no permitió guardar el registro.';
-    mensaje.className = 'mensaje-gamertag error';
-    console.warn('No se pudo guardar el registro local:', error);
-  }
-}
-
-/* ------------------------------------------------------------------
    5. ÍCONOS VECTORIALES (dibujados con Phaser Graphics, sin emojis
    ni imágenes). Todos usan el mismo grosor de línea.
    ------------------------------------------------------------------ */
@@ -2316,7 +2171,6 @@ class EscenaJuego extends Phaser.Scene {
         reproducirSonido('victoria');
         document.getElementById('texto-puntaje-victoria').textContent =
           `Puntuación final: ${estado.puntuacion} puntos`;
-        prepararRegistroVictoria();
         mostrarPantalla('pantalla-victoria');
       } else {
         const configuracionNivel = NIVELES[estado.indiceNivel];
@@ -3158,7 +3012,6 @@ document.getElementById('btn-siguiente-nivel').addEventListener('click', continu
 document.getElementById('btn-reintentar').addEventListener('click', iniciarJuegoDesdeCero);
 document.getElementById('btn-jugar-de-nuevo').addEventListener('click', iniciarJuegoDesdeCero);
 document.getElementById('btn-escaner').addEventListener('click', activarEscanerDesdeUI);
-document.getElementById('formulario-gamertag').addEventListener('submit', guardarRegistroVictoria);
 
 // Atajo de teclado: tecla "S" activa el escáner mientras se está jugando
 window.addEventListener('keydown', (evento) => {

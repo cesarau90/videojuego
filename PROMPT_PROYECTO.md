@@ -369,7 +369,7 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=8` y `game.js?v=10`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=7` y `game.js?v=9`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la
@@ -396,18 +396,6 @@ archivos, incluido el propio `index.html`. Es decir:
   hacer una sola recarga forzada tipo Ctrl+Shift+R) antes de probar
   garantiza ver la versión nueva; después de eso, recargas normales ya
   reflejan los cambios sin necesidad de forzar nada.
-
-## 11. Registro local de gamertags
-
-Al completar los tres niveles, la pantalla de victoria permite registrar
-opcionalmente un gamertag de 2 a 16 caracteres válidos junto con la puntuación final
-y la fecha. Los resultados se ordenan de mayor a menor y se muestran en una
-tabla con los 10 mejores registros. Cada victoria solo se puede guardar una
-vez, aunque el jugador puede volver a intentar sin registrarse.
-
-Los datos se conservan mediante `localStorage` únicamente en el navegador y
-dispositivo actuales. No se utiliza una base de datos, una cuenta ni un
-servicio externo; por ello la tabla no se comparte entre distintos equipos.
 
 ## Reglas de trabajo durante todo el proyecto
 
