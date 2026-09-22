@@ -105,11 +105,15 @@ un servidor pero el jefe conserva todo el daño ya recibido.
 
 ## Niveles y dificultad progresiva
 
-| Nivel | Amenazas reales | Elementos simultáneos | Se mueven | Vida de una amenaza normal | Vida de una crítica |
-|---|---|---|---|---|---|
-| 1 | 10 | hasta 2 | ~15% | 4.0 s | 3.0 s (75%) |
-| 2 | 15 | hasta 3 | ~40% | 3.4 s | 2.55 s (75%) |
-| 3 | 20 | hasta 4 | ~70% | 3.0 s | 2.25 s (75%) |
+| Nivel | Amenazas | Aparición | Máximo | Movimiento | Vida normal | Seguros | Críticos | Resistentes | Duplicadores |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 10 | 1800 ms | 2 | 15% | 4000 ms | 15% | 8% | 0% | 0% |
+| 2 | 15 | 1100 ms | 3 | 50% | 3100 ms | 25% | 15% | 13% | 14% |
+| 3 | 25 | 800 ms | 5 | 75% | 2700 ms | 30% | 18% | 17% | 20% |
+
+Primero se decide si el elemento es seguro. Los porcentajes de críticos,
+resistentes y duplicadores se aplican después entre los elementos peligrosos;
+por eso no se suman directamente al porcentaje de seguros.
 
 Además, en niveles más altos aumenta la probabilidad de malware crítico y
 resistente, y la velocidad de los elementos móviles. La dificultad sube de

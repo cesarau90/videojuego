@@ -101,7 +101,7 @@ forzar el mismo tablero en cualquier pantalla:
   (máximo 2 en nivel 1, 3 en nivel 2, 5 en nivel 3), distribuidos sin tapar
   el HUD ni los servidores.
 - **Objetivos móviles**: una fracción de los elementos se mueve lentamente
-  y rebota dentro del área de juego (≈15% nivel 1, ≈45% nivel 2, ≈75%
+  y rebota dentro del área de juego (≈15% nivel 1, ≈50% nivel 2, ≈75%
   nivel 3).
 - Cuatro tipos, cada uno con ícono, color y comportamiento propios:
   - **Malware normal** (rojo): 1 clic, 10 puntos.
@@ -115,9 +115,16 @@ forzar el mismo tablero en cualquier pantalla:
     positivo". Si expira solo, no pasa nada.
 - Cada amenaza real traza una línea tenue hacia el servidor al que
   "ataca".
-- Tiempo de vida de una amenaza normal: **4.0 s (nivel 1) / 3.2 s (nivel
+- Tiempo de vida de una amenaza normal: **4.0 s (nivel 1) / 3.1 s (nivel
   2) / 2.7 s (nivel 3)**; la crítica dura el 75% de ese valor. Aparición de
-  elementos nuevos cada 1.8 s (nivel 1) / 1.2 s (nivel 2) / 0.8 s (nivel 3).
+  elementos nuevos cada 1.8 s (nivel 1) / 1.1 s (nivel 2) / 0.8 s (nivel 3).
+- Probabilidades configuradas: nivel 1 (seguros 15%, críticos 8%, resistentes
+  0%, duplicadores 0%); nivel 2 (seguros 25%, críticos 15%, resistentes 13%,
+  duplicadores 14%); nivel 3 (seguros 30%, críticos 18%, resistentes 17%,
+  duplicadores 20%). Primero se decide si aparece un archivo seguro; los
+  porcentajes de crítico, resistente y duplicador se aplican después entre
+  los elementos peligrosos, por lo que no se suman directamente al porcentaje
+  de seguros.
 - Al perder una amenaza real o tocar un falso positivo, se desactiva **un
   servidor activo al azar** (nunca uno ya caído) con un parpadeo naranja
   antes de quedar rojo. Si los tres quedan fuera de línea → derrota.
@@ -152,7 +159,7 @@ los servidores ni los jefes.
   eliminarse se **divide en dos amenazas pequeñas** (5 puntos cada una,
   con la misma duración de vida). Si una o ambas escapan sin ser
   eliminadas, se pierde **un solo servidor** por esa pareja, nunca dos.
-  Probabilidad de aparición: 12% en nivel 2, 20% en nivel 3 (0% en nivel
+  Probabilidad de aparición: 14% en nivel 2, 20% en nivel 3 (0% en nivel
   1).
 - **Sobrecarga de red** (nivel 2 y 3): aviso "SOBRECARGA DE RED" que
   **parpadea dos veces** (aparece/desaparece dos ciclos cortos) en la
@@ -369,7 +376,7 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=7` y `game.js?v=9`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=7` y `game.js?v=11`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la
