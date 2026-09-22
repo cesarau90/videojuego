@@ -316,10 +316,43 @@ mundo horizontal a partir del tamaño real de `#contenedor-phaser`, usa un
 alto lógico mínimo seguro y compacta la fila de servidores. La rotación
 reconstruye el tablero y conserva el progreso, los elementos y los jefes.
 
+### Corrección posterior: parpadeo/deformación periódica del tablero en PC
+
+Tras ampliar el tablero (sección "Tamaño del tablero en escritorio"), el
+tablero se deformaba brevemente cada 1-3 segundos en escritorio (visible
+como texto e íconos duplicados/desalineados en una captura). Se investigó
+con Playwright, instrumentando cada escritura al `style.width/height` del
+canvas: la causa real es que **Phaser revisa por su cuenta, cada
+`resizeInterval` (500 ms por defecto), si el tamaño del contenedor padre
+cambió**, y si es así reescribe el ancho/alto del canvas con su propio
+cálculo (pensado para `box-sizing:border-box`, sin saber que aquí se usa
+`content-box` para evitar el desenfoque de subpíxel). Esa reescritura
+cambia el tamaño de `#contenedor-phaser` (que se ajusta a su contenido),
+lo que dispara nuestro propio `ResizeObserver` para corregirlo de vuelta,
+que a su vez vuelve a cambiar el tamaño del contenedor... un ciclo sin fin
+entre Phaser y nuestro código, cada ~500 ms-3 s según el momento en que
+cada revisión encontraba al otro a mitad de camino.
+
+La solución es subir `resizeInterval` a un valor enorme (una hora) en la
+configuración `scale` de `construirConfiguracionPhaser()`, para que esa
+revisión periódica de Phaser prácticamente nunca se ejecute; el
+redimensionamiento real (por eventos de `resize`/`orientationchange`)
+sigue funcionando igual, tanto en escritorio como en móvil, porque esos
+eventos siguen disparando el `dirty flag` de Phaser y nuestros propios
+listeners, solo se desactivó el sondeo periódico redundante. No bajar ni
+quitar `resizeInterval` al modificar este código: sin él, Phaser vuelve a
+pelear por el tamaño del canvas con `ajustarCanvasEscritorio()`.
+
+(De paso, se corrigió también que el `ResizeObserver` de
+`ajustarCanvasEscritorio()` observe el **contenedor** `#contenedor-phaser`
+en vez del propio canvas, para no auto-dispararse al escribir el tamaño
+del canvas — necesario pero no suficiente por sí solo, la causa principal
+era el `resizeInterval` de Phaser.)
+
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=6` y `game.js?v=5`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=6` y `game.js?v=7`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la

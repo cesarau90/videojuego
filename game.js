@@ -629,7 +629,9 @@ class EscenaJuego extends Phaser.Scene {
     this.iniciarNivelActual();
 
     if (!this.esVistaMovilActual) {
-      registrarObservadorCanvasEscritorio(this.game.canvas);
+      registrarObservadorCanvasEscritorio(
+        document.getElementById('contenedor-phaser')
+      );
     }
   }
 
@@ -2698,6 +2700,20 @@ function construirConfiguracionPhaser() {
     scale: {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
+      // Phaser revisa cada "resizeInterval" ms (500 por defecto) si el
+      // tamaño del contenedor padre cambió, y si es así reescribe el
+      // ancho/alto del canvas con su propio cálculo (pensado para
+      // box-sizing:border-box). Como ajustarCanvasEscritorio() ya
+      // controla ese tamaño a mano (con box-sizing:content-box, para
+      // evitar el desenfoque de subpíxel), ambos terminaban peleando por
+      // el tamaño del canvas cada ~500ms: Phaser lo reescribía con su
+      // propio valor, eso cambiaba el tamaño de "contenedor-phaser" (que
+      // se ajusta a su contenido), lo que a su vez disparaba nuestro
+      // ResizeObserver para corregirlo de nuevo, en un ciclo sin fin que
+      // se veía como el tablero "brincando"/deformándose cada segundo.
+      // Un intervalo enorme desactiva esa revisión periódica sin tocar
+      // el redimensionamiento real por eventos de resize/orientación.
+      resizeInterval: 1000 * 60 * 60,
     },
     scene: [EscenaJuego],
   };
@@ -2809,8 +2825,14 @@ function programarAjusteCanvasEscritorio(retraso = 120) {
 // Phaser puede volver a escribir width/height unos instantes después de
 // arrancar. El observador detecta ese único cambio tardío y recupera el
 // tamaño entero calculado; al quedar estable ya no realiza más escrituras.
-function registrarObservadorCanvasEscritorio(canvas) {
-  if (observadorCanvasEscritorio || !canvas) return;
+// Importante: observa el CONTENEDOR, no el canvas. Si observara el canvas,
+// como ajustarCanvasEscritorio() escribe el tamaño del propio canvas, cada
+// corrección disparaba de nuevo el observador (y a la vez el ajuste interno
+// de Phaser, que reescribe el canvas con su propio cálculo fraccionario),
+// generando un ciclo infinito de ambos "peleando" por el tamaño y un
+// parpadeo/deformación visible cada medio segundo aproximadamente.
+function registrarObservadorCanvasEscritorio(contenedor) {
+  if (observadorCanvasEscritorio || !contenedor) return;
   if (!window.ResizeObserver) {
     programarAjusteCanvasEscritorio(700);
     return;
@@ -2819,7 +2841,7 @@ function registrarObservadorCanvasEscritorio(canvas) {
   observadorCanvasEscritorio = new ResizeObserver(() => {
     if (!esVistaMovil()) programarAjusteCanvasEscritorio(0);
   });
-  observadorCanvasEscritorio.observe(canvas);
+  observadorCanvasEscritorio.observe(contenedor);
 }
 
 // Registra un único listener de resize (con debounce) que recalcula el
