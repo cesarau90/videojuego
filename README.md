@@ -108,8 +108,8 @@ un servidor pero el jefe conserva todo el daño ya recibido.
 | Nivel | Amenazas reales | Elementos simultáneos | Se mueven | Vida de una amenaza normal | Vida de una crítica |
 |---|---|---|---|---|---|
 | 1 | 10 | hasta 2 | ~15% | 4.0 s | 3.0 s (75%) |
-| 2 | 15 | hasta 3 | ~40% | 3.4 s | 2.55 s (75%) |
-| 3 | 20 | hasta 4 | ~70% | 3.0 s | 2.25 s (75%) |
+| 2 | 15 | hasta 3 | ~45% | 3.2 s | 2.4 s (75%) |
+| 3 | 25 | hasta 5 | ~75% | 2.7 s | 2.025 s (75%) |
 
 Además, en niveles más altos aumenta la probabilidad de malware crítico y
 resistente, y la velocidad de los elementos móviles. La dificultad sube de
@@ -127,7 +127,9 @@ forma progresiva pero el juego sigue siendo completable en los tres niveles.
 - **Derrota:** los tres servidores quedan fuera de línea → pantalla de
   derrota con la puntuación y botón "Volver a Intentar".
 - **Victoria:** se derrota al jefe del nivel 3 → pantalla de victoria con
-  la puntuación final y botón "Volver a Intentar".
+  la puntuación final, registro opcional de gamertag, tabla con los 10
+  mejores resultados y botón "Volver a Intentar". La tabla se conserva en
+  el navegador mediante `localStorage`, sin cuentas ni servicios externos.
 
 ## Tecnologías
 
