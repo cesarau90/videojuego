@@ -26,16 +26,16 @@ const NIVELES = [
     probabilidadDuplicador: 0,
   },
   {
-    numero: 2, virusRequeridos: 15, tiempoAparicion: 1300, tiempoVidaVirus: 3400, probabilidadSeguro: 0.25,
-    maxElementos: 3, probabilidadMovimiento: 0.4, probabilidadCritica: 0.12, probabilidadResistente: 0.1,
+    numero: 2, virusRequeridos: 15, tiempoAparicion: 1200, tiempoVidaVirus: 3200, probabilidadSeguro: 0.25,
+    maxElementos: 3, probabilidadMovimiento: 0.45, probabilidadCritica: 0.14, probabilidadResistente: 0.12,
     velocidadMin: 0.6, velocidadMax: 1.0,
     probabilidadDuplicador: 0.12,
   },
   {
-    numero: 3, virusRequeridos: 25, tiempoAparicion: 900, tiempoVidaVirus: 3000, probabilidadSeguro: 0.35,
-    maxElementos: 4, probabilidadMovimiento: 0.7, probabilidadCritica: 0.15, probabilidadResistente: 0.15,
+    numero: 3, virusRequeridos: 25, tiempoAparicion: 800, tiempoVidaVirus: 2700, probabilidadSeguro: 0.3,
+    maxElementos: 5, probabilidadMovimiento: 0.75, probabilidadCritica: 0.18, probabilidadResistente: 0.17,
     velocidadMin: 0.9, velocidadMax: 1.4,
-    probabilidadDuplicador: 0.18,
+    probabilidadDuplicador: 0.2,
   },
 ];
 
