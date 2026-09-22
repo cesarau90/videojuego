@@ -290,9 +290,9 @@ activaba la vista móvil con cualquier ventana de alto ≤768px, mientras
 1280×720 terminaba mostrado a 1900×694: se ampliaba y deformaba.
 
 Las reglas móviles del CSS ahora exigen las mismas condiciones de tamaño
-y puntero que JavaScript. Así, una PC conserva el modo de escritorio y la
-proporción 16:9 del tablero, incluidos los círculos y textos. No eliminar
-esa condición de puntero al modificar los estilos responsive.
+y dispositivo que JavaScript mediante la clase `html.vista-movil`. Así,
+una PC conserva el modo de escritorio y la proporción 16:9 del tablero,
+incluidos los círculos y textos.
 
 ### Tamaño del tablero en escritorio
 
@@ -316,6 +316,22 @@ máximos, por lo que siempre conservan su proporción. JavaScript calcula un
 mundo horizontal a partir del tamaño real de `#contenedor-phaser`, usa un
 alto lógico mínimo seguro y compacta la fila de servidores. La rotación
 reconstruye el tablero y conserva el progreso, los elementos y los jefes.
+
+### Corrección para Safari móvil al rotar
+
+Safari puede informar valores inconsistentes para `hover` y `pointer` al
+girar un iPhone o iPad, haciendo que CSS y JavaScript eligieran modos
+distintos. `esVistaMovil()` ahora también comprueba
+`navigator.maxTouchPoints` y el agente móvil, y sincroniza el resultado en
+la clase `html.vista-movil`; los estilos ya no repiten su propia detección.
+
+Además, `ajustarCanvasMovil()` calcula explícitamente el ancho y el alto
+visibles con ajuste tipo `contain`, usando la proporción física del canvas.
+Safari ya no puede reducir una sola dimensión ni convertir los círculos en
+óvalos. Este ajuste se reaplica al iniciar y después de cada rotación.
+Antes de cada `pointerdown`, `mousedown` o `touchstart`, también se actualizan
+los límites de entrada de Phaser con la posición real del canvas, para que
+el toque coincida con la amenaza aun cuando Safari mueva sus barras.
 
 ### Corrección posterior: parpadeo/deformación periódica del tablero en PC
 
@@ -353,7 +369,7 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=6` y `game.js?v=8`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=7` y `game.js?v=9`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la

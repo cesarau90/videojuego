@@ -135,18 +135,33 @@ const PUNTO_QUIEBRE_MOVIL = 768;
 //    sigue tratándose como móvil sin importar su orientación (un
 //    teléfono de 390x844 mide igual de "angosto" al rotarlo a 844x390,
 //    ahora es el alto el que mide 390).
-// 2) El dispositivo es principalmente táctil (sin mouse/trackpad de
-//    precisión), para no activar la vista móvil en laptops de pantalla
-//    corta (por ejemplo, 1366x768, muy comunes) que sí tienen un puntero
-//    fino.
+// 2) El dispositivo es táctil o se identifica como móvil. Se consulta
+//    navigator.maxTouchPoints además de las media queries porque Safari en
+//    iPhone/iPad puede reportar temporalmente un puntero fino al rotar.
+//    Una laptop normal de pantalla corta sigue usando la vista de PC.
 // Se reevalúa en cada llamada, así que responde a rotaciones y cambios de
 // tamaño de ventana sin necesidad de recargar la página.
 function esVistaMovil() {
   const ladoMenor = Math.min(window.innerWidth || 0, window.innerHeight || 0);
   if (!(ladoMenor > 0 && ladoMenor <= PUNTO_QUIEBRE_MOVIL)) return false;
-  if (!window.matchMedia) return true;
-  return window.matchMedia('(hover: none), (pointer: coarse)').matches;
+  const tactil = (navigator.maxTouchPoints || 0) > 0;
+  const punteroTactil = window.matchMedia
+    ? window.matchMedia('(hover: none), (pointer: coarse)').matches
+    : false;
+  const agenteMovil = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+  return tactil || punteroTactil || agenteMovil;
 }
+
+// El CSS móvil se activa con esta clase en vez de repetir la detección con
+// media queries. Así JavaScript y CSS nunca pueden elegir modos distintos,
+// incluso si Safari cambia lo que informa sobre hover/pointer al rotar.
+function sincronizarClaseVistaMovil() {
+  document.documentElement.classList.toggle('vista-movil', esVistaMovil());
+}
+
+sincronizarClaseVistaMovil();
+window.addEventListener('resize', sincronizarClaseVistaMovil);
+window.addEventListener('orientationchange', sincronizarClaseVistaMovil);
 
 // Calcula las dimensiones lógicas del tablero según el modo actual:
 // - Escritorio: siempre 1280x720 fijo (sin cambios respecto al diseño
@@ -600,6 +615,7 @@ class EscenaJuego extends Phaser.Scene {
     // teléfono, etc.) reajustando el tablero en vivo en vez de recargarlo.
     if (this.esVistaMovilActual) {
       this.registrarListenerRedimension();
+      programarAjusteCanvasMovil(0);
     }
 
     this.contadorElementosNivel = 0;
@@ -627,6 +643,8 @@ class EscenaJuego extends Phaser.Scene {
     this.actualizarHUD();
     this.actualizarBotonEscaner();
     this.iniciarNivelActual();
+
+    registrarSincronizacionEntradaCanvas(this.game.canvas);
 
     if (!this.esVistaMovilActual) {
       registrarObservadorCanvasEscritorio(
@@ -825,6 +843,7 @@ class EscenaJuego extends Phaser.Scene {
       Math.abs(nuevasDimensiones.ancho - this.anchoLogico) < 6 &&
       Math.abs(nuevasDimensiones.alto - this.altoLogico) < 6
     ) {
+      programarAjusteCanvasMovil(0);
       return; // el cambio es insignificante, no vale la pena reconstruir
     }
 
@@ -881,6 +900,7 @@ class EscenaJuego extends Phaser.Scene {
     this.actualizarHUD();
     this.actualizarBotonEscaner();
     this.actualizarLeyendaExtra();
+    programarAjusteCanvasMovil(0);
   }
 
   // Reubica con Phaser.Math.Clamp los elementos activos y al jefe dentro
@@ -2738,6 +2758,7 @@ function reiniciarEstado() {
 
 function iniciarJuegoDesdeCero() {
   reiniciarEstado();
+  sincronizarClaseVistaMovil();
   mostrarPantalla('pantalla-juego');
 
   if (!juegoPhaser) {
@@ -2751,10 +2772,43 @@ function iniciarJuegoDesdeCero() {
     juegoPhaser.scene.start('EscenaJuego');
   }
 
-  ajustarCanvasEscritorio();
-  // Phaser termina de crear y estilizar el canvas de forma asíncrona. Este
-  // segundo ajuste ocurre cuando sus medidas definitivas ya están listas.
-  programarAjusteCanvasEscritorio(120);
+  if (esVistaMovil()) {
+    programarAjusteCanvasMovil(120);
+  } else {
+    ajustarCanvasEscritorio();
+    // Phaser termina de crear y estilizar el canvas de forma asíncrona. Este
+    // segundo ajuste ocurre cuando sus medidas definitivas ya están listas.
+    programarAjusteCanvasEscritorio(120);
+  }
+}
+
+// Ajusta el canvas móvil dentro de su contenedor como "contain": calcula
+// ancho y alto juntos a partir de la proporción física real. Esta garantía
+// en JavaScript evita que Safari reduzca solo la altura y aplaste el tablero.
+function ajustarCanvasMovil() {
+  if (!juegoPhaser || !esVistaMovil()) return;
+  const canvas = juegoPhaser.canvas;
+  const contenedor = document.getElementById('contenedor-phaser');
+  if (!canvas || !contenedor || !canvas.width || !canvas.height) return;
+
+  const bordeTotal = 2;
+  const anchoMaximo = Math.max(1, contenedor.clientWidth - bordeTotal);
+  const altoMaximo = Math.max(1, contenedor.clientHeight - bordeTotal);
+  const proporcion = canvas.width / canvas.height;
+
+  let anchoContenido = anchoMaximo;
+  let altoContenido = Math.round(anchoContenido / proporcion);
+  if (altoContenido > altoMaximo) {
+    altoContenido = altoMaximo;
+    anchoContenido = Math.round(altoContenido * proporcion);
+  }
+
+  canvas.style.setProperty('box-sizing', 'content-box', 'important');
+  canvas.style.setProperty('width', `${anchoContenido}px`, 'important');
+  canvas.style.setProperty('height', `${altoContenido}px`, 'important');
+  canvas.style.setProperty('margin', '0', 'important');
+
+  sincronizarEntradaCanvas();
 }
 
 // En escritorio (no en vista móvil, que ya maneja su propio tamaño), fija
@@ -2807,12 +2861,62 @@ function ajustarCanvasEscritorio() {
     canvas.style.setProperty('box-sizing', 'content-box', 'important');
     canvas.style.setProperty('width', anchoPx, 'important');
     canvas.style.setProperty('height', altoPx, 'important');
+    sincronizarEntradaCanvas();
   }
 }
 
+// Cuando el tamaño CSS se controla manualmente, Phaser puede conservar unos
+// límites centrados calculados antes del ajuste. Se guardan aquí los límites
+// reales del área de contenido para que mouse y toque coincidan exactamente
+// con los gráficos, descontando el borde visual de 1px.
+function sincronizarEntradaCanvas() {
+  if (!juegoPhaser?.canvas || !juegoPhaser.scale) return;
+  const canvas = juegoPhaser.canvas;
+  const rect = canvas.getBoundingClientRect();
+  const estilos = window.getComputedStyle(canvas);
+  const bordeIzquierdo = parseFloat(estilos.borderLeftWidth) || 0;
+  const bordeSuperior = parseFloat(estilos.borderTopWidth) || 0;
+  const anchoContenido = canvas.clientWidth;
+  const altoContenido = canvas.clientHeight;
+  if (anchoContenido <= 0 || altoContenido <= 0) return;
+
+  juegoPhaser.scale.canvasBounds.setTo(
+    rect.left + bordeIzquierdo,
+    rect.top + bordeSuperior,
+    anchoContenido,
+    altoContenido
+  );
+  juegoPhaser.scale.displayScale.set(
+    canvas.width / anchoContenido,
+    canvas.height / altoContenido
+  );
+}
+
 let temporizadorAjusteCanvas = null;
+let temporizadorAjusteCanvasMovil = null;
 let listenerAjusteCanvasRegistrado = false;
 let observadorCanvasEscritorio = null;
+let canvasEntradaSincronizado = null;
+
+// Actualiza los límites justo antes de que Phaser procese una pulsación.
+// Safari puede recolocar el canvas después de ocultar/mostrar sus barras;
+// la fase de captura garantiza que el evento use la posición más reciente.
+function registrarSincronizacionEntradaCanvas(canvas) {
+  if (!canvas || canvasEntradaSincronizado === canvas) return;
+  canvasEntradaSincronizado = canvas;
+  const sincronizarAntesDelToque = () => sincronizarEntradaCanvas();
+  canvas.addEventListener('pointerdown', sincronizarAntesDelToque, true);
+  canvas.addEventListener('mousedown', sincronizarAntesDelToque, true);
+  canvas.addEventListener('touchstart', sincronizarAntesDelToque, { capture: true, passive: true });
+}
+
+function programarAjusteCanvasMovil(retraso = 120) {
+  clearTimeout(temporizadorAjusteCanvasMovil);
+  temporizadorAjusteCanvasMovil = setTimeout(() => {
+    temporizadorAjusteCanvasMovil = null;
+    ajustarCanvasMovil();
+  }, retraso);
+}
 
 function programarAjusteCanvasEscritorio(retraso = 120) {
   clearTimeout(temporizadorAjusteCanvas);
@@ -2850,10 +2954,16 @@ function registrarObservadorCanvasEscritorio(contenedor) {
 function registrarAjusteCanvasEscritorio() {
   if (listenerAjusteCanvasRegistrado) return;
   listenerAjusteCanvasRegistrado = true;
-  window.addEventListener('resize', () => {
-    if (esVistaMovil()) return; // el reajuste móvil lo maneja la escena
-    programarAjusteCanvasEscritorio();
-  });
+  const alCambiarVentana = () => {
+    sincronizarClaseVistaMovil();
+    if (esVistaMovil()) {
+      programarAjusteCanvasMovil(240);
+    } else {
+      programarAjusteCanvasEscritorio();
+    }
+  };
+  window.addEventListener('resize', alCambiarVentana);
+  window.addEventListener('orientationchange', alCambiarVentana);
 }
 
 // Se ejecuta al presionar "Continuar" en la tarjeta de nivel superado:

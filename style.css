@@ -825,7 +825,7 @@ body {
 }
 
 /* ============ VISTA MÓVIL (≤768px) ============
-   El tablero deja de estar limitado a 960px y en cambio ocupa todo el
+   El tablero deja de usar el límite de escritorio y ocupa el
    ancho y el alto disponibles del teléfono, tomando en cuenta las barras
    de Safari y las áreas seguras del dispositivo. Phaser calcula un mundo
    lógico acorde a esta pantalla (ver game.js: calcularDimensionesLogicas),
@@ -833,13 +833,9 @@ body {
    deforma. Se activa por ancho O por alto (no solo por ancho) para que un
    teléfono siga tratándose como móvil también en horizontal, donde su
    ancho crece más allá de 768px pero su alto sigue siendo angosto.
-   Igual que esVistaMovil() en game.js, requiere entrada táctil o sin
-   hover: una ventana baja de PC debe conservar el tablero de escritorio. */
-@media (max-width: 768px) and (hover: none),
-       (max-width: 768px) and (pointer: coarse),
-       (max-height: 768px) and (hover: none),
-       (max-height: 768px) and (pointer: coarse) {
-  #pantalla-juego.activa {
+   La clase .vista-movil la pone game.js usando una sola detección robusta
+   para CSS y JavaScript; esto evita diferencias de hover/pointer en Safari. */
+html.vista-movil #pantalla-juego.activa {
     height: 100dvh;
     min-height: 100dvh;
     max-height: 100dvh;
@@ -849,9 +845,9 @@ body {
     padding-bottom: max(10px, env(safe-area-inset-bottom, 0px));
     padding-left: max(10px, env(safe-area-inset-left, 0px));
     padding-right: max(10px, env(safe-area-inset-right, 0px));
-  }
+}
 
-  #contenedor-phaser {
+html.vista-movil #contenedor-phaser {
     width: 100%;
     max-width: 100%;
     flex: 1 1 auto;
@@ -861,9 +857,9 @@ body {
     align-items: center;
     justify-content: center;
     overflow: hidden;
-  }
+}
 
-  #contenedor-phaser canvas {
+html.vista-movil #contenedor-phaser canvas {
     /* Ambas dimensiones quedan automáticas para conservar la proporción
        intrínseca del canvas. Antes width:100% + max-height:100% reducía
        solo la altura al girar el teléfono y deformaba todo el tablero. */
@@ -872,12 +868,11 @@ body {
     height: auto !important;
     max-height: calc(100% - 2px);
     max-width: calc(100% - 2px);
-  }
+}
 
-  .barra-escaner {
+html.vista-movil .barra-escaner {
     max-width: 100%;
     flex: 0 0 auto;
-  }
 }
 
 /* ============ ANIMACIONES ============ */
