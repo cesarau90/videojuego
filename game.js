@@ -465,6 +465,187 @@ function animarConteoPuntos(desde, hasta, duracion = 650) {
 }
 
 /* ------------------------------------------------------------------
+   4B. CLASIFICACIÓN GLOBAL CON SUPABASE
+   La clave publicable identifica al cliente web y es segura para usarse
+   en el navegador. Los permisos reales se limitan con las políticas RLS
+   definidas en SUPABASE_SETUP.sql; nunca se usa una clave secreta aquí.
+   ------------------------------------------------------------------ */
+const SUPABASE_URL = 'https://msxptdklbdxeaheqcbmc.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_g6XPAfwi05KqohaBm0uL3g_umR1yBIc';
+const TABLA_PUNTUACIONES = 'puntuaciones';
+const CLAVE_GAMERTAG_RECORDADO = 'eliminaMalware.gamertag';
+const MAXIMO_REGISTROS_GLOBALES = 10;
+
+let partidaGlobalGuardada = false;
+let idPartidaVictoria = null;
+let puntuacionVictoriaPendiente = 0;
+
+function normalizarGamertag(valor) {
+  return String(valor || '')
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 _.-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 16);
+}
+
+function crearIdPartida() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (caracter) => {
+    const aleatorio = Math.floor(Math.random() * 16);
+    const valor = caracter === 'x' ? aleatorio : (aleatorio & 0x3) | 0x8;
+    return valor.toString(16);
+  });
+}
+
+function formatearFechaGlobal(fecha) {
+  const valor = new Date(fecha);
+  if (Number.isNaN(valor.getTime())) return '—';
+  return new Intl.DateTimeFormat('es-MX', {
+    day: '2-digit', month: '2-digit', year: '2-digit',
+  }).format(valor);
+}
+
+function mostrarMensajeGamertag(texto, tipo = '') {
+  const mensaje = document.getElementById('mensaje-gamertag');
+  if (!mensaje) return;
+  mensaje.textContent = texto;
+  mensaje.className = `mensaje-gamertag${tipo ? ` ${tipo}` : ''}`;
+}
+
+function mostrarEstadoTabla(texto) {
+  const cuerpo = document.getElementById('tabla-registros-cuerpo');
+  if (!cuerpo) return;
+  cuerpo.replaceChildren();
+  const fila = document.createElement('tr');
+  const celda = document.createElement('td');
+  celda.colSpan = 4;
+  celda.className = 'tabla-vacia';
+  celda.textContent = texto;
+  fila.appendChild(celda);
+  cuerpo.appendChild(fila);
+}
+
+function dibujarTablaGlobal(registros) {
+  const cuerpo = document.getElementById('tabla-registros-cuerpo');
+  if (!cuerpo) return;
+  cuerpo.replaceChildren();
+
+  if (!registros.length) {
+    mostrarEstadoTabla('Aún no hay puntuaciones');
+    return;
+  }
+
+  registros.forEach((registro, indice) => {
+    const fila = document.createElement('tr');
+    if (registro.partida_id === idPartidaVictoria) fila.classList.add('registro-actual');
+    [indice + 1, registro.gamertag, registro.puntuacion, formatearFechaGlobal(registro.creado_en)]
+      .forEach((valor) => {
+        const celda = document.createElement('td');
+        celda.textContent = valor;
+        fila.appendChild(celda);
+      });
+    cuerpo.appendChild(fila);
+  });
+}
+
+async function cargarTablaGlobal() {
+  mostrarEstadoTabla('Cargando clasificación…');
+  const columnas = 'gamertag,puntuacion,creado_en,partida_id';
+  const consulta = `select=${columnas}&order=puntuacion.desc,creado_en.asc&limit=${MAXIMO_REGISTROS_GLOBALES}`;
+
+  try {
+    const respuesta = await fetch(`${SUPABASE_URL}/rest/v1/${TABLA_PUNTUACIONES}?${consulta}`, {
+      headers: { apikey: SUPABASE_PUBLISHABLE_KEY },
+    });
+    if (!respuesta.ok) throw new Error(`Supabase respondió ${respuesta.status}`);
+    const registros = await respuesta.json();
+    dibujarTablaGlobal(Array.isArray(registros) ? registros : []);
+  } catch (error) {
+    console.warn('No se pudo cargar la clasificación global:', error);
+    mostrarEstadoTabla('Clasificación temporalmente no disponible');
+  }
+}
+
+function prepararClasificacionVictoria() {
+  const formulario = document.getElementById('formulario-gamertag');
+  const campo = document.getElementById('campo-gamertag');
+  const boton = document.getElementById('btn-guardar-gamertag');
+  if (!formulario || !campo || !boton) return;
+
+  partidaGlobalGuardada = false;
+  idPartidaVictoria = crearIdPartida();
+  puntuacionVictoriaPendiente = estado.puntuacion;
+  formulario.reset();
+
+  try {
+    campo.value = normalizarGamertag(localStorage.getItem(CLAVE_GAMERTAG_RECORDADO));
+  } catch (error) {
+    // El formulario sigue funcionando si el navegador bloquea localStorage.
+  }
+
+  campo.disabled = false;
+  boton.disabled = false;
+  boton.textContent = 'Guardar puntuación';
+  mostrarMensajeGamertag('El gamertag se recordará en este dispositivo.');
+  cargarTablaGlobal();
+  setTimeout(() => campo.focus({ preventScroll: true }), 500);
+}
+
+async function guardarPuntuacionGlobal(evento) {
+  evento.preventDefault();
+  if (partidaGlobalGuardada) return;
+
+  const campo = document.getElementById('campo-gamertag');
+  const boton = document.getElementById('btn-guardar-gamertag');
+  const gamertag = normalizarGamertag(campo.value);
+  campo.value = gamertag;
+
+  if (gamertag.length < 2) {
+    mostrarMensajeGamertag('Escribe un gamertag de al menos 2 caracteres.', 'error');
+    campo.focus();
+    return;
+  }
+
+  boton.disabled = true;
+  boton.textContent = 'Guardando…';
+  mostrarMensajeGamertag('Enviando puntuación…');
+
+  try {
+    const respuesta = await fetch(`${SUPABASE_URL}/rest/v1/${TABLA_PUNTUACIONES}`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_PUBLISHABLE_KEY,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        gamertag,
+        puntuacion: puntuacionVictoriaPendiente,
+        partida_id: idPartidaVictoria,
+      }),
+    });
+    if (!respuesta.ok) throw new Error(`Supabase respondió ${respuesta.status}`);
+
+    partidaGlobalGuardada = true;
+    try {
+      localStorage.setItem(CLAVE_GAMERTAG_RECORDADO, gamertag);
+    } catch (error) {
+      // El registro global ya se guardó; recordar el nombre es opcional.
+    }
+    campo.disabled = true;
+    boton.textContent = 'Puntuación guardada';
+    mostrarMensajeGamertag('Tu puntuación ya aparece en la clasificación global.', 'exito');
+    await cargarTablaGlobal();
+  } catch (error) {
+    console.warn('No se pudo guardar la puntuación global:', error);
+    boton.disabled = false;
+    boton.textContent = 'Guardar puntuación';
+    mostrarMensajeGamertag('No se pudo guardar. Inténtalo nuevamente.', 'error');
+  }
+}
+
+/* ------------------------------------------------------------------
    5. ÍCONOS VECTORIALES (dibujados con Phaser Graphics, sin emojis
    ni imágenes). Todos usan el mismo grosor de línea.
    ------------------------------------------------------------------ */
@@ -2171,6 +2352,7 @@ class EscenaJuego extends Phaser.Scene {
         reproducirSonido('victoria');
         document.getElementById('texto-puntaje-victoria').textContent =
           `Puntuación final: ${estado.puntuacion} puntos`;
+        prepararClasificacionVictoria();
         mostrarPantalla('pantalla-victoria');
       } else {
         const configuracionNivel = NIVELES[estado.indiceNivel];
@@ -3012,6 +3194,7 @@ document.getElementById('btn-siguiente-nivel').addEventListener('click', continu
 document.getElementById('btn-reintentar').addEventListener('click', iniciarJuegoDesdeCero);
 document.getElementById('btn-jugar-de-nuevo').addEventListener('click', iniciarJuegoDesdeCero);
 document.getElementById('btn-escaner').addEventListener('click', activarEscanerDesdeUI);
+document.getElementById('formulario-gamertag').addEventListener('submit', guardarPuntuacionGlobal);
 
 // Atajo de teclado: tecla "S" activa el escáner mientras se está jugando
 window.addEventListener('keydown', (evento) => {

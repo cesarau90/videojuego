@@ -131,7 +131,9 @@ forma progresiva pero el juego sigue siendo completable en los tres niveles.
 - **Derrota:** los tres servidores quedan fuera de línea → pantalla de
   derrota con la puntuación y botón "Volver a Intentar".
 - **Victoria:** se derrota al jefe del nivel 3 → pantalla de victoria con
-  la puntuación final y botón "Volver a Intentar".
+  la puntuación final, registro opcional de gamertag, clasificación global
+  con los 10 mejores resultados y botón "Volver a Intentar". El último
+  gamertag se recuerda en el mismo navegador para las partidas siguientes.
 
 ## Tecnologías
 
@@ -144,6 +146,8 @@ forma progresiva pero el juego sigue siendo completable en los tres niveles.
 - **Web Audio API**: sonidos generados en el navegador (acierto, error,
   combo, escudo roto, servidor perdido, alerta de jefe, nivel superado,
   victoria y derrota), sin archivos de audio externos.
+- **Supabase REST API**: almacena y consulta la clasificación global usando
+  una clave publicable y políticas Row Level Security.
 
 ## Generación procedural
 
@@ -159,7 +163,19 @@ simultáneos también dependen del nivel, por lo que cada partida es distinta.
 - `index.html` — estructura de las pantallas y el botón del escáner.
 - `style.css` — estilos, animaciones y diseño responsive.
 - `game.js` — lógica del juego, escena de Phaser, jefes, servidores, combo
-  y escáner (comentado en español).
+  escáner y clasificación global (comentado en español).
+- `SUPABASE_SETUP.sql` — crea la tabla de puntuaciones y sus permisos seguros.
+
+## Preparar la clasificación global
+
+1. Abre el proyecto en el panel de Supabase.
+2. Entra a **SQL Editor → New query**.
+3. Copia todo el contenido de `SUPABASE_SETUP.sql` y pulsa **Run**.
+4. Confirma en **Table Editor** que exista la tabla `puntuaciones`.
+
+El juego usa solamente la URL y la clave publicable del proyecto. Nunca se
+debe incluir una clave `sb_secret_`, `service_role` ni la contraseña de la
+base de datos en estos archivos.
 
 ## Ejecutar localmente
 

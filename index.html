@@ -12,7 +12,7 @@
     rel="stylesheet"
   />
 
-  <link rel="stylesheet" href="style.css?v=7" />
+  <link rel="stylesheet" href="style.css?v=9" />
 </head>
 <body>
 
@@ -215,6 +215,46 @@
       <h1 class="panel-titulo titulo-resultado">Servidor protegido</h1>
       <p class="panel-texto texto-resultado">Eliminaste todas las amenazas de los 3 niveles.</p>
       <p id="texto-puntaje-victoria" class="panel-puntaje puntaje-resultado"></p>
+
+      <form id="formulario-gamertag" class="formulario-gamertag" novalidate>
+        <label for="campo-gamertag">Registra tu gamertag</label>
+        <div class="gamertag-controles">
+          <input
+            id="campo-gamertag"
+            name="gamertag"
+            type="text"
+            minlength="2"
+            maxlength="16"
+            pattern="[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 _.-]{2,16}"
+            autocomplete="nickname"
+            placeholder="Tu gamertag"
+            aria-describedby="mensaje-gamertag"
+            required
+          />
+          <button id="btn-guardar-gamertag" class="boton-guardar" type="submit">Guardar puntuación</button>
+        </div>
+        <p id="mensaje-gamertag" class="mensaje-gamertag" aria-live="polite"></p>
+      </form>
+
+      <section class="clasificacion" aria-labelledby="titulo-clasificacion">
+        <h2 id="titulo-clasificacion">Clasificación global</h2>
+        <div class="tabla-registros-contenedor">
+          <table class="tabla-registros">
+            <thead>
+              <tr>
+                <th scope="col">#</th>
+                <th scope="col">Gamertag</th>
+                <th scope="col">Puntos</th>
+                <th scope="col">Fecha</th>
+              </tr>
+            </thead>
+            <tbody id="tabla-registros-cuerpo">
+              <tr><td class="tabla-vacia" colspan="4">Cargando clasificación…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <button id="btn-jugar-de-nuevo" class="boton-primario boton-resultado">Volver a intentar</button>
     </div>
   </div>
@@ -222,6 +262,6 @@
   <!-- Librería Phaser 3 desde CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js"></script>
   <!-- Lógica del juego -->
-  <script src="game.js?v=11"></script>
+  <script src="game.js?v=12"></script>
 </body>
 </html>

@@ -3,9 +3,9 @@
 Desarrolla un videojuego web completo llamado **"Elimina el Malware"**,
 relacionado con la ciberseguridad y la carrera de Ingeniería en Sistemas y
 Negocios Digitales (ISND). Debe funcionar directamente en el navegador y ser
-compatible con GitHub Pages, usando solo HTML, CSS, JavaScript y **Phaser 3**
-(cargado por CDN). No uses bases de datos, cuentas, registro, servicios
-externos ni tecnologías adicionales innecesarias.
+compatible con GitHub Pages, usando HTML, CSS, JavaScript y **Phaser 3**
+(cargado por CDN). Supabase se usa únicamente para la clasificación global;
+no se requieren cuentas de jugador ni otros servicios externos.
 
 Entrega el código en archivos separados: `index.html`, `style.css`,
 `game.js` y `README.md`. Código sencillo, comentado en español, explicable
@@ -242,7 +242,8 @@ derrota. Tras derrotar al jefe se reproduce la animación existente de
 - **Victoria final**: misma idea que Derrota pero en verde — ícono de
   escudo con check que se dibuja con un trazo, textos escalonados, y el
   panel cierra con un pequeño "rebote" de triunfo (overshoot de escala)
-  en vez de la sacudida. Puntuación final y botón "Volver a Intentar".
+  en vez de la sacudida. Puntuación final, formulario opcional de gamertag,
+  clasificación global y botón "Volver a Intentar".
 - Ambas respetan `prefers-reduced-motion` (fundido simple en vez de la
   secuencia completa) y se repiten correctamente cada vez que se pierde
   o se gana otra vez en la misma sesión.
@@ -376,7 +377,7 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=7` y `game.js?v=11`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=9` y `game.js?v=12`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la
@@ -403,6 +404,22 @@ archivos, incluido el propio `index.html`. Es decir:
   hacer una sola recarga forzada tipo Ctrl+Shift+R) antes de probar
   garantiza ver la versión nueva; después de eso, recargas normales ya
   reflejan los cambios sin necesidad de forzar nada.
+
+## 11. Clasificación global y gamertag recordado
+
+Al completar el nivel 3, el jugador puede registrar un gamertag de 2 a 16
+caracteres junto con su puntuación. La pantalla muestra los 10 mejores
+resultados globales ordenados por puntuación y fecha. Los registros se guardan
+en la tabla `puntuaciones` de Supabase, creada con `SUPABASE_SETUP.sql`.
+
+La aplicación utiliza únicamente la URL del proyecto y una clave publicable.
+Row Level Security permite leer e insertar registros válidos, pero impide que
+el navegador edite o borre puntuaciones existentes. Cada victoria genera un
+identificador único y solo puede enviarse una vez desde la interfaz.
+
+El último gamertag utilizado se conserva en `localStorage`, por lo que aparece
+rellenado al volver a jugar desde el mismo navegador, incluso después de cerrar
+y abrir la página. No se guarda ninguna contraseña ni clave secreta.
 
 ## Reglas de trabajo durante todo el proyecto
 
