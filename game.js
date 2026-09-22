@@ -110,11 +110,64 @@ function colorPorTipo(tipo) {
   return PALETA.azul; // 'seguro'
 }
 
-// Tamaño lógico fijo del tablero (mínimo 1280x720, como pide el diseño).
-// Todas las posiciones del HUD, el servidor y los elementos se calculan
-// en este espacio fijo, sin importar la resolución física de la pantalla.
+// Tamaño lógico fijo del tablero de escritorio (mínimo 1280x720, como pide
+// el diseño). Todas las posiciones del HUD, el servidor y los elementos se
+// calculan en este espacio fijo cuando NO se está en vista móvil.
 const ANCHO_JUEGO = 1280;
 const ALTO_JUEGO = 720;
+
+/* ------------------------------------------------------------------
+   1C. TABLERO RESPONSIVE PARA MÓVIL (≤768px)
+   En vista móvil el tablero deja de usar el mundo fijo 1280x720 y en su
+   lugar usa un mundo lógico VERTICAL cuya proporción se calcula a partir
+   del ancho y alto reales de la pantalla del teléfono (para llenar el
+   espacio disponible sin estirar ni recortar nada). La altura lógica se
+   mantiene fija (para que las fuentes y márgenes absolutos sigan viendose
+   igual de bien) y solo el ancho lógico varía según la proporción real.
+   ------------------------------------------------------------------ */
+const ALTO_JUEGO_MOVIL = 1280;
+const ANCHO_JUEGO_MOVIL_MIN = 480;
+const ANCHO_JUEGO_MOVIL_MAX = 900;
+const PUNTO_QUIEBRE_MOVIL = 768;
+
+// true si la pantalla actual entra en el punto de quiebre móvil. Combina
+// dos condiciones para no confundir un teléfono con una laptop:
+// 1) La dimensión MÁS PEQUEÑA (ancho o alto) es angosta: así un teléfono
+//    sigue tratándose como móvil sin importar su orientación (un
+//    teléfono de 390x844 mide igual de "angosto" al rotarlo a 844x390,
+//    ahora es el alto el que mide 390).
+// 2) El dispositivo es principalmente táctil (sin mouse/trackpad de
+//    precisión), para no activar la vista móvil en laptops de pantalla
+//    corta (por ejemplo, 1366x768, muy comunes) que sí tienen un puntero
+//    fino.
+// Se reevalúa en cada llamada, así que responde a rotaciones y cambios de
+// tamaño de ventana sin necesidad de recargar la página.
+function esVistaMovil() {
+  const ladoMenor = Math.min(window.innerWidth || 0, window.innerHeight || 0);
+  if (!(ladoMenor > 0 && ladoMenor <= PUNTO_QUIEBRE_MOVIL)) return false;
+  if (!window.matchMedia) return true;
+  return window.matchMedia('(hover: none), (pointer: coarse)').matches;
+}
+
+// Calcula las dimensiones lógicas del tablero según el modo actual:
+// - Escritorio: siempre 1280x720 fijo (sin cambios respecto al diseño
+//   original).
+// - Móvil: alto fijo (ALTO_JUEGO_MOVIL) y ancho calculado a partir de la
+//   proporción real ancho/alto de la ventana, para que el tablero llene la
+//   pantalla vertical sin deformarse (se limita a un rango razonable).
+function calcularDimensionesLogicas() {
+  if (!esVistaMovil()) return { ancho: ANCHO_JUEGO, alto: ALTO_JUEGO };
+  const vw = window.innerWidth || ANCHO_JUEGO_MOVIL_MIN;
+  const vh = window.innerHeight || ALTO_JUEGO_MOVIL;
+  const alto = ALTO_JUEGO_MOVIL;
+  const anchoCalculado = Math.round(alto * (vw / vh));
+  const ancho = Phaser.Math.Clamp(anchoCalculado, ANCHO_JUEGO_MOVIL_MIN, ANCHO_JUEGO_MOVIL_MAX);
+  return { ancho, alto };
+}
+
+// Dimensiones lógicas usadas para construir el juego (se fija una vez al
+// crear la instancia de Phaser y se actualiza en cada reajuste de tablero)
+let dimensionesLogicasActuales = { ancho: ANCHO_JUEGO, alto: ALTO_JUEGO };
 
 /* ------------------------------------------------------------------
    1B. CONFIGURACIÓN DE LOS JEFES (uno por nivel)
@@ -483,11 +536,14 @@ class EscenaJuego extends Phaser.Scene {
   }
 
   create() {
-    // El "mundo" del juego siempre mide 1280x720 unidades lógicas: todas
-    // las posiciones (HUD, servidor, elementos) se calculan en este
-    // espacio fijo, sin importar la resolución física de la pantalla.
-    const ancho = ANCHO_JUEGO;
-    const alto = ALTO_JUEGO;
+    // El "mundo" del juego mide 1280x720 unidades lógicas en escritorio, o
+    // un tamaño vertical calculado según la pantalla real en vista móvil
+    // (ver calcularDimensionesLogicas). Todas las posiciones (HUD,
+    // servidores, elementos) se calculan en este espacio lógico, sin
+    // importar la resolución física de la pantalla.
+    this.esVistaMovilActual = esVistaMovil();
+    this.anchoLogico = dimensionesLogicasActuales.ancho;
+    this.altoLogico = dimensionesLogicasActuales.alto;
 
     // Todo el tablero se dibuja dentro de un contenedor escalado según
     // devicePixelRatio (máx. 2): el canvas físico tiene más píxeles que
@@ -501,25 +557,26 @@ class EscenaJuego extends Phaser.Scene {
     // las animaciones decorativas (partículas, sacudidas, destellos)
     this.movimientoReducido = prefiereMovimientoReducido();
 
-    // Fondo oscuro + cuadrícula tenue + red decorativa de nodos
-    this.mundo.add(this.add.rectangle(ancho / 2, alto / 2, ancho, alto, PALETA.fondo));
-    this.dibujarFondoCircuito(ancho, alto);
-    this.dibujarRedDecorativa(ancho, alto);
-
-    this.crearHUD(ancho, alto);
-    this.crearServidoresInferior(ancho, alto);
+    // Fondo, cuadrícula, red decorativa, HUD y servidores viven dentro de
+    // "capaTablero": un contenedor que se puede reconstruir por completo
+    // (ver construirTablero/reajustarTablero) cuando cambia el tamaño de
+    // pantalla o la orientación en vista móvil, sin afectar el resto.
+    this.construirTablero(this.anchoLogico, this.altoLogico);
 
     // Rectángulo negro para oscurecer el tablero al completar un nivel
-    this.overlayOscurecer = this.add.rectangle(ancho / 2, alto / 2, ancho, alto, 0x000000, 0.6).setAlpha(0);
+    this.overlayOscurecer = this.add
+      .rectangle(this.anchoLogico / 2, this.altoLogico / 2, this.anchoLogico, this.altoLogico, 0x000000, 0.6)
+      .setAlpha(0);
     this.mundo.add(this.overlayOscurecer);
 
     // Área donde pueden aparecer los elementos (entre el HUD y el servidor)
-    this.areaJuego = {
-      xMin: 96,
-      xMax: ancho - 96,
-      yMin: 211,
-      yMax: alto - 240,
-    };
+    this.areaJuego = this.calcularAreaJuego(this.anchoLogico, this.altoLogico);
+
+    // En vista móvil, reacciona a cambios de tamaño/orientación (rotar el
+    // teléfono, etc.) reajustando el tablero en vivo en vez de recargarlo.
+    if (this.esVistaMovilActual) {
+      this.registrarListenerRedimension();
+    }
 
     this.contadorElementosNivel = 0;
     this.temporizadorSpawn = null;
@@ -633,20 +690,178 @@ class EscenaJuego extends Phaser.Scene {
       color: opciones.color || PALETA.texto,
       fontStyle: opciones.negrita ? 'bold' : 'normal',
       align: opciones.alinear || 'left',
+      // Envuelve el texto si se indica un ancho máximo (por ejemplo, las
+      // etiquetas de los servidores en pantallas angostas), en vez de
+      // dejarlo desbordar fuera de su recuadro o del canvas.
+      wordWrap: opciones.anchoMaximo ? { width: opciones.anchoMaximo, useAdvancedWrap: true } : undefined,
     });
     estiloTexto.setResolution(this.factorResolucion);
     if (opciones.origenX !== undefined || opciones.origenY !== undefined) {
       estiloTexto.setOrigin(opciones.origenX ?? 0, opciones.origenY ?? 0);
     }
-    this.mundo.add(estiloTexto);
+    (opciones.contenedor || this.mundo).add(estiloTexto);
     return estiloTexto;
   }
 
   // Etiqueta (Inter) + valor (JetBrains Mono) alineados a la izquierda.
   // Devuelve el texto del VALOR, que es el que se actualiza después.
-  crearParEtiquetaValor(x, y, etiqueta, tamano) {
-    const label = this.crearTexto(x, y, etiqueta, { tamano: tamano - 2, color: PALETA.textoSecundario });
-    return this.crearTexto(x + label.width + 10, y, '', { tamano, mono: true, color: PALETA.texto });
+  crearParEtiquetaValor(x, y, etiqueta, tamano, contenedor) {
+    const label = this.crearTexto(x, y, etiqueta, { tamano: tamano - 2, color: PALETA.textoSecundario, contenedor });
+    return this.crearTexto(x + label.width + 10, y, '', { tamano, mono: true, color: PALETA.texto, contenedor });
+  }
+
+  /* ---------------- TABLERO (fondo + HUD + servidores) ---------------- */
+
+  // Construye todo el "tablero" (fondo, cuadrícula, red decorativa, HUD y
+  // servidores) dentro de "capaTablero", un contenedor propio que puede
+  // destruirse y reconstruirse por completo cuando cambia el tamaño de
+  // pantalla en vista móvil (ver reajustarTablero), sin tocar el resto de
+  // objetos del juego (elementos activos, jefe, overlays).
+  construirTablero(ancho, alto) {
+    this.capaTablero = this.add.container(0, 0);
+    this.mundo.add(this.capaTablero);
+
+    const fondo = this.add.rectangle(ancho / 2, alto / 2, ancho, alto, PALETA.fondo);
+    this.capaTablero.add(fondo);
+
+    this.dibujarFondoCircuito(ancho, alto);
+    this.dibujarRedDecorativa(ancho, alto);
+    this.crearHUD(ancho, alto);
+    this.crearServidoresInferior(ancho, alto);
+  }
+
+  // Área donde pueden aparecer los elementos (entre el HUD y los
+  // servidores). El margen lateral siempre es mayor al radio de una
+  // amenaza (48px) más un pequeño respiro, para que ninguna amenaza
+  // aparezca cortada ni fuera del recuadro del tablero.
+  calcularAreaJuego(ancho, alto) {
+    const margenLateral = Math.max(60, Math.round(ancho * 0.075));
+    return {
+      xMin: margenLateral,
+      xMax: ancho - margenLateral,
+      yMin: 211,
+      yMax: alto - 240,
+    };
+  }
+
+  // Activa el reajuste en vivo del tablero para vista móvil: al girar el
+  // teléfono o cambiar el tamaño de la ventana, se recalculan las
+  // dimensiones lógicas y se reconstruye el tablero sin perder el progreso
+  // de la partida. Quita cualquier listener anterior antes de registrar
+  // uno nuevo, para no acumular listeners duplicados entre reinicios.
+  registrarListenerRedimension() {
+    this.quitarListenerRedimension();
+    this.listenerRedimension = () => this.programarReajusteTablero();
+    window.addEventListener('resize', this.listenerRedimension);
+    window.addEventListener('orientationchange', this.listenerRedimension);
+    this.events.once('shutdown', () => this.quitarListenerRedimension());
+  }
+
+  quitarListenerRedimension() {
+    if (!this.listenerRedimension) return;
+    window.removeEventListener('resize', this.listenerRedimension);
+    window.removeEventListener('orientationchange', this.listenerRedimension);
+    this.listenerRedimension = null;
+  }
+
+  // Espera un instante antes de reajustar (debounce): evita reconstruir el
+  // tablero decenas de veces mientras el navegador todavía está animando
+  // la rotación o el cambio de tamaño.
+  programarReajusteTablero() {
+    if (this.temporizadorReajuste) {
+      clearTimeout(this.temporizadorReajuste);
+    }
+    this.temporizadorReajuste = setTimeout(() => {
+      this.temporizadorReajuste = null;
+      this.reajustarTablero();
+    }, 200);
+  }
+
+  // Reconstruye el tablero (fondo, HUD y servidores) con las nuevas
+  // dimensiones lógicas, conservando el estado real de cada servidor
+  // (activo/caído), y reubica dentro del nuevo recuadro tanto los
+  // elementos activos como el jefe (si lo hay) con Phaser.Math.Clamp,
+  // para que nada quede fuera del canvas ni se pierda el progreso.
+  reajustarTablero() {
+    if (!esVistaMovil()) return; // el modo de escritorio no se reajusta en vivo
+    const nuevasDimensiones = calcularDimensionesLogicas();
+    if (
+      Math.abs(nuevasDimensiones.ancho - this.anchoLogico) < 6 &&
+      Math.abs(nuevasDimensiones.alto - this.altoLogico) < 6
+    ) {
+      return; // el cambio es insignificante, no vale la pena reconstruir
+    }
+
+    const factor = Math.min(window.devicePixelRatio || 1, 2);
+    dimensionesLogicasActuales = nuevasDimensiones;
+    if (this.sys.game) {
+      this.sys.game.scale.resize(
+        Math.round(nuevasDimensiones.ancho * factor),
+        Math.round(nuevasDimensiones.alto * factor)
+      );
+    }
+
+    // Guarda el estado real de cada servidor antes de reconstruirlos, y los
+    // marca como "destruidos" para que cualquier parpadeo de ataque en
+    // curso (parpadearServidorAtaque) se detenga sin tocar objetos que
+    // están a punto de eliminarse.
+    const estadosServidores = (this.servidores || []).map((s) => ({ id: s.id, activo: s.activo }));
+    (this.servidores || []).forEach((s) => { s.destruido = true; });
+
+    // Destruye explícitamente cada hijo antes que el contenedor, para no
+    // dejar gráficos ni textos sueltos del tablero anterior
+    this.capaTablero.removeAll(true);
+    this.capaTablero.destroy();
+    this.anchoLogico = nuevasDimensiones.ancho;
+    this.altoLogico = nuevasDimensiones.alto;
+    this.construirTablero(this.anchoLogico, this.altoLogico);
+
+    // Restaura qué servidores estaban caídos (su estado es parte de la
+    // partida, no solo un detalle visual)
+    this.servidores.forEach((servidor) => {
+      const previo = estadosServidores.find((s) => s.id === servidor.id);
+      if (previo && !previo.activo) {
+        servidor.activo = false;
+        this.dibujarEstadoServidor(servidor);
+      }
+    });
+    estado.vidas = this.servidores.filter((s) => s.activo).length;
+
+    // Recalcula el área de juego y reubica dentro de ella los elementos
+    // activos y al jefe, para que ninguno quede fuera del nuevo tablero
+    this.areaJuego = this.calcularAreaJuego(this.anchoLogico, this.altoLogico);
+    this.reposicionarElementosEnNuevaArea();
+
+    if (this.overlayOscurecer) {
+      this.overlayOscurecer.setPosition(this.anchoLogico / 2, this.altoLogico / 2);
+      this.overlayOscurecer.setSize(this.anchoLogico, this.altoLogico);
+    }
+
+    // Refresca los valores del HUD (los objetos de texto son nuevos tras
+    // reconstruir el tablero, pero los datos de la partida no cambiaron)
+    this.actualizarHUD();
+    this.actualizarBotonEscaner();
+    this.actualizarLeyendaExtra();
+  }
+
+  // Reubica con Phaser.Math.Clamp los elementos activos y al jefe dentro
+  // de los nuevos límites del área de juego, y corrige la línea de
+  // objetivo de cada elemento hacia la posición actual de su servidor.
+  reposicionarElementosEnNuevaArea() {
+    const area = this.areaJuego;
+    estado.virusActivos.forEach((elemento) => {
+      elemento.contenedor.x = Phaser.Math.Clamp(elemento.contenedor.x, area.xMin, area.xMax);
+      elemento.contenedor.y = Phaser.Math.Clamp(elemento.contenedor.y, area.yMin, area.yMax);
+      if (elemento.servidorObjetivoId) {
+        const servidor = this.servidores.find((s) => s.id === elemento.servidorObjetivoId);
+        if (servidor) elemento.servidorObjetivoX = servidor.x;
+      }
+    });
+
+    if (this.jefe && this.jefe.contenedor) {
+      this.jefe.contenedor.x = Phaser.Math.Clamp(this.jefe.contenedor.x, area.xMin + 90, area.xMax - 90);
+      this.jefe.contenedor.y = Phaser.Math.Clamp(this.jefe.contenedor.y, area.yMin + 90, area.yMax - 90);
+    }
   }
 
   /* ---------------- FONDO Y AMBIENTACIÓN ---------------- */
@@ -661,7 +876,7 @@ class EscenaJuego extends Phaser.Scene {
     for (let y = 0; y < alto; y += 96) {
       graficos.lineBetween(0, y, ancho, y);
     }
-    this.mundo.add(graficos);
+    this.capaTablero.add(graficos);
   }
 
   // Nodos y conexiones de red muy tenues, algunos con un pulso lento,
@@ -669,7 +884,7 @@ class EscenaJuego extends Phaser.Scene {
   dibujarRedDecorativa(ancho, alto) {
     const lineas = this.add.graphics();
     lineas.lineStyle(1, PALETA.azul, 0.1);
-    this.mundo.add(lineas);
+    this.capaTablero.add(lineas);
 
     const nodos = [];
     for (let i = 0; i < 6; i++) {
@@ -684,7 +899,7 @@ class EscenaJuego extends Phaser.Scene {
 
     nodos.forEach((nodo, indice) => {
       const punto = this.add.circle(nodo.x, nodo.y, 3.5, PALETA.azul, 0.25);
-      this.mundo.add(punto);
+      this.capaTablero.add(punto);
       if (!this.movimientoReducido && indice % 2 === 0) {
         this.tweens.add({
           targets: punto,
@@ -701,6 +916,8 @@ class EscenaJuego extends Phaser.Scene {
   /* ---------------- HUD SUPERIOR ---------------- */
 
   crearHUD(ancho) {
+    const capa = this.capaTablero;
+
     // Ícono simple de actividad/datos junto a la puntuación
     const iconoActividad = this.add.graphics();
     iconoActividad.lineStyle(3, PALETA.azul, 1);
@@ -712,27 +929,27 @@ class EscenaJuego extends Phaser.Scene {
     iconoActividad.lineTo(46, 38);
     iconoActividad.lineTo(53, 38);
     iconoActividad.strokePath();
-    this.mundo.add(iconoActividad);
+    capa.add(iconoActividad);
 
-    this.textoPuntuacion = this.crearParEtiquetaValor(64, 27, 'PUNTOS', 24);
+    this.textoPuntuacion = this.crearParEtiquetaValor(64, 27, 'PUNTOS', 24, capa);
 
     // Nivel, alineado a la derecha: se crea el valor primero (para medir
     // su ancho) y la etiqueta se ubica justo antes, ambos con origen derecho
     this.textoNivel = this.crearTexto(ancho - 32, 27, '', {
-      tamano: 24, mono: true, origenX: 1, origenY: 0,
+      tamano: 24, mono: true, origenX: 1, origenY: 0, contenedor: capa,
     });
     this.etiquetaNivel = this.crearTexto(ancho - 32, 27, 'NIVEL', {
-      tamano: 20, origenX: 1, origenY: 0, color: PALETA.textoSecundario,
+      tamano: 20, origenX: 1, origenY: 0, color: PALETA.textoSecundario, contenedor: capa,
     });
 
-    this.textoAmenazas = this.crearParEtiquetaValor(32, 78, 'AMENAZAS', 19);
+    this.textoAmenazas = this.crearParEtiquetaValor(32, 78, 'AMENAZAS', 19, capa);
 
     // Combo, alineado a la derecha (mismo patrón que NIVEL)
     this.textoCombo = this.crearTexto(ancho - 32, 78, '', {
-      tamano: 19, mono: true, origenX: 1, origenY: 0,
+      tamano: 19, mono: true, origenX: 1, origenY: 0, contenedor: capa,
     });
     this.etiquetaCombo = this.crearTexto(ancho - 32, 78, 'COMBO', {
-      tamano: 16, origenX: 1, origenY: 0, color: PALETA.textoSecundario,
+      tamano: 16, origenX: 1, origenY: 0, color: PALETA.textoSecundario, contenedor: capa,
     });
 
     // Barra de progreso de amenazas eliminadas
@@ -740,20 +957,20 @@ class EscenaJuego extends Phaser.Scene {
     this.barraProgresoY = 107;
     this.barraProgresoAncho = ancho - 64;
     this.graficosProgreso = this.add.graphics();
-    this.mundo.add(this.graficosProgreso);
+    capa.add(this.graficosProgreso);
 
     // Cargas del escáner
-    this.textoEscaner = this.crearParEtiquetaValor(32, 140, 'ESCÁNER', 15);
+    this.textoEscaner = this.crearParEtiquetaValor(32, 140, 'ESCÁNER', 15, capa);
 
     // Leyenda de colores (una entrada por tipo de elemento)
     this.crearTexto(ancho - 32, 140, 'Rojo·Naranja·Morado: eliminar · Azul: ignorar', {
-      tamano: 14, origenX: 1, origenY: 0, color: PALETA.textoSecundario,
+      tamano: 14, origenX: 1, origenY: 0, color: PALETA.textoSecundario, contenedor: capa,
     });
 
     // Segunda línea de leyenda para las mecánicas nuevas (se completa en
     // actualizarLeyendaExtra según el nivel, sin saturar el HUD)
     this.textoLeyendaExtra = this.crearTexto(ancho - 32, 164, '', {
-      tamano: 13, origenX: 1, origenY: 0, color: PALETA.textoSecundario,
+      tamano: 13, origenX: 1, origenY: 0, color: PALETA.textoSecundario, contenedor: capa,
     });
   }
 
@@ -769,9 +986,13 @@ class EscenaJuego extends Phaser.Scene {
   /* ---------------- SERVIDORES INFERIORES (sistema de vidas) ---------------- */
 
   crearServidoresInferior(ancho, alto) {
+    const capa = this.capaTablero;
     this.servidorY = alto - 106;
     const gap = 16;
     const anchoCaja = (ancho - 64 - gap * 2) / 3;
+    // En pantallas angostas se reduce un poco el texto y se permite que se
+    // envuelva en dos líneas en vez de desbordar fuera de su recuadro.
+    const tamanoNombre = anchoCaja < 170 ? 11 : 13;
     const definiciones = [
       { id: 'web', nombre: 'SERVIDOR WEB' },
       { id: 'bd', nombre: 'BASE DE DATOS' },
@@ -783,14 +1004,16 @@ class EscenaJuego extends Phaser.Scene {
       const rect = this.add.rectangle(x, this.servidorY, anchoCaja, 90, PALETA.superficie, 0.95)
         .setStrokeStyle(2, PALETA.verde, 1);
       const nombreTexto = this.crearTexto(x, this.servidorY - 16, def.nombre, {
-        tamano: 13, mono: true, color: PALETA.texto, origenX: 0.5, origenY: 0.5, alinear: 'center',
+        tamano: tamanoNombre, mono: true, color: PALETA.texto, origenX: 0.5, origenY: 0.5, alinear: 'center',
+        anchoMaximo: anchoCaja - 10, contenedor: capa,
       });
       const estadoTexto = this.crearTexto(x, this.servidorY + 16, 'EN LÍNEA', {
         tamano: 12, mono: true, color: PALETA.verdeTexto, origenX: 0.5, origenY: 0.5, alinear: 'center',
+        contenedor: capa,
       });
-      this.mundo.add(rect);
-      this.mundo.bringToTop(nombreTexto);
-      this.mundo.bringToTop(estadoTexto);
+      capa.add(rect);
+      capa.bringToTop(nombreTexto);
+      capa.bringToTop(estadoTexto);
       return { id: def.id, nombre: def.nombre, x, rect, nombreTexto, estadoTexto, activo: true, parpadeando: false };
     });
   }
@@ -809,12 +1032,17 @@ class EscenaJuego extends Phaser.Scene {
     }
   }
 
-  // Parpadeo naranja ("bajo ataque") antes de asentarse en su estado final
+  // Parpadeo naranja ("bajo ataque") antes de asentarse en su estado final.
+  // Si el tablero se reconstruye a mitad del parpadeo (reajustarTablero, al
+  // rotar el teléfono o cambiar de tamaño), el servidor viejo queda
+  // marcado "destruido" y el parpadeo se detiene sin tocar objetos ya
+  // eliminados.
   parpadearServidorAtaque(servidor, callback) {
     servidor.parpadeando = true;
     const ciclos = this.movimientoReducido ? 1 : 3;
     let paso = 0;
     const alternar = () => {
+      if (servidor.destruido) return;
       const encendido = paso % 2 === 0;
       servidor.rect.setStrokeStyle(3, PALETA.naranja, 1);
       servidor.rect.setFillStyle(encendido ? 0x3a2408 : PALETA.superficie, 0.95);
@@ -1072,14 +1300,18 @@ class EscenaJuego extends Phaser.Scene {
       velY: movil ? Math.sin(anguloMovimiento) * velocidad : 0,
       lineaObjetivo: null,
       servidorObjetivoX: null,
+      servidorObjetivoId: null,
       colorLinea: color,
       grupo: opciones.grupo || null,
     };
 
     // Línea/etiqueta que indica a qué servidor apunta una amenaza real
-    // (también se muestra para el malware duplicador, antes de dividirse)
+    // (también se muestra para el malware duplicador, antes de dividirse).
+    // Se guarda también el id del servidor para poder corregir la línea
+    // si el tablero se reajusta (ver reposicionarElementosEnNuevaArea).
     if (opciones.servidorObjetivo) {
       elemento.servidorObjetivoX = opciones.servidorObjetivo.x;
+      elemento.servidorObjetivoId = opciones.servidorObjetivo.id;
       const linea = this.add.graphics();
       this.mundo.add(linea);
       this.mundo.moveBelow(linea, contenedor);
@@ -1383,8 +1615,9 @@ class EscenaJuego extends Phaser.Scene {
   // Aviso breve en la parte superior del área de juego (no cubre el HUD,
   // los servidores ni el botón del escáner, que ahora está fuera del canvas)
   mostrarAvisoEvento(texto, color) {
-    const aviso = this.crearTexto(ANCHO_JUEGO / 2, this.areaJuego.yMin + 16, texto, {
-      tamano: 22, mono: true, negrita: true, color, origenX: 0.5, origenY: 0.5, alinear: 'center',
+    const aviso = this.crearTexto(this.anchoLogico / 2, this.areaJuego.yMin + 16, texto, {
+      tamano: this.esVistaMovilActual ? 18 : 22, mono: true, negrita: true, color,
+      origenX: 0.5, origenY: 0.5, alinear: 'center', anchoMaximo: this.anchoLogico - 32,
     });
     aviso.setAlpha(0);
     this.mundo.bringToTop(aviso);
@@ -1709,7 +1942,7 @@ class EscenaJuego extends Phaser.Scene {
       return;
     }
 
-    const cx = ANCHO_JUEGO / 2;
+    const cx = this.anchoLogico / 2;
     const cy = this.servidorY;
 
     // 2) Resaltar la barra de progreso (ya está completa)
@@ -1790,8 +2023,9 @@ class EscenaJuego extends Phaser.Scene {
       duration: duracionOscurecer,
     });
 
-    const alerta = this.crearTexto(ANCHO_JUEGO / 2, ALTO_JUEGO / 2 - 30, 'AMENAZA PRINCIPAL DETECTADA', {
-      tamano: 32, mono: true, negrita: true, color: '#ff5c70', origenX: 0.5, origenY: 0.5, alinear: 'center',
+    const alerta = this.crearTexto(this.anchoLogico / 2, this.altoLogico / 2 - 30, 'AMENAZA PRINCIPAL DETECTADA', {
+      tamano: this.esVistaMovilActual ? 24 : 32, mono: true, negrita: true, color: '#ff5c70',
+      origenX: 0.5, origenY: 0.5, alinear: 'center', anchoMaximo: this.anchoLogico - 48,
     });
     alerta.setAlpha(0);
     this.mundo.bringToTop(alerta);
@@ -1813,7 +2047,7 @@ class EscenaJuego extends Phaser.Scene {
   // escala 0.7 -> 1, con una onda alrededor al terminar.
   crearJefe(configuracionJefe) {
     const area = this.areaJuego;
-    const cx = ANCHO_JUEGO / 2;
+    const cx = this.anchoLogico / 2;
     const cy = (area.yMin + area.yMax) / 2;
     const radioJefe = 78;
 
@@ -2036,7 +2270,7 @@ class EscenaJuego extends Phaser.Scene {
     const area = this.areaJuego;
 
     if (cfg.movimiento === 'fijo') {
-      const cx = ANCHO_JUEGO / 2;
+      const cx = this.anchoLogico / 2;
       const cy = (area.yMin + area.yMax) / 2;
       const nx = Phaser.Math.Clamp(cx + Phaser.Math.Between(-40, 40), area.xMin + 90, area.xMax - 90);
       const ny = Phaser.Math.Clamp(cy + Phaser.Math.Between(-30, 30), area.yMin + 90, area.yMax - 90);
@@ -2234,7 +2468,7 @@ class EscenaJuego extends Phaser.Scene {
     });
 
     // 3) Onda verde desde el servidor
-    this.crearOndaExpansiva(ANCHO_JUEGO / 2, this.servidorY, PALETA.verde);
+    this.crearOndaExpansiva(this.anchoLogico / 2, this.servidorY, PALETA.verde);
 
     // 4) Puntos adicionales
     estado.puntuacion += recompensa;
@@ -2273,31 +2507,34 @@ class EscenaJuego extends Phaser.Scene {
    7. CONFIGURACIÓN Y CREACIÓN DEL JUEGO PHASER
    ------------------------------------------------------------------ */
 
-// Factor de nitidez: más píxeles físicos en pantallas de alta densidad
-// (Retina, etc.), limitado a 2x para no exigir demasiado a equipos modestos.
-const FACTOR_RESOLUCION = Math.min(window.devicePixelRatio || 1, 2);
-
-const configuracionPhaser = {
-  type: Phaser.AUTO,
-  parent: 'contenedor-phaser',
-  // El canvas físico es más grande que el mundo lógico (1280x720); la
-  // escena compensa con el contenedor "mundo" escalado para que las
-  // coordenadas del juego no cambien. Así el tablero se ve nítido y no
-  // pixelado, tanto en pantallas normales como de alta densidad.
-  width: Math.round(ANCHO_JUEGO * FACTOR_RESOLUCION),
-  height: Math.round(ALTO_JUEGO * FACTOR_RESOLUCION),
-  backgroundColor: '#07110f',
-  render: {
-    antialias: true,
-    pixelArt: false,
-    roundPixels: false,
-  },
-  scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
-  },
-  scene: [EscenaJuego],
-};
+// Construye la configuración de Phaser en el momento de crear el juego (no
+// antes), para que el tamaño lógico del canvas refleje la pantalla real en
+// ese instante: 1280x720 fijo en escritorio, o el tamaño vertical calculado
+// por calcularDimensionesLogicas() en vista móvil. El canvas físico siempre
+// es más grande que el mundo lógico; la escena compensa con el contenedor
+// "mundo" escalado para que las coordenadas del juego no cambien, dando
+// nitidez sin pixelado tanto en pantallas normales como de alta densidad.
+function construirConfiguracionPhaser() {
+  dimensionesLogicasActuales = calcularDimensionesLogicas();
+  const factor = Math.min(window.devicePixelRatio || 1, 2);
+  return {
+    type: Phaser.AUTO,
+    parent: 'contenedor-phaser',
+    width: Math.round(dimensionesLogicasActuales.ancho * factor),
+    height: Math.round(dimensionesLogicasActuales.alto * factor),
+    backgroundColor: '#07110f',
+    render: {
+      antialias: true,
+      pixelArt: false,
+      roundPixels: false,
+    },
+    scale: {
+      mode: Phaser.Scale.FIT,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+    },
+    scene: [EscenaJuego],
+  };
+}
 
 let juegoPhaser = null;
 
@@ -2321,8 +2558,9 @@ function iniciarJuegoDesdeCero() {
   mostrarPantalla('pantalla-juego');
 
   if (!juegoPhaser) {
-    // Primera vez: se crea la instancia de Phaser
-    juegoPhaser = new Phaser.Game(configuracionPhaser);
+    // Primera vez: se crea la instancia de Phaser con el tamaño lógico
+    // adecuado a la pantalla actual (escritorio o móvil)
+    juegoPhaser = new Phaser.Game(construirConfiguracionPhaser());
   } else {
     // Ya existía una partida: reiniciamos la escena desde el principio
     juegoPhaser.scene.stop('EscenaJuego');

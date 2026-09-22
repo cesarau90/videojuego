@@ -58,6 +58,11 @@ genérica de IA:
   sincronizada para no romper la lógica de derrota.
 - Fondo con cuadrícula tenue y una pequeña red decorativa de nodos
   animados, sin llenar la pantalla.
+- El botón "ESCÁNER" vive **fuera del canvas**, en una barra propia
+  centrada inmediatamente debajo del tablero (sin posición absoluta), para
+  no cubrir el servidor de respaldo ni ningún elemento del juego. Conserva
+  diseño, animaciones, contador de cargas y funcionamiento con clic, toque
+  y tecla **S**.
 
 ## 4. Elementos y mecánicas normales de cada nivel
 
@@ -97,6 +102,42 @@ genérica de IA:
 - Al alcanzar el objetivo de amenazas reales del nivel: se detiene la
   generación, se retiran los elementos restantes sin penalizar, y comienza
   el combate contra el jefe.
+
+## 4B. Mecánicas adicionales (reparación, duplicador, sobrecarga)
+
+Usan el mismo círculo, íconos vectoriales y reglas de clic/toque que el
+resto de elementos; ninguna sustituye ni modifica el escáner, el combo,
+los servidores ni los jefes.
+
+- **Reparación de servidor** (nivel 1, 2 y 3): elemento verde con ícono de
+  cruz y etiqueta permanente "REPARACIÓN". Solo puede aparecer si al
+  menos un servidor está fuera de línea, **como máximo una vez por
+  nivel**, y permanece ≈4 s. Un clic recupera un servidor caído; no
+  entrega puntos ni cuenta como amenaza eliminada. Si desaparece sin
+  clic, no hay penalización.
+- **Malware duplicador** (nivel 2 y 3, magenta, ícono de división; el
+  escáner lo revela como "DUPLICADOR"): al hacer clic, en vez de
+  eliminarse se **divide en dos amenazas pequeñas** (5 puntos cada una,
+  con la misma duración de vida). Si una o ambas escapan sin ser
+  eliminadas, se pierde **un solo servidor** por esa pareja, nunca dos.
+  Probabilidad de aparición: 12% en nivel 2, 18% en nivel 3 (0% en nivel
+  1).
+- **Sobrecarga de red** (nivel 2 y 3): aviso breve "SOBRECARGA DE RED" en
+  la parte superior del área de juego (sin cubrir el HUD, los servidores
+  ni el escáner). Acelera la aparición de elementos y permite **un
+  elemento simultáneo más** de lo normal durante 5 s; al terminar,
+  restaura exactamente la velocidad y el máximo originales, sin dejar
+  temporizadores duplicados. Se activa **una vez** en el nivel 2 (≈50% de
+  progreso) y **dos veces** en el nivel 3 (≈40% y ≈75% de progreso).
+  Nunca se activa durante el combate contra el jefe, y cualquier
+  sobrecarga en curso se cancela automáticamente si el jefe aparece antes
+  de que termine.
+- El nivel 3 requiere **25 amenazas reales** (en vez de 20) para
+  acompañar estas mecánicas adicionales; el juego debe seguir siendo
+  completable en los tres niveles.
+- La leyenda del HUD se extiende con una segunda línea compacta
+  ("Verde: reparación" desde el nivel 1, sumando "Magenta: duplicador"
+  desde el nivel 2) sin saturar la interfaz.
 
 ## 5. Jefes de nivel
 
