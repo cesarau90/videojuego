@@ -12,7 +12,7 @@
     rel="stylesheet"
   />
 
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=3" />
 </head>
 <body>
 
@@ -191,15 +191,15 @@
   <!-- PANTALLA 4: DERROTA                            -->
   <!-- ============================================= -->
   <div id="pantalla-derrota" class="pantalla">
-    <div class="panel">
-      <svg class="panel-icono icono-peligro" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5" />
-        <path d="M8.5 8.5 L15.5 15.5 M15.5 8.5 L8.5 15.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    <div class="panel panel-derrota" id="panel-derrota">
+      <svg class="panel-icono icono-peligro icono-resultado" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle class="icono-resultado-trazo-1" cx="12" cy="12" r="10" pathLength="1" stroke="currentColor" stroke-width="1.5" />
+        <path class="icono-resultado-trazo-2" d="M8.5 8.5 L15.5 15.5 M15.5 8.5 L8.5 15.5" pathLength="1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
       </svg>
-      <h1 class="panel-titulo">Servidor comprometido</h1>
-      <p class="panel-texto">El malware ha vencido tus defensas.</p>
-      <p id="texto-puntaje-derrota" class="panel-puntaje"></p>
-      <button id="btn-reintentar" class="boton-primario">Volver a intentar</button>
+      <h1 class="panel-titulo titulo-resultado">Servidor comprometido</h1>
+      <p class="panel-texto texto-resultado">El malware ha vencido tus defensas.</p>
+      <p id="texto-puntaje-derrota" class="panel-puntaje puntaje-resultado"></p>
+      <button id="btn-reintentar" class="boton-primario boton-resultado">Volver a intentar</button>
     </div>
   </div>
 
@@ -207,21 +207,21 @@
   <!-- PANTALLA 5: VICTORIA FINAL                     -->
   <!-- ============================================= -->
   <div id="pantalla-victoria" class="pantalla">
-    <div class="panel">
-      <svg class="panel-icono icono-verde" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M12 2 L20.5 5.2 V11.8 C20.5 17 16.8 20.9 12 22.8 C7.2 20.9 3.5 17 3.5 11.8 V5.2 Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
-        <path d="M8.5 12.3 L11 14.8 L15.8 9.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+    <div class="panel panel-victoria" id="panel-victoria">
+      <svg class="panel-icono icono-verde icono-resultado" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path class="icono-resultado-trazo-1" d="M12 2 L20.5 5.2 V11.8 C20.5 17 16.8 20.9 12 22.8 C7.2 20.9 3.5 17 3.5 11.8 V5.2 Z" pathLength="1" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+        <path class="icono-resultado-trazo-2" d="M8.5 12.3 L11 14.8 L15.8 9.7" pathLength="1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
-      <h1 class="panel-titulo">Servidor protegido</h1>
-      <p class="panel-texto">Eliminaste todas las amenazas de los 3 niveles.</p>
-      <p id="texto-puntaje-victoria" class="panel-puntaje"></p>
-      <button id="btn-jugar-de-nuevo" class="boton-primario">Volver a intentar</button>
+      <h1 class="panel-titulo titulo-resultado">Servidor protegido</h1>
+      <p class="panel-texto texto-resultado">Eliminaste todas las amenazas de los 3 niveles.</p>
+      <p id="texto-puntaje-victoria" class="panel-puntaje puntaje-resultado"></p>
+      <button id="btn-jugar-de-nuevo" class="boton-primario boton-resultado">Volver a intentar</button>
     </div>
   </div>
 
   <!-- Librería Phaser 3 desde CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js"></script>
   <!-- Lógica del juego -->
-  <script src="game.js"></script>
+  <script src="game.js?v=3"></script>
 </body>
 </html>

@@ -150,9 +150,10 @@ los servidores ni los jefes.
   eliminadas, se pierde **un solo servidor** por esa pareja, nunca dos.
   Probabilidad de aparición: 12% en nivel 2, 18% en nivel 3 (0% en nivel
   1).
-- **Sobrecarga de red** (nivel 2 y 3): aviso breve "SOBRECARGA DE RED" en
-  la parte superior del área de juego (sin cubrir el HUD, los servidores
-  ni el escáner). Acelera la aparición de elementos y permite **un
+- **Sobrecarga de red** (nivel 2 y 3): aviso "SOBRECARGA DE RED" que
+  **parpadea dos veces** (aparece/desaparece dos ciclos cortos) en la
+  parte superior del área de juego (sin cubrir el HUD, los servidores ni
+  el escáner). Acelera la aparición de elementos y permite **un
   elemento simultáneo más** de lo normal durante 5 s; al terminar,
   restaura exactamente la velocidad y el máximo originales, sin dejar
   temporizadores duplicados. Se activa **una vez** en el nivel 2 (≈50% de
@@ -221,12 +222,19 @@ derrota. Tras derrotar al jefe se reproduce la animación existente de
   reinicia la barra de progreso y comienza el siguiente nivel (que a su
   vez muestra su propia intro "NIVEL X"). Todo en menos de 2 segundos.
 - **Derrota**: primero un destello rojo breve (~280 ms, dentro del
-  canvas) y una vibración ligera de cámara, y solo después aparece la
-  pantalla HTML de "Derrota" con ícono de error, mensaje, puntuación
-  final y botón "Volver a Intentar". Nada de esto se muestra si
-  `prefers-reduced-motion` está activo (va directo a la pantalla).
-- Victoria final: ícono de escudo con check, puntuación final, botón
-  "Volver a Intentar".
+  canvas) y una vibración ligera de cámara; luego aparece la pantalla
+  HTML de "Derrota" con su propia animación de entrada: el ícono
+  (círculo con X) se dibuja con un trazo, título/texto/puntaje aparecen
+  de forma escalonada, y el panel se asienta con una leve sacudida y un
+  destello rojo en el ícono. Termina con ícono de error, mensaje,
+  puntuación final y botón "Volver a Intentar".
+- **Victoria final**: misma idea que Derrota pero en verde — ícono de
+  escudo con check que se dibuja con un trazo, textos escalonados, y el
+  panel cierra con un pequeño "rebote" de triunfo (overshoot de escala)
+  en vez de la sacudida. Puntuación final y botón "Volver a Intentar".
+- Ambas respetan `prefers-reduced-motion` (fundido simple en vez de la
+  secuencia completa) y se repiten correctamente cada vez que se pierde
+  o se gana otra vez en la misma sesión.
 
 ## 7. Sonido
 
@@ -251,6 +259,54 @@ derrota.
   escáner, jefes), niveles y dificultad, controles, tecnologías,
   instrucciones para ejecutar localmente y publicar en GitHub Pages, y los
   nombres del equipo.
+
+## 9. Nitidez del canvas en escritorio
+
+El canvas se ve nítido (sin desenfoque de subpíxel) también en pantallas
+de alta densidad. La causa real de un desenfoque que llegó a aparecer no
+era el `devicePixelRatio` en sí (ya se manejaba con el contenedor "mundo"
+escalado): era que el canvas tiene un borde de 1px con
+`box-sizing: border-box` (regla global del proyecto), y al fijar su
+tamaño total el navegador comprobaba la proporción intrínseca 1280×720
+contra el **área de contenido** (total menos el borde), que ya no daba
+una razón exacta y producía medidas como `540.875px`. La solución:
+calcular el tamaño del canvas en escritorio sobre el área de contenido
+real (`clientWidth` del contenedor, siempre entero, menos el borde) y
+fijarlo con `box-sizing: content-box` solo por estilo en línea (con
+`important`, para ganarle a la regla `!important` de `style.css`), sin
+tocar el CSS de la versión móvil ni las dimensiones del tablero. Se
+reaplica en cada `resize` de la ventana (con debounce).
+
+## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
+
+`index.html` referencia sus archivos locales (`style.css`, `game.js`)
+con un parámetro de versión: `style.css?v=3`, `game.js?v=3`. Cada vez
+que se sube una modificación a esos archivos, ese número debe
+**incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
+descargue la versión nueva en vez de servir una copia en caché con la
+misma URL. **Nunca usar `Date.now()` ni un valor que cambie solo**, ya
+que obligaría a descargar todo de nuevo en cada visita, incluso sin
+cambios reales.
+
+Esto no es una solución perfecta e instantánea por sí sola: GitHub
+Pages envía `Cache-Control: max-age=600` (10 minutos) en **todos** los
+archivos, incluido el propio `index.html`. Es decir:
+
+- `style.css?v=N` y `game.js?v=N` **sí** se resuelven de forma
+  confiable con este método: al cambiar el número, la URL es distinta
+  a cualquier cosa que el navegador tenga guardada, así que siempre
+  se descarga fresca, sin depender de esos 10 minutos.
+- Pero si el propio `index.html` sigue en la caché del navegador (dentro
+  de esa ventana de 10 minutos desde la última visita), el usuario
+  seguirá viendo la referencia `?v=` **anterior** hasta que esa copia
+  del HTML expire y el navegador la vuelva a pedir sola con una recarga
+  normal. No hay manera de eliminar ese margen desde el lado del
+  proyecto (es una cabecera que pone GitHub Pages, no algo configurable
+  en este repositorio).
+- En la práctica: tras publicar un cambio, esperar unos minutos (o
+  hacer una sola recarga forzada tipo Ctrl+Shift+R) antes de probar
+  garantiza ver la versión nueva; después de eso, recargas normales ya
+  reflejan los cambios sin necesidad de forzar nada.
 
 ## Reglas de trabajo durante todo el proyecto
 

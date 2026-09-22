@@ -1699,7 +1699,7 @@ class EscenaJuego extends Phaser.Scene {
     this.sobrecargaIndice += 1;
     this.sobrecargaActiva = true;
     this.limiteElementosExtra = 1;
-    this.mostrarAvisoEvento('SOBRECARGA DE RED', PALETA.naranjaTexto);
+    this.mostrarAvisoEvento('SOBRECARGA DE RED', PALETA.naranjaTexto, { parpadeos: 2 });
     this.reiniciarTemporizadorSpawn(Math.round(configuracionNivel.tiempoAparicion * 0.55));
 
     this.temporizadorSobrecarga = this.time.delayedCall(5000, () => {
@@ -1713,8 +1713,13 @@ class EscenaJuego extends Phaser.Scene {
   }
 
   // Aviso breve en la parte superior del área de juego (no cubre el HUD,
-  // los servidores ni el botón del escáner, que ahora está fuera del canvas)
-  mostrarAvisoEvento(texto, color) {
+  // los servidores ni el botón del escáner, que ahora está fuera del canvas).
+  // "parpadeos" (opciones.parpadeos, por defecto 1) repite el ciclo de
+  // aparecer/desaparecer esa cantidad de veces, por ejemplo para que la
+  // sobrecarga de red destaque más al aparecer.
+  mostrarAvisoEvento(texto, color, opciones = {}) {
+    const parpadeos = Math.max(1, opciones.parpadeos || 1);
+
     const aviso = this.crearTexto(this.anchoLogico / 2, this.areaJuego.yMin + 16, texto, {
       tamano: this.esVistaMovilActual ? 18 : 22, mono: true, negrita: true, color,
       origenX: 0.5, origenY: 0.5, alinear: 'center', anchoMaximo: this.anchoLogico - 32,
@@ -1723,13 +1728,16 @@ class EscenaJuego extends Phaser.Scene {
     this.mundo.bringToTop(aviso);
 
     const duracionFade = this.movimientoReducido ? 30 : 260;
-    const espera = this.movimientoReducido ? 60 : 1100;
+    // Con más de un parpadeo se acorta la pausa de cada ciclo, para que el
+    // aviso completo no dure demasiado (nada exagerado ni muy largo).
+    const espera = this.movimientoReducido ? 60 : parpadeos > 1 ? 420 : 1100;
     this.tweens.add({
       targets: aviso,
       alpha: { from: 0, to: 1 },
       duration: duracionFade,
       yoyo: true,
       hold: espera,
+      repeat: parpadeos - 1,
       onComplete: () => aviso.destroy(),
     });
   }
@@ -2692,11 +2700,69 @@ function iniciarJuegoDesdeCero() {
     // Primera vez: se crea la instancia de Phaser con el tamaño lógico
     // adecuado a la pantalla actual (escritorio o móvil)
     juegoPhaser = new Phaser.Game(construirConfiguracionPhaser());
+    registrarAjusteCanvasEscritorio();
   } else {
     // Ya existía una partida: reiniciamos la escena desde el principio
     juegoPhaser.scene.stop('EscenaJuego');
     juegoPhaser.scene.start('EscenaJuego');
   }
+
+  ajustarCanvasEscritorio();
+}
+
+// En escritorio (no en vista móvil, que ya maneja su propio tamaño), fija
+// el ancho y el alto del canvas en CSS a números enteros de píxel exactos
+// en vez de dejar que "width:100%" (en style.css) resuelva a una medida
+// fraccionaria: una altura como 540.875px obliga al navegador a repartir
+// los píxeles del canvas en un número no entero de píxeles de pantalla,
+// lo que introduce un ligero desenfoque de subpíxel en texto e íconos.
+// Se usa "important" en el propio estilo en línea para ganarle tanto al
+// !important de style.css como a cualquier estilo que Phaser reaplique.
+function ajustarCanvasEscritorio() {
+  if (!juegoPhaser || esVistaMovil()) return;
+  const canvas = juegoPhaser.canvas;
+  const contenedor = document.getElementById('contenedor-phaser');
+  if (!canvas || !contenedor) return;
+
+  // La causa real de la medida fraccionaria (p. ej. 540.875px): el canvas
+  // tiene un borde de 1px y usa box-sizing:border-box (regla global), así
+  // que al fijar su tamaño TOTAL (borde incluido) el navegador comprueba
+  // la proporción intrínseca 1280x720 contra el ÁREA DE CONTENIDO (total
+  // menos el borde), que ya no da una razón exacta, y ajusta el alto con
+  // un resto de subpíxel. La solución es calcular sobre el área de
+  // contenido (ya sin el borde) y fijar el tamaño en esos mismos términos
+  // (box-sizing:content-box solo aquí, por estilo en línea): así el
+  // navegador nunca tiene que repartir un borde no entero para cumplir la
+  // proporción, y el total visible sigue ocupando exactamente el mismo
+  // ancho que el contenedor.
+  const bordeTotal = 2; // 1px arriba/abajo y 1px izquierda/derecha
+  const anchoContenido = contenedor.clientWidth - bordeTotal;
+  if (anchoContenido <= 0) return;
+  const altoContenido = Math.round(anchoContenido * (ALTO_JUEGO / ANCHO_JUEGO));
+
+  const anchoPx = `${anchoContenido}px`;
+  const altoPx = `${altoContenido}px`;
+  if (canvas.style.width !== anchoPx || canvas.style.height !== altoPx) {
+    canvas.style.setProperty('box-sizing', 'content-box', 'important');
+    canvas.style.setProperty('width', anchoPx, 'important');
+    canvas.style.setProperty('height', altoPx, 'important');
+  }
+}
+
+let temporizadorAjusteCanvas = null;
+let listenerAjusteCanvasRegistrado = false;
+
+// Registra un único listener de resize (con debounce) que recalcula el
+// tamaño entero del canvas en escritorio. Se registra una sola vez por
+// carga de página, sin importar cuántas veces se reinicie la partida.
+function registrarAjusteCanvasEscritorio() {
+  if (listenerAjusteCanvasRegistrado) return;
+  listenerAjusteCanvasRegistrado = true;
+  window.addEventListener('resize', () => {
+    if (esVistaMovil()) return; // el reajuste móvil lo maneja la escena
+    clearTimeout(temporizadorAjusteCanvas);
+    temporizadorAjusteCanvas = setTimeout(ajustarCanvasEscritorio, 120);
+  });
 }
 
 // Se ejecuta al presionar "Continuar" en la tarjeta de nivel superado:

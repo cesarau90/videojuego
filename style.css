@@ -589,6 +589,106 @@ body {
   to { opacity: 1; }
 }
 
+/* ============ ENTRADA DE "DERROTA" Y "VICTORIA" ============
+   Mismo lenguaje visual que la tarjeta de "Nivel superado" (ícono que se
+   dibuja, textos con aparición escalonada), con un cierre propio para
+   cada resultado: Derrota se asienta con una leve sacudida; Victoria
+   termina con un pequeño "rebote" de triunfo. */
+.panel-derrota {
+  opacity: 0;
+  transform: translateY(24px) scale(0.85);
+  animation: derrota-entrada 650ms cubic-bezier(0.3, 1, 0.6, 1) forwards;
+}
+
+@keyframes derrota-entrada {
+  0% { opacity: 0; transform: translateY(24px) scale(0.85); }
+  55% { opacity: 1; transform: translateY(0) scale(1); }
+  68% { opacity: 1; transform: translateY(0) scale(1) translateX(-6px); }
+  80% { opacity: 1; transform: translateY(0) scale(1) translateX(5px); }
+  90% { opacity: 1; transform: translateY(0) scale(1) translateX(-3px); }
+  100% { opacity: 1; transform: translateY(0) scale(1) translateX(0); }
+}
+
+.panel-victoria {
+  opacity: 0;
+  transform: translateY(24px) scale(0.85);
+  animation: victoria-entrada 550ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes victoria-entrada {
+  0% { opacity: 0; transform: translateY(24px) scale(0.85); }
+  70% { opacity: 1; transform: translateY(0) scale(1.03); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.icono-resultado-trazo-1,
+.icono-resultado-trazo-2 {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: logro-trazo 350ms ease-out forwards;
+}
+.icono-resultado-trazo-1 { animation-delay: 80ms; }
+.icono-resultado-trazo-2 { animation-delay: 280ms; }
+
+/* Destello del ícono al terminar de dibujarse: rojo en derrota, verde en victoria */
+.panel-derrota .panel-icono {
+  animation: pulso-peligro 700ms ease-out 420ms;
+}
+
+.panel-victoria .panel-icono {
+  animation: pulso-victoria 700ms ease-out 420ms;
+}
+
+@keyframes pulso-peligro {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(255, 92, 112, 0)); }
+  45% { filter: drop-shadow(0 0 10px rgba(255, 92, 112, 0.75)); }
+}
+
+@keyframes pulso-victoria {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(0, 217, 155, 0)); }
+  45% { filter: drop-shadow(0 0 10px rgba(0, 217, 155, 0.7)); }
+}
+
+.titulo-resultado,
+.texto-resultado {
+  opacity: 0;
+  animation: aparecer 350ms ease forwards;
+}
+.titulo-resultado { animation-delay: 320ms; }
+.texto-resultado { animation-delay: 360ms; }
+
+.puntaje-resultado {
+  opacity: 0;
+  animation: aparecer 300ms ease forwards;
+  animation-delay: 400ms;
+}
+
+.boton-resultado {
+  animation: aparecer 300ms ease 440ms both !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-derrota,
+  .panel-victoria {
+    transform: none;
+    animation: fundido 200ms ease forwards;
+  }
+  .icono-resultado-trazo-1,
+  .icono-resultado-trazo-2 {
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+    animation: fundido 200ms ease forwards;
+  }
+  .panel-derrota .panel-icono,
+  .panel-victoria .panel-icono {
+    animation: none;
+  }
+  .titulo-resultado, .texto-resultado, .puntaje-resultado, .boton-resultado {
+    animation-name: fundido !important;
+    animation-duration: 200ms !important;
+  }
+}
+
 /* ============ TRANSICIÓN ENTRE NIVELES ============ */
 #pantalla-transicion.activa {
   display: flex;
