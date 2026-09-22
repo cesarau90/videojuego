@@ -42,6 +42,10 @@ const PALETA = {
   verde: 0x00d99b,
   azul: 0x38bdf8,
   peligro: 0xff5c70,
+  // Colores adicionales usados solo por los jefes de nivel
+  naranja: 0xff9f45,
+  morado: 0xa855f7,
+  magenta: 0xec4899,
 };
 
 // Tamaño lógico fijo del tablero (mínimo 1280x720, como pide el diseño).
@@ -49,6 +53,106 @@ const PALETA = {
 // en este espacio fijo, sin importar la resolución física de la pantalla.
 const ANCHO_JUEGO = 1280;
 const ALTO_JUEGO = 720;
+
+/* ------------------------------------------------------------------
+   1B. CONFIGURACIÓN DE LOS JEFES (uno por nivel)
+   Aparecen al alcanzar el objetivo de amenazas reales del nivel.
+   El nivel no se considera superado hasta derrotarlos.
+   ------------------------------------------------------------------ */
+const JEFES = [
+  {
+    id: 'troyano',
+    nombre: 'TROYANO',
+    subtitulo: 'ACCESO NO AUTORIZADO',
+    vidaMaxima: 3,
+    tiempoAtaque: 7000,
+    colorPrincipal: PALETA.naranja,
+    colorSecundario: PALETA.naranja,
+    puntosRecompensa: 50,
+    movimiento: 'fijo', // casi fijo, pequeño desplazamiento tras cada golpe
+    generaTrampas: false,
+    maxTrampas: 0,
+    puntoDebil: false,
+  },
+  {
+    id: 'botnet',
+    nombre: 'BOTNET',
+    subtitulo: 'CONTROLADOR CENTRAL',
+    vidaMaxima: 5,
+    tiempoAtaque: 6000,
+    colorPrincipal: PALETA.azul,
+    colorSecundario: PALETA.morado,
+    puntosRecompensa: 100,
+    movimiento: 'salto', // cambia de posición tras cada golpe
+    generaTrampas: true,
+    maxTrampas: 1,
+    puntoDebil: false,
+  },
+  {
+    id: 'ransomware',
+    nombre: 'RANSOMWARE',
+    subtitulo: 'NÚCLEO PRINCIPAL',
+    vidaMaxima: 8,
+    tiempoAtaque: 5000,
+    colorPrincipal: PALETA.peligro,
+    colorSecundario: PALETA.magenta,
+    puntosRecompensa: 200,
+    movimiento: 'lento', // se desplaza continuamente por el tablero
+    generaTrampas: true,
+    maxTrampas: 2,
+    puntoDebil: true,
+    faseCambioVida: 4, // al perder esta cantidad de vida entra en fase 2
+  },
+];
+
+// ---- Formas vectoriales de cada jefe (Phaser Graphics, sin emojis) ----
+
+function dibujarFormaTroyano(g, color) {
+  g.lineStyle(4, color, 1);
+  const radio = 40;
+  const puntos = [];
+  for (let i = 0; i < 6; i++) {
+    const angulo = (Math.PI / 3) * i - Math.PI / 2;
+    puntos.push([Math.cos(angulo) * radio, Math.sin(angulo) * radio]);
+  }
+  g.beginPath();
+  puntos.forEach(([px, py], i) => (i === 0 ? g.moveTo(px, py) : g.lineTo(px, py)));
+  g.closePath();
+  g.strokePath();
+  // Flecha de infiltración (metáfora del troyano entrando al sistema)
+  g.lineBetween(0, -34, 0, 6);
+  g.beginPath();
+  g.moveTo(-10, -4);
+  g.lineTo(0, 8);
+  g.lineTo(10, -4);
+  g.strokePath();
+}
+
+function dibujarFormaBotnet(g, colorNucleo, colorNodo) {
+  g.lineStyle(4, colorNucleo, 1);
+  g.strokeCircle(0, 0, 26);
+  const radioOrbita = 46;
+  for (let i = 0; i < 5; i++) {
+    const angulo = ((Math.PI * 2) / 5) * i - Math.PI / 2;
+    const nx = Math.cos(angulo) * radioOrbita;
+    const ny = Math.sin(angulo) * radioOrbita;
+    g.lineStyle(1.5, colorNodo, 0.6);
+    g.lineBetween(0, 0, nx, ny);
+    g.fillStyle(colorNodo, 1);
+    g.fillCircle(nx, ny, 7);
+  }
+}
+
+function dibujarFormaRansomware(g, colorCuerpo, colorAcento) {
+  g.lineStyle(4, colorAcento, 1);
+  g.beginPath();
+  g.arc(0, -14, 16, Math.PI, 0, false);
+  g.strokePath();
+  g.fillStyle(colorCuerpo, 1);
+  g.fillRoundedRect(-24, -10, 48, 38, 8);
+  g.lineStyle(3, colorAcento, 1);
+  g.strokeRoundedRect(-24, -10, 48, 38, 8);
+}
 
 /* ------------------------------------------------------------------
    2. ESTADO GLOBAL DEL JUEGO
@@ -61,6 +165,7 @@ const estado = {
   virusEliminados: 0, // cuenta solo amenazas reales eliminadas a tiempo
   virusActivos: [], // lista de elementos que están en pantalla ahora mismo
   juegoActivo: false,
+  jefeActivo: false, // true durante el combate contra el jefe del nivel
 };
 
 /* ------------------------------------------------------------------
@@ -111,6 +216,16 @@ function reproducirSonido(tipo) {
       volumen.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
       oscilador.start();
       oscilador.stop(ctx.currentTime + 0.22);
+    } else if (tipo === 'alertaJefe') {
+      // Alarma corta: aparece la amenaza principal (jefe) del nivel
+      oscilador.type = 'sawtooth';
+      oscilador.frequency.setValueAtTime(500, ctx.currentTime);
+      oscilador.frequency.setValueAtTime(350, ctx.currentTime + 0.15);
+      oscilador.frequency.setValueAtTime(500, ctx.currentTime + 0.3);
+      volumen.gain.setValueAtTime(0.14, ctx.currentTime);
+      volumen.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+      oscilador.start();
+      oscilador.stop(ctx.currentTime + 0.5);
     } else if (tipo === 'nivelSuperado') {
       // Sonido corto de éxito: melodía ascendente al completar un nivel
       oscilador.type = 'triangle';
@@ -292,6 +407,7 @@ class EscenaJuego extends Phaser.Scene {
     this.contadorElementosNivel = 0;
     this.temporizadorSiguienteVirus = null;
     this.puntuacionInicioNivel = 0;
+    this.jefe = null;
 
     this.actualizarHUD();
     this.iniciarNivelActual();
@@ -312,6 +428,34 @@ class EscenaJuego extends Phaser.Scene {
       elemento.anilloTiempo.arc(0, 0, 56, inicioAngulo, finAngulo, false);
       elemento.anilloTiempo.strokePath();
     });
+
+    // Anillo de tiempo del jefe y, si corresponde, su desplazamiento continuo
+    if (this.jefe && !this.jefe.destruido) {
+      if (this.jefe.temporizadorAtaque && this.jefe.anilloTiempo) {
+        const restante = 1 - this.jefe.temporizadorAtaque.getProgress();
+        this.jefe.anilloTiempo.clear();
+        this.jefe.anilloTiempo.lineStyle(5, this.jefe.config.colorPrincipal, 0.5);
+        this.jefe.anilloTiempo.beginPath();
+        const inicioAngulo = -Math.PI / 2;
+        const finAngulo = inicioAngulo + Math.PI * 2 * restante;
+        this.jefe.anilloTiempo.arc(0, 0, 92, inicioAngulo, finAngulo, false);
+        this.jefe.anilloTiempo.strokePath();
+      }
+
+      if (this.jefe.config.movimiento === 'lento' && !this.movimientoReducido) {
+        const velocidad = this.jefe.fase === 2 ? 1 : 0.6;
+        const area = this.areaJuego;
+        const margen = 100;
+        this.jefe.contenedor.x += this.jefe.velX * velocidad;
+        this.jefe.contenedor.y += this.jefe.velY * velocidad;
+        if (this.jefe.contenedor.x < area.xMin + margen || this.jefe.contenedor.x > area.xMax - margen) {
+          this.jefe.velX *= -1;
+        }
+        if (this.jefe.contenedor.y < area.yMin + margen || this.jefe.contenedor.y > area.yMax - margen) {
+          this.jefe.velY *= -1;
+        }
+      }
+    }
   }
 
   /* ---------------- TEXTO (helper con fuente e resolución consistentes) ---------------- */
@@ -484,9 +628,11 @@ class EscenaJuego extends Phaser.Scene {
 
   iniciarNivelActual() {
     estado.virusEliminados = 0;
+    estado.jefeActivo = false;
     this.contadorElementosNivel = 0;
     this.puntuacionInicioNivel = estado.puntuacion;
     this.limpiarVirusActivos();
+    this.limpiarJefe();
     this.actualizarHUD();
 
     // El juego trabaja con UN elemento a la vez: aparece el primero, y
@@ -498,7 +644,7 @@ class EscenaJuego extends Phaser.Scene {
   // Programa la aparición del próximo elemento tras "tiempoAparicion" ms
   // (generación procedural: posición y tipo aleatorios en generarVirus()).
   programarSiguienteVirus() {
-    if (!estado.juegoActivo) return;
+    if (!estado.juegoActivo || estado.jefeActivo) return;
 
     const configuracionNivel = NIVELES[estado.indiceNivel];
     this.temporizadorSiguienteVirus = this.time.delayedCall(
@@ -524,7 +670,7 @@ class EscenaJuego extends Phaser.Scene {
   /* ---------------- GENERACIÓN PROCEDURAL DE ELEMENTOS ---------------- */
 
   generarVirus() {
-    if (!estado.juegoActivo) return;
+    if (!estado.juegoActivo || estado.jefeActivo) return;
 
     const configuracionNivel = NIVELES[estado.indiceNivel];
     const area = this.areaJuego;
@@ -846,15 +992,21 @@ class EscenaJuego extends Phaser.Scene {
       return;
     }
 
+    // Mientras el jefe está en combate, el nivel se completa cuando lo
+    // derrotan (ver derrotarJefe()), no por volver a alcanzar el objetivo.
+    if (estado.jefeActivo) return;
+
     const configuracionNivel = NIVELES[estado.indiceNivel];
     if (estado.virusEliminados >= configuracionNivel.virusRequeridos) {
-      this.finalizarPorNivelCompletado();
+      this.iniciarCombateJefe();
     }
   }
 
   finalizarPorDerrota() {
     estado.juegoActivo = false;
+    estado.jefeActivo = false;
     this.limpiarVirusActivos();
+    this.limpiarJefe();
     reproducirSonido('derrota');
 
     document.getElementById('texto-puntaje-derrota').textContent =
@@ -938,6 +1090,513 @@ class EscenaJuego extends Phaser.Scene {
       }
     });
   }
+
+  /* ================================================================
+     JEFE DE NIVEL
+     Aparece al alcanzar el objetivo de amenazas del nivel. El nivel
+     solo se considera superado cuando el jefe es derrotado.
+     ================================================================ */
+
+  // 1-2-3-4-5-6: detiene la generación normal (ya lo hace el guard de
+  // estado.jefeActivo), muestra la alerta, oscurece el tablero y hace
+  // aparecer al jefe. El combate arranca al terminar la animación.
+  iniciarCombateJefe() {
+    estado.jefeActivo = true;
+    this.limpiarVirusActivos();
+
+    const configuracionJefe = JEFES[estado.indiceNivel];
+    reproducirSonido('alertaJefe');
+    this.mostrarAlertaJefe(() => this.crearJefe(configuracionJefe));
+  }
+
+  mostrarAlertaJefe(callback) {
+    this.mundo.bringToTop(this.overlayOscurecer);
+    const duracionOscurecer = this.movimientoReducido ? 1 : 300;
+    this.tweens.add({
+      targets: this.overlayOscurecer,
+      alpha: { from: 0, to: 0.5 },
+      duration: duracionOscurecer,
+    });
+
+    const alerta = this.crearTexto(ANCHO_JUEGO / 2, ALTO_JUEGO / 2 - 30, 'AMENAZA PRINCIPAL DETECTADA', {
+      tamano: 32, mono: true, negrita: true, color: '#ff5c70', origenX: 0.5, origenY: 0.5, alinear: 'center',
+    });
+    alerta.setAlpha(0);
+    this.mundo.bringToTop(alerta);
+
+    this.tweens.add({
+      targets: alerta,
+      alpha: { from: 0, to: 1 },
+      duration: this.movimientoReducido ? 150 : 250,
+      yoyo: true,
+      hold: this.movimientoReducido ? 100 : 550,
+      onComplete: () => {
+        alerta.destroy();
+        callback();
+      },
+    });
+  }
+
+  // Construye al jefe (visual + estado de combate) y anima su entrada:
+  // escala 0.7 -> 1, con una onda alrededor al terminar.
+  crearJefe(configuracionJefe) {
+    const area = this.areaJuego;
+    const cx = ANCHO_JUEGO / 2;
+    const cy = (area.yMin + area.yMax) / 2;
+    const radioJefe = 78;
+
+    const contenedor = this.add.container(cx, cy);
+    this.mundo.add(contenedor);
+
+    const circuloBase = this.add.circle(0, 0, radioJefe, PALETA.superficie, 0.95);
+    circuloBase.setStrokeStyle(4, configuracionJefe.colorPrincipal, 1);
+
+    const graficoForma = this.add.graphics();
+    if (configuracionJefe.id === 'troyano') {
+      dibujarFormaTroyano(graficoForma, configuracionJefe.colorPrincipal);
+    } else if (configuracionJefe.id === 'botnet') {
+      dibujarFormaBotnet(graficoForma, configuracionJefe.colorPrincipal, configuracionJefe.colorSecundario);
+    } else {
+      dibujarFormaRansomware(graficoForma, configuracionJefe.colorPrincipal, configuracionJefe.colorSecundario);
+    }
+
+    const anilloTiempo = this.add.graphics();
+
+    const placaY = -radioJefe - 46;
+    const nombreTexto = this.add.text(0, placaY, `${configuracionJefe.nombre} · ${configuracionJefe.subtitulo}`, {
+      fontFamily: FUENTE_MONO,
+      fontSize: '15px',
+      color: PALETA.texto,
+      align: 'center',
+    }).setOrigin(0.5);
+    nombreTexto.setResolution(this.factorResolucion);
+
+    const graficosVida = this.add.graphics();
+
+    contenedor.add([circuloBase, graficoForma, anilloTiempo, graficosVida, nombreTexto]);
+    contenedor.setScale(0.7);
+    contenedor.setAlpha(0);
+
+    this.jefe = {
+      config: configuracionJefe,
+      vida: configuracionJefe.vidaMaxima,
+      vidaMaxima: configuracionJefe.vidaMaxima,
+      contenedor,
+      circuloBase,
+      graficosVida,
+      barraVidaAncho: 210,
+      placaY,
+      anilloTiempo,
+      protegido: false,
+      fase: 1,
+      trampas: [],
+      temporizadorAtaque: null,
+      temporizadorTrampa: null,
+      temporizadorPuntoDebil: null,
+      destruido: false,
+      puntoDebil: null,
+      proporcionVidaVisual: 1,
+      velX: Phaser.Math.FloatBetween(0.5, 1) * (Math.random() < 0.5 ? -1 : 1),
+      velY: Phaser.Math.FloatBetween(0.4, 0.8) * (Math.random() < 0.5 ? -1 : 1),
+    };
+
+    if (configuracionJefe.puntoDebil) {
+      this.crearPuntoDebilJefe();
+    } else {
+      circuloBase.setInteractive({ useHandCursor: true });
+      circuloBase.on('pointerdown', () => this.golpearJefe());
+    }
+
+    this.actualizarBarraVidaJefe(true);
+
+    const duracionEntrada = this.movimientoReducido ? 1 : 380;
+    this.tweens.add({
+      targets: contenedor,
+      scale: 1,
+      alpha: 1,
+      duration: duracionEntrada,
+      ease: 'Back.Out',
+      onComplete: () => {
+        if (!this.jefe) return; // el jugador pudo perder durante la animación
+        this.crearOndaExpansiva(contenedor.x, contenedor.y, configuracionJefe.colorPrincipal);
+        this.iniciarCicloAtaqueJefe();
+        if (configuracionJefe.generaTrampas) this.programarTrampaJefe();
+      },
+    });
+  }
+
+  /* ---------------- PUNTO DÉBIL (solo ransomware) ---------------- */
+
+  crearPuntoDebilJefe() {
+    const g = this.add.circle(0, 0, 24, PALETA.peligro, 1);
+    g.setStrokeStyle(3, 0xffffff, 0.6);
+    this.jefe.contenedor.add(g);
+    this.jefe.puntoDebil = { circulo: g };
+    g.on('pointerdown', () => this.golpearJefe());
+    this.reposicionarPuntoDebil();
+    this.iniciarParpadeoPuntoDebil();
+  }
+
+  reposicionarPuntoDebil() {
+    if (!this.jefe || !this.jefe.puntoDebil) return;
+    const angulo = Math.random() * Math.PI * 2;
+    const distancia = Phaser.Math.Between(20, 46);
+    this.jefe.puntoDebil.circulo.x = Math.cos(angulo) * distancia;
+    this.jefe.puntoDebil.circulo.y = Math.sin(angulo) * distancia;
+  }
+
+  mostrarPuntoDebil(visible) {
+    if (!this.jefe || !this.jefe.puntoDebil) return;
+    this.jefe.puntoDebil.circulo.setVisible(visible);
+    if (visible) {
+      this.jefe.puntoDebil.circulo.setInteractive({ useHandCursor: true });
+    } else {
+      this.jefe.puntoDebil.circulo.disableInteractive();
+    }
+  }
+
+  // El punto débil parpadea: solo se puede dañar cuando está visible.
+  // En la fase 2 dura menos tiempo visible y aparece con más frecuencia.
+  iniciarParpadeoPuntoDebil() {
+    const ciclo = () => {
+      if (!this.jefe || this.jefe.destruido) return;
+      const duracionVisible = this.jefe.fase === 2 ? 700 : 1100;
+      const duracionOculto = this.jefe.fase === 2 ? 900 : 700;
+
+      this.mostrarPuntoDebil(true);
+      this.jefe.temporizadorPuntoDebil = this.time.delayedCall(duracionVisible, () => {
+        if (!this.jefe || this.jefe.destruido) return;
+        this.mostrarPuntoDebil(false);
+        this.jefe.temporizadorPuntoDebil = this.time.delayedCall(duracionOculto, ciclo);
+      });
+    };
+    ciclo();
+  }
+
+  /* ---------------- CICLO DE ATAQUE (tiempo límite del jefe) ---------------- */
+
+  iniciarCicloAtaqueJefe() {
+    if (!this.jefe || this.jefe.destruido) return;
+    this.jefe.temporizadorAtaque = this.time.delayedCall(this.jefe.config.tiempoAtaque, () => {
+      this.onCicloAtaqueJefeTerminado();
+    });
+  }
+
+  onCicloAtaqueJefeTerminado() {
+    if (!this.jefe || this.jefe.destruido) return;
+
+    // El jugador pierde una vida, pero el jefe conserva el daño recibido
+    estado.vidas -= 1;
+    reproducirSonido('perderVida');
+    this.destelloServidor();
+    this.mostrarTextoFlotante(this.jefe.contenedor.x, this.jefe.contenedor.y - 100, '-1 VIDA', PALETA.peligro);
+    this.actualizarHUD();
+    this.verificarEstadoJuego();
+
+    if (estado.vidas > 0 && this.jefe && !this.jefe.destruido) {
+      this.iniciarCicloAtaqueJefe();
+    }
+  }
+
+  /* ---------------- RECIBIR GOLPE ---------------- */
+
+  golpearJefe() {
+    if (!this.jefe || this.jefe.destruido || this.jefe.protegido) return;
+    this.jefe.protegido = true;
+
+    this.jefe.vida -= 1;
+    reproducirSonido('eliminar');
+    this.crearParticulas(this.jefe.contenedor.x, this.jefe.contenedor.y, this.jefe.config.colorPrincipal);
+    this.mostrarTextoFlotante(this.jefe.contenedor.x, this.jefe.contenedor.y - 100, '-1', PALETA.texto);
+    this.destelloProteccionJefe();
+
+    if (!this.movimientoReducido) {
+      this.cameras.main.shake(90, 0.004);
+      this.tweens.add({
+        targets: this.jefe.contenedor,
+        angle: { from: -2, to: 2 },
+        duration: 45,
+        yoyo: true,
+        repeat: 3,
+        onComplete: () => { if (this.jefe) this.jefe.contenedor.setAngle(0); },
+      });
+    }
+
+    this.actualizarBarraVidaJefe();
+    this.reposicionarJefeTrasGolpe();
+
+    // Ya no puede volver a recibir clics durante 500ms (evita registrar
+    // varios clics/toques como si fueran golpes distintos)
+    this.time.delayedCall(500, () => {
+      if (this.jefe) this.jefe.protegido = false;
+    });
+
+    if (this.jefe.vida <= 0) {
+      this.derrotarJefe();
+      return;
+    }
+
+    if (
+      this.jefe.config.id === 'ransomware' &&
+      this.jefe.fase === 1 &&
+      this.jefe.vida <= this.jefe.vidaMaxima - this.jefe.config.faseCambioVida
+    ) {
+      this.activarFaseDosRansomware();
+    }
+  }
+
+  // Breve destello blanco que marca la ventana de protección tras un golpe
+  destelloProteccionJefe() {
+    if (!this.jefe) return;
+    const destello = this.add.circle(0, 0, 82, 0xffffff, 0.5);
+    this.jefe.contenedor.add(destello);
+    this.tweens.add({
+      targets: destello,
+      alpha: 0,
+      scale: 1.15,
+      duration: this.movimientoReducido ? 1 : 220,
+      onComplete: () => destello.destroy(),
+    });
+  }
+
+  reposicionarJefeTrasGolpe() {
+    if (!this.jefe) return;
+    const cfg = this.jefe.config;
+    const area = this.areaJuego;
+
+    if (cfg.movimiento === 'fijo') {
+      const cx = ANCHO_JUEGO / 2;
+      const cy = (area.yMin + area.yMax) / 2;
+      const nx = Phaser.Math.Clamp(cx + Phaser.Math.Between(-40, 40), area.xMin + 90, area.xMax - 90);
+      const ny = Phaser.Math.Clamp(cy + Phaser.Math.Between(-30, 30), area.yMin + 90, area.yMax - 90);
+      this.moverJefeA(nx, ny);
+    } else if (cfg.movimiento === 'salto') {
+      const nx = Phaser.Math.Between(area.xMin + 90, area.xMax - 90);
+      const ny = Phaser.Math.Between(area.yMin + 90, area.yMax - 90);
+      this.moverJefeA(nx, ny);
+    }
+    // 'lento' (ransomware) ya se mueve solo, de forma continua, en update()
+
+    if (cfg.puntoDebil) {
+      this.reposicionarPuntoDebil();
+    }
+  }
+
+  moverJefeA(x, y) {
+    if (!this.jefe) return;
+    this.tweens.add({
+      targets: this.jefe.contenedor,
+      x,
+      y,
+      duration: this.movimientoReducido ? 1 : 260,
+      ease: 'Quad.Out',
+    });
+  }
+
+  actualizarBarraVidaJefe(inicial = false) {
+    const jefe = this.jefe;
+    if (!jefe) return;
+    const objetivo = Phaser.Math.Clamp(jefe.vida / jefe.vidaMaxima, 0, 1);
+
+    const dibujar = (proporcion) => {
+      jefe.graficosVida.clear();
+      const anchoBarra = jefe.barraVidaAncho;
+      const x0 = -anchoBarra / 2;
+      const y0 = jefe.placaY + 22;
+      jefe.graficosVida.fillStyle(PALETA.borde, 1);
+      jefe.graficosVida.fillRoundedRect(x0, y0, anchoBarra, 10, 5);
+      if (proporcion > 0) {
+        jefe.graficosVida.fillStyle(jefe.config.colorPrincipal, 1);
+        jefe.graficosVida.fillRoundedRect(x0, y0, Math.max(anchoBarra * proporcion, 10), 10, 5);
+      }
+    };
+
+    if (inicial || this.movimientoReducido) {
+      dibujar(objetivo);
+      jefe.proporcionVidaVisual = objetivo;
+      return;
+    }
+
+    const estadoBarra = { valor: jefe.proporcionVidaVisual };
+    this.tweens.add({
+      targets: estadoBarra,
+      valor: objetivo,
+      duration: 300,
+      ease: 'Quad.Out',
+      onUpdate: () => dibujar(estadoBarra.valor),
+      onComplete: () => { jefe.proporcionVidaVisual = objetivo; },
+    });
+  }
+
+  activarFaseDosRansomware() {
+    if (!this.jefe || this.jefe.fase === 2) return;
+    this.jefe.fase = 2;
+    this.mostrarTextoFlotante(this.jefe.contenedor.x, this.jefe.contenedor.y - 100, 'FASE 2', PALETA.peligro);
+    if (!this.movimientoReducido) this.cameras.main.shake(150, 0.006);
+  }
+
+  /* ---------------- TRAMPAS GENERADAS POR EL JEFE ---------------- */
+  /* (mismo comportamiento que un elemento "seguro" normal: clic = -1
+     vida y "Falso positivo"; expira sola sin consecuencias) */
+
+  programarTrampaJefe() {
+    if (!this.jefe || this.jefe.destruido) return;
+    const cfg = this.jefe.config;
+    if (!cfg.generaTrampas) return;
+
+    const intervalo = this.jefe.fase === 2
+      ? Phaser.Math.Between(2200, 3400)
+      : Phaser.Math.Between(3200, 4800);
+
+    this.jefe.temporizadorTrampa = this.time.delayedCall(intervalo, () => {
+      if (!this.jefe || this.jefe.destruido) return;
+      if (this.jefe.trampas.length < cfg.maxTrampas) {
+        this.generarTrampaJefe();
+      }
+      this.programarTrampaJefe();
+    });
+  }
+
+  generarTrampaJefe() {
+    const area = this.areaJuego;
+    const x = Phaser.Math.Between(area.xMin, area.xMax);
+    const y = Phaser.Math.Between(area.yMin, area.yMax);
+
+    const contenedor = this.add.container(x, y);
+    this.mundo.add(contenedor);
+
+    const circuloFondo = this.add.circle(0, 0, 48, PALETA.superficie, 0.95);
+    circuloFondo.setStrokeStyle(3, PALETA.azul, 1);
+    const icono = this.add.graphics();
+    dibujarIconoSeguro(icono, PALETA.azul);
+
+    contenedor.add([circuloFondo, icono]);
+    contenedor.setSize(96, 96);
+    contenedor.setScale(0);
+    this.tweens.add({
+      targets: contenedor,
+      scale: 1,
+      duration: this.movimientoReducido ? 1 : 180,
+      ease: 'Sine.Out',
+    });
+
+    circuloFondo.setInteractive({ useHandCursor: true });
+
+    const trampa = { contenedor, temporizador: null, procesado: false };
+    circuloFondo.on('pointerdown', () => this.resolverTrampaJefe(trampa, true));
+    const vida = Phaser.Math.Between(2600, 3400);
+    trampa.temporizador = this.time.delayedCall(vida, () => this.resolverTrampaJefe(trampa, false));
+
+    this.jefe.trampas.push(trampa);
+  }
+
+  resolverTrampaJefe(trampa, fueClic) {
+    if (trampa.procesado) return;
+    trampa.procesado = true;
+    if (trampa.temporizador) trampa.temporizador.remove();
+
+    if (this.jefe) {
+      const indice = this.jefe.trampas.indexOf(trampa);
+      if (indice !== -1) this.jefe.trampas.splice(indice, 1);
+    }
+
+    const duracionSalida = this.movimientoReducido ? 1 : 220;
+
+    if (fueClic) {
+      estado.vidas -= 1;
+      reproducirSonido('trampa');
+      if (!this.movimientoReducido) this.cameras.main.shake(110, 0.005);
+      this.destelloServidor();
+      this.mostrarTextoFlotante(
+        trampa.contenedor.x,
+        trampa.contenedor.y,
+        [
+          { texto: 'Falso positivo', fuente: FUENTE_INTERFAZ, tamano: 20 },
+          { texto: '-1 vida', fuente: FUENTE_MONO, tamano: 20 },
+        ],
+        PALETA.peligro
+      );
+      this.actualizarHUD();
+      this.verificarEstadoJuego();
+    }
+
+    this.tweens.add({
+      targets: trampa.contenedor,
+      alpha: 0,
+      duration: duracionSalida,
+      onComplete: () => trampa.contenedor.destroy(),
+    });
+  }
+
+  /* ---------------- DERROTA DEL JEFE ---------------- */
+
+  derrotarJefe() {
+    if (!this.jefe || this.jefe.destruido) return;
+    this.jefe.destruido = true;
+
+    // 1) Detener todos sus temporizadores y entradas
+    if (this.jefe.temporizadorAtaque) this.jefe.temporizadorAtaque.remove();
+    if (this.jefe.temporizadorTrampa) this.jefe.temporizadorTrampa.remove();
+    if (this.jefe.temporizadorPuntoDebil) this.jefe.temporizadorPuntoDebil.remove();
+    this.jefe.circuloBase.disableInteractive();
+    if (this.jefe.puntoDebil) this.jefe.puntoDebil.circulo.disableInteractive();
+    this.jefe.trampas.forEach((t) => {
+      if (t.temporizador) t.temporizador.remove();
+      t.contenedor.destroy();
+    });
+    this.jefe.trampas = [];
+
+    const x = this.jefe.contenedor.x;
+    const y = this.jefe.contenedor.y;
+    const colorRotura = this.jefe.config.colorPrincipal;
+    const recompensa = this.jefe.config.puntosRecompensa;
+    const contenedorJefe = this.jefe.contenedor;
+
+    // 2) Romper visualmente el jefe en partículas
+    this.crearParticulas(x, y, colorRotura);
+    this.crearParticulasDatos(x, y);
+    this.tweens.add({
+      targets: contenedorJefe,
+      scale: 1.3,
+      alpha: 0,
+      duration: this.movimientoReducido ? 1 : 350,
+      onComplete: () => contenedorJefe.destroy(),
+    });
+
+    // 3) Onda verde desde el servidor
+    this.crearOndaExpansiva(ANCHO_JUEGO / 2, this.servidorY, PALETA.verde);
+
+    // 4) Puntos adicionales
+    estado.puntuacion += recompensa;
+    this.mostrarTextoFlotante(x, y, `+${recompensa}`, PALETA.verde);
+    this.actualizarHUD();
+
+    this.jefe = null;
+    estado.jefeActivo = false;
+
+    // 5) Esperar un momento y 6-7) reproducir la animación existente de
+    // "Nivel superado", que además habilita continuar al siguiente nivel
+    this.time.delayedCall(this.movimientoReducido ? 60 : 700, () => {
+      this.finalizarPorNivelCompletado();
+    });
+  }
+
+  // Detiene y destruye todo lo relacionado con el jefe (temporizadores,
+  // trampas y el propio objeto). Se usa al reiniciar/cambiar de nivel o
+  // ante una derrota, para no dejar eventos ni listeners sueltos.
+  limpiarJefe() {
+    if (!this.jefe) return;
+    if (this.jefe.temporizadorAtaque) this.jefe.temporizadorAtaque.remove();
+    if (this.jefe.temporizadorTrampa) this.jefe.temporizadorTrampa.remove();
+    if (this.jefe.temporizadorPuntoDebil) this.jefe.temporizadorPuntoDebil.remove();
+    this.jefe.trampas.forEach((t) => {
+      if (t.temporizador) t.temporizador.remove();
+      t.contenedor.destroy();
+    });
+    this.jefe.trampas = [];
+    if (this.jefe.contenedor) this.jefe.contenedor.destroy();
+    this.jefe = null;
+  }
 }
 
 /* ------------------------------------------------------------------
@@ -983,6 +1642,7 @@ function reiniciarEstado() {
   estado.virusEliminados = 0;
   estado.virusActivos = [];
   estado.juegoActivo = true;
+  estado.jefeActivo = false;
 }
 
 function iniciarJuegoDesdeCero() {
