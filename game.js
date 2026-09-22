@@ -20,17 +20,17 @@
    ------------------------------------------------------------------ */
 const NIVELES = [
   {
-    numero: 1, virusRequeridos: 10, tiempoAparicion: 1800, tiempoVidaVirus: 2600, probabilidadSeguro: 0.15,
+    numero: 1, virusRequeridos: 10, tiempoAparicion: 1800, tiempoVidaVirus: 4000, probabilidadSeguro: 0.15,
     maxElementos: 2, probabilidadMovimiento: 0.15, probabilidadCritica: 0.08, probabilidadResistente: 0,
     velocidadMin: 0.4, velocidadMax: 0.7,
   },
   {
-    numero: 2, virusRequeridos: 15, tiempoAparicion: 1300, tiempoVidaVirus: 2100, probabilidadSeguro: 0.25,
+    numero: 2, virusRequeridos: 15, tiempoAparicion: 1300, tiempoVidaVirus: 3400, probabilidadSeguro: 0.25,
     maxElementos: 3, probabilidadMovimiento: 0.4, probabilidadCritica: 0.12, probabilidadResistente: 0.1,
     velocidadMin: 0.6, velocidadMax: 1.0,
   },
   {
-    numero: 3, virusRequeridos: 20, tiempoAparicion: 900, tiempoVidaVirus: 1700, probabilidadSeguro: 0.35,
+    numero: 3, virusRequeridos: 20, tiempoAparicion: 900, tiempoVidaVirus: 3000, probabilidadSeguro: 0.35,
     maxElementos: 4, probabilidadMovimiento: 0.7, probabilidadCritica: 0.15, probabilidadResistente: 0.15,
     velocidadMin: 0.9, velocidadMax: 1.4,
   },
@@ -479,6 +479,7 @@ class EscenaJuego extends Phaser.Scene {
     this.escanerCargas = 2;
     this.escanerActivo = false;
     this.escanerActivoHasta = 0;
+    this.temporizadorEscaner = null;
 
     this.actualizarHUD();
     this.actualizarBotonEscaner();
@@ -826,6 +827,13 @@ class EscenaJuego extends Phaser.Scene {
       this.temporizadorSpawn.remove();
       this.temporizadorSpawn = null;
     }
+    // Evita que el escáner quede "a medias" o reaparezca en el nivel
+    // siguiente con temporizadores de otra partida
+    if (this.temporizadorEscaner) {
+      this.temporizadorEscaner.remove();
+      this.temporizadorEscaner = null;
+    }
+    this.escanerActivo = false;
     estado.virusActivos.forEach((elemento) => {
       if (elemento.temporizador) elemento.temporizador.remove();
       if (elemento.lineaObjetivo) elemento.lineaObjetivo.destroy();
@@ -938,9 +946,9 @@ class EscenaJuego extends Phaser.Scene {
     });
 
     // Temporizador: si expira sin clic, se resuelve como "no atendido".
-    // El malware crítico dura menos tiempo en pantalla.
+    // El malware crítico dura el 75% del tiempo de una amenaza normal.
     const tiempoVida = tipo === 'critica'
-      ? Math.round(configuracionNivel.tiempoVidaVirus * 0.6)
+      ? Math.round(configuracionNivel.tiempoVidaVirus * 0.75)
       : tipo === 'resistente'
         ? Math.round(configuracionNivel.tiempoVidaVirus * 1.15)
         : configuracionNivel.tiempoVidaVirus;
@@ -952,10 +960,14 @@ class EscenaJuego extends Phaser.Scene {
     estado.virusActivos.push(elemento);
 
     // Si el escáner está activo, el elemento recién aparecido también
-    // muestra su etiqueta durante el tiempo que le quede al escaneo.
+    // muestra su etiqueta y su temporizador queda ralentizado durante
+    // el tiempo que le quede al escaneo.
     if (this.escanerActivo) {
       const restante = this.escanerActivoHasta - this.time.now;
-      if (restante > 0) this.mostrarEtiquetaEscaner(elemento, restante);
+      if (restante > 0) {
+        this.mostrarEtiquetaEscaner(elemento, restante);
+        elemento.temporizador.timeScale = this.factorEscaner;
+      }
     }
   }
 
@@ -1255,8 +1267,9 @@ class EscenaJuego extends Phaser.Scene {
 
   /* ---------------- ESCÁNER (2 usos por nivel) ---------------- */
 
-  // Activa el escáner: ralentiza los elementos activos (y al jefe, si
-  // corresponde) durante 2s y revela una etiqueta "AMENAZA"/"SEGURO"
+  // Activa el escáner: ralentiza el movimiento y los temporizadores de
+  // expiración de los elementos activos (y el movimiento del jefe, si
+  // corresponde) durante 2s, y revela una etiqueta "AMENAZA"/"SEGURO"
   // sobre cada uno. No elimina nada ni entrega puntos.
   activarEscaner() {
     if (!estado.juegoActivo || this.escanerCargas <= 0 || this.escanerActivo) return;
@@ -1268,10 +1281,19 @@ class EscenaJuego extends Phaser.Scene {
     this.escanerActivo = true;
     this.escanerActivoHasta = this.time.now + 2000;
 
-    estado.virusActivos.forEach((elemento) => this.mostrarEtiquetaEscaner(elemento, 2000));
+    estado.virusActivos.forEach((elemento) => {
+      this.mostrarEtiquetaEscaner(elemento, 2000);
+      // Ralentiza también el tiempo que le queda antes de expirar
+      if (elemento.temporizador) elemento.temporizador.timeScale = this.factorEscaner;
+    });
 
-    this.time.delayedCall(2000, () => {
+    this.temporizadorEscaner = this.time.delayedCall(2000, () => {
       this.escanerActivo = false;
+      this.temporizadorEscaner = null;
+      // Restaura la velocidad normal de los temporizadores que sigan activos
+      estado.virusActivos.forEach((elemento) => {
+        if (elemento.temporizador) elemento.temporizador.timeScale = 1;
+      });
     });
   }
 
