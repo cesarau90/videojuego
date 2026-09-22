@@ -652,6 +652,7 @@ body {
 }
 
 #contenedor-phaser {
+  position: relative;
   width: 100%;
   max-width: 960px;
   margin: 0 auto;
@@ -664,6 +665,57 @@ body {
   display: block;
   border: 1px solid var(--borde);
   image-rendering: auto;
+}
+
+.boton-escaner {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 9px 14px;
+  background: rgba(13, 27, 24, 0.85);
+  border: 1px solid var(--azul);
+  border-radius: 8px;
+  color: var(--texto);
+  font-family: var(--fuente-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.5px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 150ms ease, background 150ms ease;
+}
+
+.boton-escaner:hover {
+  background: rgba(56, 189, 248, 0.18);
+}
+
+.boton-escaner:active {
+  transform: scale(0.96);
+}
+
+.boton-escaner:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.boton-escaner-icono {
+  width: 16px;
+  height: 16px;
+  color: var(--azul);
+  flex: none;
+}
+
+@media (max-width: 480px) {
+  .boton-escaner {
+    right: 6px;
+    bottom: 6px;
+    padding: 8px 10px;
+    font-size: 0.66rem;
+  }
 }
 
 /* ============ ANIMACIONES ============ */

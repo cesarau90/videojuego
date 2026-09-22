@@ -19,13 +19,40 @@
      una amenaza real
    ------------------------------------------------------------------ */
 const NIVELES = [
-  { numero: 1, virusRequeridos: 10, tiempoAparicion: 1800, tiempoVidaVirus: 2600, probabilidadSeguro: 0.15 },
-  { numero: 2, virusRequeridos: 15, tiempoAparicion: 1300, tiempoVidaVirus: 2100, probabilidadSeguro: 0.25 },
-  { numero: 3, virusRequeridos: 20, tiempoAparicion: 900, tiempoVidaVirus: 1700, probabilidadSeguro: 0.35 },
+  {
+    numero: 1, virusRequeridos: 10, tiempoAparicion: 1800, tiempoVidaVirus: 2600, probabilidadSeguro: 0.15,
+    maxElementos: 2, probabilidadMovimiento: 0.15, probabilidadCritica: 0.08, probabilidadResistente: 0,
+    velocidadMin: 0.4, velocidadMax: 0.7,
+  },
+  {
+    numero: 2, virusRequeridos: 15, tiempoAparicion: 1300, tiempoVidaVirus: 2100, probabilidadSeguro: 0.25,
+    maxElementos: 3, probabilidadMovimiento: 0.4, probabilidadCritica: 0.12, probabilidadResistente: 0.1,
+    velocidadMin: 0.6, velocidadMax: 1.0,
+  },
+  {
+    numero: 3, virusRequeridos: 20, tiempoAparicion: 900, tiempoVidaVirus: 1700, probabilidadSeguro: 0.35,
+    maxElementos: 4, probabilidadMovimiento: 0.7, probabilidadCritica: 0.15, probabilidadResistente: 0.15,
+    velocidadMin: 0.9, velocidadMax: 1.4,
+  },
 ];
 
 const VIDAS_INICIALES = 3;
-const PUNTOS_POR_VIRUS = 10;
+
+// Puntos base por tipo de amenaza real (antes de aplicar el multiplicador de combo)
+const PUNTOS_POR_TIPO = { amenaza: 10, critica: 20, resistente: 15 };
+
+// Una amenaza "real" es cualquier tipo que cuenta para el objetivo del nivel
+// y que, si escapa, cuesta un servidor. Los archivos seguros no lo son.
+function esAmenazaReal(tipo) {
+  return tipo === 'amenaza' || tipo === 'critica' || tipo === 'resistente';
+}
+
+// Multiplicador de combo: x1 (0-2 aciertos), x2 (3-5), x3 (6 o más)
+function calcularMultiplicadorCombo(combo) {
+  if (combo >= 6) return 3;
+  if (combo >= 3) return 2;
+  return 1;
+}
 
 // Fuentes: Inter para etiquetas de interfaz, JetBrains Mono solo para
 // cifras y etiquetas técnicas (según la identidad visual del proyecto)
@@ -46,7 +73,23 @@ const PALETA = {
   naranja: 0xff9f45,
   morado: 0xa855f7,
   magenta: 0xec4899,
+  // Versiones en texto (CSS) de los mismos colores, para usarlas en
+  // Phaser.Text (que espera cadenas de color, no números)
+  verdeTexto: '#00d99b',
+  azulTexto: '#38bdf8',
+  peligroTexto: '#ff5c70',
+  naranjaTexto: '#ff9f45',
+  moradoTexto: '#a855f7',
 };
+
+// Color de cada tipo de elemento (usado en el aro, el ícono, la línea
+// de objetivo y las partículas de retroalimentación)
+function colorPorTipo(tipo) {
+  if (tipo === 'amenaza') return PALETA.peligro;
+  if (tipo === 'critica') return PALETA.naranja;
+  if (tipo === 'resistente') return PALETA.morado;
+  return PALETA.azul; // 'seguro'
+}
 
 // Tamaño lógico fijo del tablero (mínimo 1280x720, como pide el diseño).
 // Todas las posiciones del HUD, el servidor y los elementos se calculan
@@ -166,6 +209,7 @@ const estado = {
   virusActivos: [], // lista de elementos que están en pantalla ahora mismo
   juegoActivo: false,
   jefeActivo: false, // true durante el combate contra el jefe del nivel
+  combo: 0, // aciertos consecutivos sobre amenazas reales (parte normal del nivel)
 };
 
 /* ------------------------------------------------------------------
@@ -246,6 +290,23 @@ function reproducirSonido(tipo) {
       volumen.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.7);
       oscilador.start();
       oscilador.stop(ctx.currentTime + 0.7);
+    } else if (tipo === 'combo') {
+      // Nota corta cuando el combo sube de nivel
+      oscilador.type = 'triangle';
+      oscilador.frequency.setValueAtTime(660, ctx.currentTime);
+      oscilador.frequency.setValueAtTime(990, ctx.currentTime + 0.08);
+      volumen.gain.setValueAtTime(0.11, ctx.currentTime);
+      volumen.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+      oscilador.start();
+      oscilador.stop(ctx.currentTime + 0.18);
+    } else if (tipo === 'escudo') {
+      // Golpe metálico corto: se rompió el escudo de una amenaza resistente
+      oscilador.type = 'square';
+      oscilador.frequency.setValueAtTime(700, ctx.currentTime);
+      volumen.gain.setValueAtTime(0.1, ctx.currentTime);
+      volumen.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+      oscilador.start();
+      oscilador.stop(ctx.currentTime + 0.12);
     } else if (tipo === 'derrota') {
       // Sonido grave y descendente de fin de juego
       oscilador.type = 'sawtooth';
@@ -315,6 +376,34 @@ function dibujarIconoAmenaza(g, color) {
   g.fillCircle(0, 9, 2);
 }
 
+// Malware crítico: rayo (representa un ataque rápido y de alto impacto)
+function dibujarIconoCritico(g, color) {
+  g.fillStyle(color, 1);
+  g.beginPath();
+  g.moveTo(4, -18);
+  g.lineTo(-10, 2);
+  g.lineTo(-1, 2);
+  g.lineTo(-4, 18);
+  g.lineTo(10, -4);
+  g.lineTo(1, -4);
+  g.closePath();
+  g.fillPath();
+}
+
+// Malware resistente: "bug" con patas (representa malware persistente,
+// que necesita dos golpes: el primero rompe su escudo exterior)
+function dibujarIconoResistente(g, color) {
+  g.lineStyle(3.5, color, 1);
+  g.strokeEllipse(0, 2, 20, 26);
+  for (let signo = -1; signo <= 1; signo += 2) {
+    g.lineBetween(signo * 9, -6, signo * 19, -12);
+    g.lineBetween(signo * 10, 2, signo * 21, 2);
+    g.lineBetween(signo * 9, 10, signo * 19, 16);
+  }
+  g.fillStyle(color, 1);
+  g.fillCircle(0, -14, 3);
+}
+
 // Elemento seguro: escudo con marca de verificación
 function dibujarIconoSeguro(g, color) {
   g.lineStyle(3.5, color, 1);
@@ -331,27 +420,6 @@ function dibujarIconoSeguro(g, color) {
   g.moveTo(-6, 1);
   g.lineTo(-2, 6);
   g.lineTo(9, -6);
-  g.strokePath();
-}
-
-// Segmento de escudo para representar una vida en el HUD
-function dibujarEscudoVida(g, cx, cy, color, relleno) {
-  const puntos = [
-    [0, -14], [11, -10], [11, 3], [0, 16], [-11, 3], [-11, -10],
-  ];
-  g.lineStyle(3, color, 1);
-  g.beginPath();
-  puntos.forEach(([dx, dy], i) => {
-    const px = cx + dx;
-    const py = cy + dy;
-    if (i === 0) g.moveTo(px, py);
-    else g.lineTo(px, py);
-  });
-  g.closePath();
-  if (relleno) {
-    g.fillStyle(color, 0.22);
-    g.fillPath();
-  }
   g.strokePath();
 }
 
@@ -390,7 +458,7 @@ class EscenaJuego extends Phaser.Scene {
     this.dibujarRedDecorativa(ancho, alto);
 
     this.crearHUD(ancho, alto);
-    this.crearServidor(ancho, alto);
+    this.crearServidoresInferior(ancho, alto);
 
     // Rectángulo negro para oscurecer el tablero al completar un nivel
     this.overlayOscurecer = this.add.rectangle(ancho / 2, alto / 2, ancho, alto, 0x000000, 0.6).setAlpha(0);
@@ -405,20 +473,55 @@ class EscenaJuego extends Phaser.Scene {
     };
 
     this.contadorElementosNivel = 0;
-    this.temporizadorSiguienteVirus = null;
+    this.temporizadorSpawn = null;
     this.puntuacionInicioNivel = 0;
     this.jefe = null;
+    this.escanerCargas = 2;
+    this.escanerActivo = false;
+    this.escanerActivoHasta = 0;
 
     this.actualizarHUD();
+    this.actualizarBotonEscaner();
     this.iniciarNivelActual();
   }
 
-  // Cada elemento activo dibuja un anillo que se reduce con el tiempo restante
+  // Factor de lentitud aplicado por el escáner (2s) a elementos y, si
+  // corresponde, al jefe. 1 = velocidad normal.
+  get factorEscaner() {
+    return this.escanerActivo ? 0.35 : 1;
+  }
+
+  // Cada elemento activo dibuja un anillo que se reduce con el tiempo
+  // restante, se mueve si es móvil (rebotando en los bordes del área de
+  // juego) y mantiene su línea de objetivo apuntando al servidor elegido.
   update() {
     estado.virusActivos.forEach((elemento) => {
+      if (elemento.movil) {
+        const factor = this.factorEscaner;
+        elemento.contenedor.x += elemento.velX * factor;
+        elemento.contenedor.y += elemento.velY * factor;
+        const area = this.areaJuego;
+        const margen = 60;
+        if (elemento.contenedor.x < area.xMin + margen || elemento.contenedor.x > area.xMax - margen) {
+          elemento.velX *= -1;
+        }
+        if (elemento.contenedor.y < area.yMin + margen || elemento.contenedor.y > area.yMax - margen) {
+          elemento.velY *= -1;
+        }
+      }
+
+      if (elemento.lineaObjetivo) {
+        elemento.lineaObjetivo.clear();
+        elemento.lineaObjetivo.lineStyle(1.5, elemento.colorLinea, 0.28);
+        elemento.lineaObjetivo.lineBetween(
+          elemento.contenedor.x, elemento.contenedor.y,
+          elemento.servidorObjetivoX, this.servidorY
+        );
+      }
+
       if (!elemento.temporizador || !elemento.anilloTiempo) return;
       const restante = 1 - elemento.temporizador.getProgress();
-      const color = elemento.tipo === 'amenaza' ? PALETA.peligro : PALETA.azul;
+      const color = colorPorTipo(elemento.tipo);
 
       elemento.anilloTiempo.clear();
       elemento.anilloTiempo.lineStyle(4, color, 0.55);
@@ -443,7 +546,9 @@ class EscenaJuego extends Phaser.Scene {
       }
 
       if (this.jefe.config.movimiento === 'lento' && !this.movimientoReducido) {
-        const velocidad = this.jefe.fase === 2 ? 1 : 0.6;
+        // El escáner también puede ralentizar al jefe durante 2s, sin
+        // tocar su vida, temporizadores de ataque ni punto débil.
+        const velocidad = (this.jefe.fase === 2 ? 1 : 0.6) * this.factorEscaner;
         const area = this.areaJuego;
         const margen = 100;
         this.jefe.contenedor.x += this.jefe.velX * velocidad;
@@ -564,6 +669,14 @@ class EscenaJuego extends Phaser.Scene {
 
     this.textoAmenazas = this.crearParEtiquetaValor(32, 78, 'AMENAZAS', 19);
 
+    // Combo, alineado a la derecha (mismo patrón que NIVEL)
+    this.textoCombo = this.crearTexto(ancho - 32, 78, '', {
+      tamano: 19, mono: true, origenX: 1, origenY: 0,
+    });
+    this.etiquetaCombo = this.crearTexto(ancho - 32, 78, 'COMBO', {
+      tamano: 16, origenX: 1, origenY: 0, color: PALETA.textoSecundario,
+    });
+
     // Barra de progreso de amenazas eliminadas
     this.barraProgresoX = 32;
     this.barraProgresoY = 107;
@@ -571,57 +684,98 @@ class EscenaJuego extends Phaser.Scene {
     this.graficosProgreso = this.add.graphics();
     this.mundo.add(this.graficosProgreso);
 
-    // Escudos de vida
-    this.escudosX = 45;
-    this.escudosY = 154;
-    this.graficosEscudos = this.add.graphics();
-    this.mundo.add(this.graficosEscudos);
+    // Cargas del escáner
+    this.textoEscaner = this.crearParEtiquetaValor(32, 140, 'ESCÁNER', 15);
 
-    // Leyenda de colores
-    this.crearTexto(ancho - 32, 142, 'Rojo: eliminar · Azul: ignorar', {
-      tamano: 17, origenX: 1, origenY: 0, color: PALETA.textoSecundario,
+    // Leyenda de colores (una entrada por tipo de elemento)
+    this.crearTexto(ancho - 32, 140, 'Rojo·Naranja·Morado: eliminar · Azul: ignorar', {
+      tamano: 14, origenX: 1, origenY: 0, color: PALETA.textoSecundario,
     });
   }
 
-  /* ---------------- SERVIDOR INFERIOR ---------------- */
+  /* ---------------- SERVIDORES INFERIORES (sistema de vidas) ---------------- */
 
-  crearServidor(ancho, alto) {
-    this.integridadX = 32;
-    this.integridadY = alto - 186;
-    this.integridadAncho = ancho - 64;
-    this.graficosIntegridad = this.add.graphics();
-    this.mundo.add(this.graficosIntegridad);
-
+  crearServidoresInferior(ancho, alto) {
     this.servidorY = alto - 106;
-    const rectServidor = this.add.rectangle(ancho / 2, this.servidorY, ancho - 64, 90, PALETA.superficie)
-      .setStrokeStyle(1, PALETA.borde, 1);
-    const textoServidor = this.crearTexto(ancho / 2, this.servidorY, 'SERVIDOR CENTRAL', {
-      tamano: 22, mono: true, color: PALETA.textoSecundario, origenX: 0.5, origenY: 0.5,
+    const gap = 16;
+    const anchoCaja = (ancho - 64 - gap * 2) / 3;
+    const definiciones = [
+      { id: 'web', nombre: 'SERVIDOR WEB' },
+      { id: 'bd', nombre: 'BASE DE DATOS' },
+      { id: 'respaldo', nombre: 'SERVIDOR DE RESPALDO' },
+    ];
+
+    this.servidores = definiciones.map((def, indice) => {
+      const x = 32 + anchoCaja / 2 + indice * (anchoCaja + gap);
+      const rect = this.add.rectangle(x, this.servidorY, anchoCaja, 90, PALETA.superficie, 0.95)
+        .setStrokeStyle(2, PALETA.verde, 1);
+      const nombreTexto = this.crearTexto(x, this.servidorY - 16, def.nombre, {
+        tamano: 13, mono: true, color: PALETA.texto, origenX: 0.5, origenY: 0.5, alinear: 'center',
+      });
+      const estadoTexto = this.crearTexto(x, this.servidorY + 16, 'EN LÍNEA', {
+        tamano: 12, mono: true, color: PALETA.verdeTexto, origenX: 0.5, origenY: 0.5, alinear: 'center',
+      });
+      this.mundo.add(rect);
+      this.mundo.bringToTop(nombreTexto);
+      this.mundo.bringToTop(estadoTexto);
+      return { id: def.id, nombre: def.nombre, x, rect, nombreTexto, estadoTexto, activo: true, parpadeando: false };
     });
-
-    // Rectángulo superpuesto, invisible por defecto, para el destello rojo
-    this.overlayServidor = this.add
-      .rectangle(ancho / 2, this.servidorY, ancho - 64, 90, PALETA.peligro, 0.5)
-      .setAlpha(0);
-
-    this.mundo.add([rectServidor, this.overlayServidor]);
-    this.mundo.bringToTop(textoServidor);
   }
 
-  // Breve destello rojo del servidor (error: amenaza escapada o falso positivo)
-  destelloServidor() {
-    if (this.movimientoReducido) {
-      this.overlayServidor.setAlpha(0.45);
-      this.time.delayedCall(120, () => this.overlayServidor.setAlpha(0));
-      return;
+  dibujarEstadoServidor(servidor) {
+    if (servidor.activo) {
+      servidor.rect.setStrokeStyle(2, PALETA.verde, 1);
+      servidor.rect.setFillStyle(PALETA.superficie, 0.95);
+      servidor.estadoTexto.setText('EN LÍNEA');
+      servidor.estadoTexto.setColor(PALETA.verdeTexto);
+    } else {
+      servidor.rect.setStrokeStyle(2, PALETA.peligro, 1);
+      servidor.rect.setFillStyle(0x1a0d10, 0.95);
+      servidor.estadoTexto.setText('FUERA DE LÍNEA');
+      servidor.estadoTexto.setColor(PALETA.peligroTexto);
     }
-    this.tweens.add({
-      targets: this.overlayServidor,
-      alpha: { from: 0, to: 0.45 },
-      duration: 130,
-      yoyo: true,
-      ease: 'Quad.Out',
-    });
+  }
+
+  // Parpadeo naranja ("bajo ataque") antes de asentarse en su estado final
+  parpadearServidorAtaque(servidor, callback) {
+    servidor.parpadeando = true;
+    const ciclos = this.movimientoReducido ? 1 : 3;
+    let paso = 0;
+    const alternar = () => {
+      const encendido = paso % 2 === 0;
+      servidor.rect.setStrokeStyle(3, PALETA.naranja, 1);
+      servidor.rect.setFillStyle(encendido ? 0x3a2408 : PALETA.superficie, 0.95);
+      servidor.estadoTexto.setText('BAJO ATAQUE');
+      servidor.estadoTexto.setColor(PALETA.naranjaTexto);
+      paso += 1;
+      if (paso < ciclos * 2) {
+        this.time.delayedCall(this.movimientoReducido ? 30 : 110, alternar);
+      } else {
+        servidor.parpadeando = false;
+        callback();
+      }
+    };
+    alternar();
+  }
+
+  // Desactiva un servidor ACTIVO al azar (nunca uno que ya esté fuera de
+  // línea). Mantiene estado.vidas sincronizado para no romper el resto
+  // del código (derrota, HUD, etc. siguen leyendo estado.vidas).
+  desactivarServidorAleatorio() {
+    const activos = this.servidores.filter((s) => s.activo);
+    if (activos.length === 0) return;
+    const objetivo = Phaser.Utils.Array.GetRandom(activos);
+    objetivo.activo = false;
+    estado.vidas = this.servidores.filter((s) => s.activo).length;
+    this.parpadearServidorAtaque(objetivo, () => this.dibujarEstadoServidor(objetivo));
+  }
+
+  // Elige a qué servidor "apunta" una amenaza real recién generada:
+  // preferentemente uno que siga activo (si ya no quedan, cualquiera).
+  elegirServidorObjetivo() {
+    if (!this.servidores) return null;
+    const activos = this.servidores.filter((s) => s.activo);
+    return Phaser.Utils.Array.GetRandom(activos.length ? activos : this.servidores);
   }
 
   /* ---------------- CONTROL DE NIVELES ---------------- */
@@ -629,39 +783,53 @@ class EscenaJuego extends Phaser.Scene {
   iniciarNivelActual() {
     estado.virusEliminados = 0;
     estado.jefeActivo = false;
+    estado.combo = 0;
     this.contadorElementosNivel = 0;
     this.puntuacionInicioNivel = estado.puntuacion;
+    this.escanerCargas = 2;
+    this.escanerActivo = false;
     this.limpiarVirusActivos();
     this.limpiarJefe();
     this.actualizarHUD();
+    this.actualizarBotonEscaner();
 
-    // El juego trabaja con UN elemento a la vez: aparece el primero, y
-    // cada vez que ese elemento se resuelve (clic o tiempo agotado) se
-    // programa automáticamente la aparición del siguiente.
-    this.programarSiguienteVirus();
+    // Arranca el generador de elementos (ver iniciarGeneracionElementos).
+    this.iniciarGeneracionElementos();
   }
 
-  // Programa la aparición del próximo elemento tras "tiempoAparicion" ms
-  // (generación procedural: posición y tipo aleatorios en generarVirus()).
-  programarSiguienteVirus() {
-    if (!estado.juegoActivo || estado.jefeActivo) return;
-
+  // Temporizador repetitivo: en cada intervalo ("tiempoAparicion") trata
+  // de agregar un elemento nuevo, sin superar el máximo simultáneo del
+  // nivel. Si el tablero ya está lleno, simplemente lo intenta de nuevo
+  // en el siguiente intervalo (generación procedural continua).
+  iniciarGeneracionElementos() {
     const configuracionNivel = NIVELES[estado.indiceNivel];
-    this.temporizadorSiguienteVirus = this.time.delayedCall(
-      configuracionNivel.tiempoAparicion,
-      this.generarVirus,
-      [],
-      this
-    );
+    this.temporizadorSpawn = this.time.addEvent({
+      delay: configuracionNivel.tiempoAparicion,
+      loop: true,
+      callback: this.intentarGenerarElemento,
+      callbackScope: this,
+    });
+  }
+
+  intentarGenerarElemento() {
+    if (!estado.juegoActivo || estado.jefeActivo) return;
+    const configuracionNivel = NIVELES[estado.indiceNivel];
+    // Ya se alcanzó el objetivo del nivel: se detiene la generación
+    // (el jefe se encarga de retirar lo que quede en pantalla).
+    if (estado.virusEliminados >= configuracionNivel.virusRequeridos) return;
+    if (estado.virusActivos.length >= configuracionNivel.maxElementos) return;
+    this.generarVirus();
   }
 
   limpiarVirusActivos() {
-    if (this.temporizadorSiguienteVirus) {
-      this.temporizadorSiguienteVirus.remove();
-      this.temporizadorSiguienteVirus = null;
+    if (this.temporizadorSpawn) {
+      this.temporizadorSpawn.remove();
+      this.temporizadorSpawn = null;
     }
     estado.virusActivos.forEach((elemento) => {
       if (elemento.temporizador) elemento.temporizador.remove();
+      if (elemento.lineaObjetivo) elemento.lineaObjetivo.destroy();
+      if (elemento.escudoGrafico) elemento.escudoGrafico.destroy();
       elemento.contenedor.destroy();
     });
     estado.virusActivos = [];
@@ -679,16 +847,21 @@ class EscenaJuego extends Phaser.Scene {
     const x = Phaser.Math.Between(area.xMin, area.xMax);
     const y = Phaser.Math.Between(area.yMin, area.yMax);
 
-    // Decide si es una amenaza real o un falso positivo ("elemento seguro").
-    // En el nivel 1, las primeras 3 amenazas nunca son falsos positivos.
+    // Decide el tipo de elemento. En el nivel 1, las primeras 3 amenazas
+    // nunca son falsos positivos. Entre las amenazas reales, se sortea
+    // además si es crítica o resistente según la configuración del nivel.
     let tipo = 'amenaza';
     const protegerInicioNivel1 = estado.indiceNivel === 0 && this.contadorElementosNivel < 3;
     if (!protegerInicioNivel1 && Math.random() < configuracionNivel.probabilidadSeguro) {
       tipo = 'seguro';
+    } else {
+      const sorteo = Math.random();
+      if (sorteo < configuracionNivel.probabilidadResistente) tipo = 'resistente';
+      else if (sorteo < configuracionNivel.probabilidadResistente + configuracionNivel.probabilidadCritica) tipo = 'critica';
     }
     this.contadorElementosNivel += 1;
 
-    const color = tipo === 'amenaza' ? PALETA.peligro : PALETA.azul;
+    const color = colorPorTipo(tipo);
 
     // Un contenedor agrupa el círculo, el anillo de tiempo y el ícono
     const contenedor = this.add.container(x, y);
@@ -700,13 +873,22 @@ class EscenaJuego extends Phaser.Scene {
     const anilloTiempo = this.add.graphics();
 
     const icono = this.add.graphics();
-    if (tipo === 'amenaza') {
-      dibujarIconoAmenaza(icono, color);
-    } else {
-      dibujarIconoSeguro(icono, color);
-    }
+    if (tipo === 'amenaza') dibujarIconoAmenaza(icono, color);
+    else if (tipo === 'critica') dibujarIconoCritico(icono, color);
+    else if (tipo === 'resistente') dibujarIconoResistente(icono, color);
+    else dibujarIconoSeguro(icono, color);
 
     contenedor.add([circuloFondo, anilloTiempo, icono]);
+
+    // El malware resistente muestra además un escudo exterior: el primer
+    // golpe solo lo rompe, el segundo elimina el elemento.
+    let escudoGrafico = null;
+    if (tipo === 'resistente') {
+      escudoGrafico = this.add.circle(0, 0, 60, 0, 0);
+      escudoGrafico.setStrokeStyle(3, PALETA.morado, 0.9);
+      contenedor.add(escudoGrafico);
+    }
+
     contenedor.setSize(96, 96);
     contenedor.setScale(0);
 
@@ -721,18 +903,60 @@ class EscenaJuego extends Phaser.Scene {
     // El círculo es interactivo: se puede hacer clic/tocar sobre él
     circuloFondo.setInteractive({ useHandCursor: true });
 
-    const elemento = { contenedor, circuloFondo, anilloTiempo, tipo, temporizador: null };
+    // Objetivo móvil: una fracción de los elementos (según el nivel) se
+    // desplaza lentamente y rebota dentro del área de juego.
+    const movil = !this.movimientoReducido && Math.random() < configuracionNivel.probabilidadMovimiento;
+    const velocidad = Phaser.Math.FloatBetween(configuracionNivel.velocidadMin, configuracionNivel.velocidadMax);
+    const anguloMovimiento = Math.random() * Math.PI * 2;
+
+    const elemento = {
+      contenedor, circuloFondo, anilloTiempo, tipo, temporizador: null,
+      escudoGrafico,
+      golpesRestantes: tipo === 'resistente' ? 2 : 1,
+      movil,
+      velX: movil ? Math.cos(anguloMovimiento) * velocidad : 0,
+      velY: movil ? Math.sin(anguloMovimiento) * velocidad : 0,
+      lineaObjetivo: null,
+      servidorObjetivoX: null,
+      colorLinea: color,
+    };
+
+    // Línea/etiqueta que indica a qué servidor apunta una amenaza real
+    if (esAmenazaReal(tipo)) {
+      const servidorObjetivo = this.elegirServidorObjetivo();
+      if (servidorObjetivo) {
+        elemento.servidorObjetivoX = servidorObjetivo.x;
+        const linea = this.add.graphics();
+        this.mundo.add(linea);
+        this.mundo.moveBelow(linea, contenedor);
+        elemento.lineaObjetivo = linea;
+      }
+    }
 
     circuloFondo.on('pointerdown', () => {
       this.eliminarVirus(elemento, true);
     });
 
-    // Temporizador: si expira sin clic, se resuelve como "no atendido"
-    elemento.temporizador = this.time.delayedCall(configuracionNivel.tiempoVidaVirus, () => {
+    // Temporizador: si expira sin clic, se resuelve como "no atendido".
+    // El malware crítico dura menos tiempo en pantalla.
+    const tiempoVida = tipo === 'critica'
+      ? Math.round(configuracionNivel.tiempoVidaVirus * 0.6)
+      : tipo === 'resistente'
+        ? Math.round(configuracionNivel.tiempoVidaVirus * 1.15)
+        : configuracionNivel.tiempoVidaVirus;
+
+    elemento.temporizador = this.time.delayedCall(tiempoVida, () => {
       this.eliminarVirus(elemento, false);
     });
 
     estado.virusActivos.push(elemento);
+
+    // Si el escáner está activo, el elemento recién aparecido también
+    // muestra su etiqueta durante el tiempo que le quede al escaneo.
+    if (this.escanerActivo) {
+      const restante = this.escanerActivoHasta - this.time.now;
+      if (restante > 0) this.mostrarEtiquetaEscaner(elemento, restante);
+    }
   }
 
   /* ---------------- RESOLVER UN ELEMENTO (clic o expiración) ---------------- */
@@ -740,21 +964,42 @@ class EscenaJuego extends Phaser.Scene {
   eliminarVirus(elemento, fueEliminadoPorClic) {
     // Evita procesar el mismo elemento dos veces (por ejemplo, clic justo cuando expira)
     if (elemento.procesado) return;
-    elemento.procesado = true;
 
+    // Malware resistente: el primer clic solo rompe el escudo exterior,
+    // no elimina el elemento ni reinicia su temporizador.
+    if (fueEliminadoPorClic && elemento.tipo === 'resistente' && elemento.golpesRestantes > 1) {
+      elemento.golpesRestantes -= 1;
+      this.romperEscudoResistente(elemento);
+      return;
+    }
+
+    elemento.procesado = true;
     if (elemento.temporizador) elemento.temporizador.remove();
+    if (elemento.lineaObjetivo) elemento.lineaObjetivo.destroy();
 
     const indice = estado.virusActivos.indexOf(elemento);
     if (indice !== -1) estado.virusActivos.splice(indice, 1);
 
     const duracionSalida = this.movimientoReducido ? 1 : 220;
+    const color = colorPorTipo(elemento.tipo);
 
-    if (elemento.tipo === 'amenaza' && fueEliminadoPorClic) {
-      // Amenaza real eliminada a tiempo: suma puntos y cuenta para el nivel
-      estado.puntuacion += PUNTOS_POR_VIRUS;
+    if (esAmenazaReal(elemento.tipo) && fueEliminadoPorClic) {
+      // Amenaza real eliminada a tiempo: suma puntos (con el multiplicador
+      // de combo vigente) y cuenta para el objetivo del nivel
+      estado.combo += 1;
+      const multiplicador = calcularMultiplicadorCombo(estado.combo);
+      const puntosGanados = PUNTOS_POR_TIPO[elemento.tipo] * multiplicador;
+      estado.puntuacion += puntosGanados;
       estado.virusEliminados += 1;
-      reproducirSonido('eliminar');
-      this.crearParticulas(elemento.contenedor.x, elemento.contenedor.y, PALETA.verde);
+
+      if (elemento.tipo === 'critica') {
+        reproducirSonido('eliminar');
+        this.destelloNaranja(elemento.contenedor.x, elemento.contenedor.y);
+      } else {
+        reproducirSonido('eliminar');
+        this.crearParticulas(elemento.contenedor.x, elemento.contenedor.y, color);
+      }
+      this.animarComboHUD();
 
       this.tweens.add({
         targets: elemento.contenedor,
@@ -764,12 +1009,13 @@ class EscenaJuego extends Phaser.Scene {
         onComplete: () => elemento.contenedor.destroy(),
       });
 
-      this.mostrarTextoFlotante(elemento.contenedor.x, elemento.contenedor.y, '+10', PALETA.verde);
-    } else if (elemento.tipo === 'amenaza' && !fueEliminadoPorClic) {
-      // Amenaza real no eliminada a tiempo: se pierde una vida
-      estado.vidas -= 1;
+      this.mostrarTextoFlotante(elemento.contenedor.x, elemento.contenedor.y, `+${puntosGanados}`, color);
+    } else if (esAmenazaReal(elemento.tipo) && !fueEliminadoPorClic) {
+      // Amenaza real no eliminada a tiempo: se pierde un servidor y el combo
+      estado.combo = 0;
       reproducirSonido('perderVida');
-      this.destelloServidor();
+      this.desactivarServidorAleatorio();
+      this.animarComboHUD();
 
       this.tweens.add({
         targets: elemento.contenedor,
@@ -778,13 +1024,14 @@ class EscenaJuego extends Phaser.Scene {
         onComplete: () => elemento.contenedor.destroy(),
       });
 
-      this.mostrarTextoFlotante(elemento.contenedor.x, elemento.contenedor.y, '-1 VIDA', PALETA.peligro);
+      this.mostrarTextoFlotante(elemento.contenedor.x, elemento.contenedor.y, '-1 SERVIDOR', PALETA.peligro);
     } else if (elemento.tipo === 'seguro' && fueEliminadoPorClic) {
-      // Falso positivo: el jugador hizo clic en un elemento seguro
-      estado.vidas -= 1;
+      // Falso positivo: el jugador hizo clic en un archivo seguro
+      estado.combo = 0;
       reproducirSonido('trampa');
       if (!this.movimientoReducido) this.cameras.main.shake(110, 0.005);
-      this.destelloServidor();
+      this.desactivarServidorAleatorio();
+      this.animarComboHUD();
 
       this.tweens.add({
         targets: elemento.contenedor,
@@ -798,7 +1045,7 @@ class EscenaJuego extends Phaser.Scene {
         elemento.contenedor.y,
         [
           { texto: 'Falso positivo', fuente: FUENTE_INTERFAZ, tamano: 20 },
-          { texto: '-1 vida', fuente: FUENTE_MONO, tamano: 20 },
+          { texto: '-1 servidor', fuente: FUENTE_MONO, tamano: 20 },
         ],
         PALETA.peligro
       );
@@ -814,12 +1061,53 @@ class EscenaJuego extends Phaser.Scene {
 
     this.actualizarHUD();
     this.verificarEstadoJuego();
+  }
 
-    // Si el juego sigue activo (no hubo derrota ni se completó el nivel),
-    // se genera automáticamente el siguiente elemento.
-    if (estado.juegoActivo) {
-      this.programarSiguienteVirus();
+  // Breve efecto de escudo roto: la amenaza resistente pierde su anillo
+  // exterior tras el primer golpe, pero sigue activa para el segundo.
+  romperEscudoResistente(elemento) {
+    reproducirSonido('escudo');
+    if (elemento.escudoGrafico) {
+      const escudo = elemento.escudoGrafico;
+      elemento.escudoGrafico = null;
+      this.tweens.add({
+        targets: escudo,
+        scale: 1.4,
+        alpha: 0,
+        duration: this.movimientoReducido ? 1 : 240,
+        onComplete: () => escudo.destroy(),
+      });
     }
+    this.crearParticulas(elemento.contenedor.x, elemento.contenedor.y, PALETA.morado);
+    this.mostrarTextoFlotante(elemento.contenedor.x, elemento.contenedor.y, 'ESCUDO ROTO', PALETA.morado);
+  }
+
+  // Destello naranja al eliminar una amenaza crítica (además de las
+  // partículas ya usadas para el malware normal)
+  destelloNaranja(x, y) {
+    if (this.movimientoReducido) return;
+    const destello = this.add.circle(x, y, 30, PALETA.naranja, 0.55);
+    this.mundo.add(destello);
+    this.tweens.add({
+      targets: destello,
+      scale: 2.4,
+      alpha: 0,
+      duration: 260,
+      ease: 'Quad.Out',
+      onComplete: () => destello.destroy(),
+    });
+  }
+
+  // Pulso breve del combo en el HUD cada vez que cambia (sube o se reinicia)
+  animarComboHUD() {
+    const objetivos = [this.textoCombo, this.etiquetaCombo];
+    if (estado.combo > 0) reproducirSonido('combo');
+    this.tweens.add({
+      targets: objetivos,
+      scale: { from: 1.28, to: 1 },
+      duration: this.movimientoReducido ? 1 : 180,
+      ease: 'Quad.Out',
+    });
   }
 
   // Pequeño estallido de partículas (círculos que se alejan y se desvanecen)
@@ -944,7 +1232,6 @@ class EscenaJuego extends Phaser.Scene {
 
   actualizarHUD() {
     const configuracionNivel = NIVELES[estado.indiceNivel];
-    const vidasActuales = Math.max(estado.vidas, 0);
 
     this.textoPuntuacion.setText(`${estado.puntuacion}`);
 
@@ -953,35 +1240,60 @@ class EscenaJuego extends Phaser.Scene {
 
     this.textoAmenazas.setText(`${estado.virusEliminados}/${configuracionNivel.virusRequeridos}`);
 
+    const multiplicador = calcularMultiplicadorCombo(estado.combo);
+    this.textoCombo.setText(`${estado.combo} (x${multiplicador})`);
+    this.etiquetaCombo.x = this.textoCombo.x - this.textoCombo.width - 10;
+
+    this.textoEscaner.setText(`${this.escanerCargas}/2`);
+
     // Barra de progreso (amenazas eliminadas / objetivo del nivel)
     const proporcion = Phaser.Math.Clamp(
       estado.virusEliminados / configuracionNivel.virusRequeridos, 0, 1
     );
     this.dibujarBarraProgreso(proporcion);
+  }
 
-    // Escudos de vida (3 segmentos)
-    this.graficosEscudos.clear();
-    for (let i = 0; i < VIDAS_INICIALES; i++) {
-      const cx = this.escudosX + i * 38;
-      const activo = i < vidasActuales;
-      dibujarEscudoVida(this.graficosEscudos, cx, this.escudosY, activo ? PALETA.verde : PALETA.borde, activo);
-    }
+  /* ---------------- ESCÁNER (2 usos por nivel) ---------------- */
 
-    // Barra de integridad del servidor (según las vidas restantes)
-    const proporcionIntegridad = vidasActuales / VIDAS_INICIALES;
-    this.graficosIntegridad.clear();
-    this.graficosIntegridad.fillStyle(PALETA.borde, 1);
-    this.graficosIntegridad.fillRoundedRect(
-      this.integridadX, this.integridadY, this.integridadAncho, 10, 5
-    );
-    if (proporcionIntegridad > 0) {
-      this.graficosIntegridad.fillStyle(
-        proporcionIntegridad > 0.34 ? PALETA.verde : PALETA.peligro, 1
-      );
-      this.graficosIntegridad.fillRoundedRect(
-        this.integridadX, this.integridadY, this.integridadAncho * proporcionIntegridad, 10, 5
-      );
-    }
+  // Activa el escáner: ralentiza los elementos activos (y al jefe, si
+  // corresponde) durante 2s y revela una etiqueta "AMENAZA"/"SEGURO"
+  // sobre cada uno. No elimina nada ni entrega puntos.
+  activarEscaner() {
+    if (!estado.juegoActivo || this.escanerCargas <= 0 || this.escanerActivo) return;
+
+    this.escanerCargas -= 1;
+    this.actualizarHUD();
+    this.actualizarBotonEscaner();
+
+    this.escanerActivo = true;
+    this.escanerActivoHasta = this.time.now + 2000;
+
+    estado.virusActivos.forEach((elemento) => this.mostrarEtiquetaEscaner(elemento, 2000));
+
+    this.time.delayedCall(2000, () => {
+      this.escanerActivo = false;
+    });
+  }
+
+  mostrarEtiquetaEscaner(elemento, duracion) {
+    const esSeguro = elemento.tipo === 'seguro';
+    const etiqueta = this.add.text(0, -74, esSeguro ? 'SEGURO' : 'AMENAZA', {
+      fontFamily: FUENTE_MONO,
+      fontSize: '14px',
+      color: esSeguro ? PALETA.azulTexto : PALETA.peligroTexto,
+      fontStyle: 'bold',
+    }).setOrigin(0.5);
+    etiqueta.setResolution(this.factorResolucion);
+    elemento.contenedor.add(etiqueta);
+    this.time.delayedCall(duracion, () => etiqueta.destroy());
+  }
+
+  // Sincroniza el botón HTML del escáner (texto y estado deshabilitado)
+  actualizarBotonEscaner() {
+    const boton = document.getElementById('btn-escaner');
+    if (!boton) return;
+    boton.querySelector('.boton-escaner-texto').textContent = `ESCÁNER · ${this.escanerCargas}`;
+    boton.disabled = this.escanerCargas <= 0;
   }
 
   /* ---------------- VERIFICAR VICTORIA / DERROTA / NIVEL COMPLETADO ---------------- */
@@ -1285,11 +1597,10 @@ class EscenaJuego extends Phaser.Scene {
   onCicloAtaqueJefeTerminado() {
     if (!this.jefe || this.jefe.destruido) return;
 
-    // El jugador pierde una vida, pero el jefe conserva el daño recibido
-    estado.vidas -= 1;
+    // El jugador pierde un servidor, pero el jefe conserva el daño recibido
     reproducirSonido('perderVida');
-    this.destelloServidor();
-    this.mostrarTextoFlotante(this.jefe.contenedor.x, this.jefe.contenedor.y - 100, '-1 VIDA', PALETA.peligro);
+    this.desactivarServidorAleatorio();
+    this.mostrarTextoFlotante(this.jefe.contenedor.x, this.jefe.contenedor.y - 100, '-1 SERVIDOR', PALETA.peligro);
     this.actualizarHUD();
     this.verificarEstadoJuego();
 
@@ -1503,16 +1814,15 @@ class EscenaJuego extends Phaser.Scene {
     const duracionSalida = this.movimientoReducido ? 1 : 220;
 
     if (fueClic) {
-      estado.vidas -= 1;
       reproducirSonido('trampa');
       if (!this.movimientoReducido) this.cameras.main.shake(110, 0.005);
-      this.destelloServidor();
+      this.desactivarServidorAleatorio();
       this.mostrarTextoFlotante(
         trampa.contenedor.x,
         trampa.contenedor.y,
         [
           { texto: 'Falso positivo', fuente: FUENTE_INTERFAZ, tamano: 20 },
-          { texto: '-1 vida', fuente: FUENTE_MONO, tamano: 20 },
+          { texto: '-1 servidor', fuente: FUENTE_MONO, tamano: 20 },
         ],
         PALETA.peligro
       );
@@ -1643,6 +1953,7 @@ function reiniciarEstado() {
   estado.virusActivos = [];
   estado.juegoActivo = true;
   estado.jefeActivo = false;
+  estado.combo = 0;
 }
 
 function iniciarJuegoDesdeCero() {
@@ -1689,6 +2000,14 @@ function continuarAlSiguienteNivel() {
   }, duracionSalida);
 }
 
+// Activa el escáner de la escena actual (si el juego está en curso).
+// Se usa tanto desde el botón "ESCÁNER" como desde la tecla "S".
+function activarEscanerDesdeUI() {
+  if (!juegoPhaser || !estado.juegoActivo) return;
+  const escena = juegoPhaser.scene.keys['EscenaJuego'];
+  if (escena) escena.activarEscaner();
+}
+
 /* ------------------------------------------------------------------
    9. CONEXIÓN DE BOTONES DEL HTML
    ------------------------------------------------------------------ */
@@ -1696,3 +2015,11 @@ document.getElementById('btn-jugar').addEventListener('click', iniciarJuegoDesde
 document.getElementById('btn-siguiente-nivel').addEventListener('click', continuarAlSiguienteNivel);
 document.getElementById('btn-reintentar').addEventListener('click', iniciarJuegoDesdeCero);
 document.getElementById('btn-jugar-de-nuevo').addEventListener('click', iniciarJuegoDesdeCero);
+document.getElementById('btn-escaner').addEventListener('click', activarEscanerDesdeUI);
+
+// Atajo de teclado: tecla "S" activa el escáner mientras se está jugando
+window.addEventListener('keydown', (evento) => {
+  if (evento.key.toLowerCase() !== 's') return;
+  if (!document.getElementById('pantalla-juego').classList.contains('activa')) return;
+  activarEscanerDesdeUI();
+});
