@@ -667,11 +667,15 @@ body {
   image-rendering: auto;
 }
 
+.barra-escaner {
+  width: 100%;
+  max-width: 960px;
+  margin: 12px auto 0;
+  display: flex;
+  justify-content: center;
+}
+
 .boton-escaner {
-  position: absolute;
-  right: 10px;
-  bottom: 10px;
-  z-index: 5;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -710,9 +714,11 @@ body {
 }
 
 @media (max-width: 480px) {
+  .barra-escaner {
+    margin-top: 8px;
+  }
+
   .boton-escaner {
-    right: 6px;
-    bottom: 6px;
     padding: 8px 10px;
     font-size: 0.66rem;
   }
