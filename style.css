@@ -832,8 +832,13 @@ body {
    así que el canvas conserva su proporción real y nunca se estira ni se
    deforma. Se activa por ancho O por alto (no solo por ancho) para que un
    teléfono siga tratándose como móvil también en horizontal, donde su
-   ancho crece más allá de 768px pero su alto sigue siendo angosto. */
-@media (max-width: 768px), (max-height: 768px) {
+   ancho crece más allá de 768px pero su alto sigue siendo angosto.
+   Igual que esVistaMovil() en game.js, requiere entrada táctil o sin
+   hover: una ventana baja de PC debe conservar el tablero de escritorio. */
+@media (max-width: 768px) and (hover: none),
+       (max-width: 768px) and (pointer: coarse),
+       (max-height: 768px) and (hover: none),
+       (max-height: 768px) and (pointer: coarse) {
   #pantalla-juego.activa {
     height: 100dvh;
     min-height: 100dvh;

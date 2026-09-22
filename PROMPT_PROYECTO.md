@@ -277,6 +277,19 @@ fijarlo con `box-sizing: content-box` solo por estilo en línea (con
 tocar el CSS de la versión móvil ni las dimensiones del tablero. Se
 reaplica en cada `resize` de la ventana (con debounce).
 
+### Corrección posterior: tablero estirado y borroso en PC
+
+La corrección del borde no resolvía otra causa independiente: el CSS
+activaba la vista móvil con cualquier ventana de alto ≤768px, mientras
+`esVistaMovil()` en JavaScript también exigía `(hover: none)` o
+`(pointer: coarse)`. En Edge, con viewport 1920×768 y DPR 1, el canvas
+1280×720 terminaba mostrado a 1900×694: se ampliaba y deformaba.
+
+Las reglas móviles del CSS ahora exigen las mismas condiciones de tamaño
+y puntero que JavaScript. Así, una PC conserva el límite de 960px y la
+proporción 16:9 del tablero, incluidos los círculos y textos. No eliminar
+esa condición de puntero al modificar los estilos responsive.
+
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
