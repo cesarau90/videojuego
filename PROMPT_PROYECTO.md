@@ -68,8 +68,8 @@ genérica de IA:
 
 En escritorio el tablero sigue siendo el mundo lógico fijo 1280×720 con
 `Phaser.Scale.FIT` (sin cambios). En móvil, Phaser calcula un **mundo
-lógico vertical** acorde a la pantalla real, en vez de forzar el mismo
-16:9 horizontal dentro de una pantalla angosta:
+lógico acorde con la orientación** y el espacio real disponible, en vez de
+forzar el mismo tablero en cualquier pantalla:
 
 - Detección de "vista móvil": la dimensión más chica del viewport
   (ancho o alto) es ≤768px **y** el dispositivo no tiene puntero fino
@@ -77,9 +77,12 @@ lógico vertical** acorde a la pantalla real, en vez de forzar el mismo
   pantalla corta (p. ej. 1366×768) con un teléfono. Se reevalúa en cada
   `resize`/`orientationchange`, así que un teléfono sigue siendo "móvil"
   al rotarlo.
-- Alto lógico fijo (1280) y ancho lógico calculado a partir de la
-  proporción real ancho/alto de la pantalla (acotado entre 480 y 900),
-  para llenar el espacio disponible sin estirar ni recortar nada.
+- En vertical se usa alto lógico fijo (1280) y ancho calculado a partir de
+  la proporción real del área del canvas (acotado entre 480 y 900). En
+  horizontal se usa ancho lógico fijo (1280) y alto calculado, con un
+  mínimo de 540 para que el HUD, los jefes y los servidores tengan espacio.
+  La proporción se obtiene del contenedor del canvas, ya descontando la
+  barra HTML del escáner, para llenar el espacio sin estirar el dibujo.
 - HUD, fondo, red decorativa y servidores viven en una capa
   reconstruible que se destruye y rearma en vivo al rotar o cambiar el
   tamaño de ventana, conservando puntuación, servidores caídos y
@@ -290,10 +293,23 @@ y puntero que JavaScript. Así, una PC conserva el límite de 960px y la
 proporción 16:9 del tablero, incluidos los círculos y textos. No eliminar
 esa condición de puntero al modificar los estilos responsive.
 
+### Corrección posterior: deformación al girar el teléfono
+
+En móvil horizontal, el canvas conservaba internamente un mundo vertical,
+pero el CSS combinaba `width: 100%` con `max-height: 100%`. El navegador
+reducía solo la altura para dejar sitio al botón del escáner y estiraba el
+dibujo a todo el ancho, convirtiendo círculos en óvalos.
+
+Ahora las dos dimensiones CSS del canvas son automáticas y usan límites
+máximos, por lo que siempre conservan su proporción. JavaScript calcula un
+mundo horizontal a partir del tamaño real de `#contenedor-phaser`, usa un
+alto lógico mínimo seguro y compacta la fila de servidores. La rotación
+reconstruye el tablero y conserva el progreso, los elementos y los jefes.
+
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión: `style.css?v=3`, `game.js?v=3`. Cada vez
+con un parámetro de versión (actualmente `style.css?v=5` y `game.js?v=4`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la

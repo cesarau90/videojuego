@@ -118,16 +118,15 @@ const ALTO_JUEGO = 720;
 
 /* ------------------------------------------------------------------
    1C. TABLERO RESPONSIVE PARA MÓVIL (≤768px)
-   En vista móvil el tablero deja de usar el mundo fijo 1280x720 y en su
-   lugar usa un mundo lógico VERTICAL cuya proporción se calcula a partir
-   del ancho y alto reales de la pantalla del teléfono (para llenar el
-   espacio disponible sin estirar ni recortar nada). La altura lógica se
-   mantiene fija (para que las fuentes y márgenes absolutos sigan viendose
-   igual de bien) y solo el ancho lógico varía según la proporción real.
+   En vista móvil el tablero adapta su proporción al espacio real disponible
+   para el canvas. En vertical conserva 1280 unidades de alto; en horizontal
+   conserva 1280 de ancho y calcula el alto. Así el teléfono puede girarse
+   sin estirar el dibujo ni convertir los círculos en óvalos.
    ------------------------------------------------------------------ */
 const ALTO_JUEGO_MOVIL = 1280;
 const ANCHO_JUEGO_MOVIL_MIN = 480;
 const ANCHO_JUEGO_MOVIL_MAX = 900;
+const ALTO_JUEGO_MOVIL_HORIZONTAL_MIN = 540;
 const PUNTO_QUIEBRE_MOVIL = 768;
 
 // true si la pantalla actual entra en el punto de quiebre móvil. Combina
@@ -152,16 +151,37 @@ function esVistaMovil() {
 // Calcula las dimensiones lógicas del tablero según el modo actual:
 // - Escritorio: siempre 1280x720 fijo (sin cambios respecto al diseño
 //   original).
-// - Móvil: alto fijo (ALTO_JUEGO_MOVIL) y ancho calculado a partir de la
-//   proporción real ancho/alto de la ventana, para que el tablero llene la
-//   pantalla vertical sin deformarse (se limita a un rango razonable).
+// - Móvil vertical: alto fijo y ancho calculado con la proporción del área.
+// - Móvil horizontal: ancho fijo y alto calculado con esa proporción. Se
+//   conserva un mínimo de 540 unidades de alto para que HUD, área de juego,
+//   jefes y servidores nunca se encimen en teléfonos muy panorámicos.
 function calcularDimensionesLogicas() {
   if (!esVistaMovil()) return { ancho: ANCHO_JUEGO, alto: ALTO_JUEGO };
-  const vw = window.innerWidth || ANCHO_JUEGO_MOVIL_MIN;
-  const vh = window.innerHeight || ALTO_JUEGO_MOVIL;
+
+  // El botón del escáner vive fuera del canvas. Por eso usamos el tamaño
+  // real de su contenedor flexible y no window.innerWidth/innerHeight: en
+  // horizontal la barra del botón reduce la altura disponible del tablero.
+  const contenedor = document.getElementById('contenedor-phaser');
+  const anchoDisponible = contenedor?.clientWidth || window.innerWidth || ANCHO_JUEGO_MOVIL_MIN;
+  const altoDisponible = contenedor?.clientHeight || window.innerHeight || ALTO_JUEGO_MOVIL;
+  const proporcion = anchoDisponible / Math.max(altoDisponible, 1);
+
+  if (proporcion > 1) {
+    const ancho = ANCHO_JUEGO;
+    const alto = Phaser.Math.Clamp(
+      Math.round(ancho / proporcion),
+      ALTO_JUEGO_MOVIL_HORIZONTAL_MIN,
+      ALTO_JUEGO_MOVIL
+    );
+    return { ancho, alto };
+  }
+
   const alto = ALTO_JUEGO_MOVIL;
-  const anchoCalculado = Math.round(alto * (vw / vh));
-  const ancho = Phaser.Math.Clamp(anchoCalculado, ANCHO_JUEGO_MOVIL_MIN, ANCHO_JUEGO_MOVIL_MAX);
+  const ancho = Phaser.Math.Clamp(
+    Math.round(alto * proporcion),
+    ANCHO_JUEGO_MOVIL_MIN,
+    ANCHO_JUEGO_MOVIL_MAX
+  );
   return { ancho, alto };
 }
 
@@ -537,7 +557,7 @@ class EscenaJuego extends Phaser.Scene {
 
   create() {
     // El "mundo" del juego mide 1280x720 unidades lógicas en escritorio, o
-    // un tamaño vertical calculado según la pantalla real en vista móvil
+    // un tamaño adaptado a la orientación real en vista móvil
     // (ver calcularDimensionesLogicas). Todas las posiciones (HUD,
     // servidores, elementos) se calculan en este espacio lógico, sin
     // importar la resolución física de la pantalla.
@@ -745,11 +765,12 @@ class EscenaJuego extends Phaser.Scene {
   // aparezca cortada ni fuera del recuadro del tablero.
   calcularAreaJuego(ancho, alto) {
     const margenLateral = Math.max(60, Math.round(ancho * 0.075));
+    const horizontalMovil = this.esVistaMovilActual && ancho > alto;
     return {
       xMin: margenLateral,
       xMax: ancho - margenLateral,
-      yMin: 211,
-      yMax: alto - 240,
+      yMin: horizontalMovil ? 195 : 211,
+      yMax: horizontalMovil ? alto - 150 : alto - 240,
     };
   }
 
@@ -999,9 +1020,12 @@ class EscenaJuego extends Phaser.Scene {
 
   crearServidoresInferior(ancho, alto) {
     const capa = this.capaTablero;
-    this.servidorY = alto - 106;
+    const horizontalMovil = this.esVistaMovilActual && ancho > alto;
+    this.servidorY = alto - (horizontalMovil ? 55 : 106);
     const gap = 16;
     const anchoCaja = (ancho - 64 - gap * 2) / 3;
+    const altoCaja = horizontalMovil ? 70 : 90;
+    const separacionTexto = horizontalMovil ? 13 : 16;
     // En pantallas angostas se reduce un poco el texto y se permite que se
     // envuelva en dos líneas en vez de desbordar fuera de su recuadro.
     const tamanoNombre = anchoCaja < 170 ? 11 : 13;
@@ -1013,13 +1037,13 @@ class EscenaJuego extends Phaser.Scene {
 
     this.servidores = definiciones.map((def, indice) => {
       const x = 32 + anchoCaja / 2 + indice * (anchoCaja + gap);
-      const rect = this.add.rectangle(x, this.servidorY, anchoCaja, 90, PALETA.superficie, 0.95)
+      const rect = this.add.rectangle(x, this.servidorY, anchoCaja, altoCaja, PALETA.superficie, 0.95)
         .setStrokeStyle(2, PALETA.verde, 1);
-      const nombreTexto = this.crearTexto(x, this.servidorY - 16, def.nombre, {
+      const nombreTexto = this.crearTexto(x, this.servidorY - separacionTexto, def.nombre, {
         tamano: tamanoNombre, mono: true, color: PALETA.texto, origenX: 0.5, origenY: 0.5, alinear: 'center',
         anchoMaximo: anchoCaja - 10, contenedor: capa,
       });
-      const estadoTexto = this.crearTexto(x, this.servidorY + 16, 'EN LÍNEA', {
+      const estadoTexto = this.crearTexto(x, this.servidorY + separacionTexto, 'EN LÍNEA', {
         tamano: 12, mono: true, color: PALETA.verdeTexto, origenX: 0.5, origenY: 0.5, alinear: 'center',
         contenedor: capa,
       });
@@ -2645,8 +2669,8 @@ class EscenaJuego extends Phaser.Scene {
 
 // Construye la configuración de Phaser en el momento de crear el juego (no
 // antes), para que el tamaño lógico del canvas refleje la pantalla real en
-// ese instante: 1280x720 fijo en escritorio, o el tamaño vertical calculado
-// por calcularDimensionesLogicas() en vista móvil. El canvas físico siempre
+// ese instante: 1280x720 fijo en escritorio, o el tamaño adaptado a la
+// orientación por calcularDimensionesLogicas() en móvil. El canvas físico siempre
 // es más grande que el mundo lógico (ancho/alto x factor); la escena
 // compensa con el contenedor "mundo" escalado para que las coordenadas del
 // juego no cambien, dando nitidez sin pixelado en pantallas de alta
@@ -2698,7 +2722,7 @@ function iniciarJuegoDesdeCero() {
 
   if (!juegoPhaser) {
     // Primera vez: se crea la instancia de Phaser con el tamaño lógico
-    // adecuado a la pantalla actual (escritorio o móvil)
+// adecuado a la pantalla y orientación actuales (escritorio o móvil)
     juegoPhaser = new Phaser.Game(construirConfiguracionPhaser());
     registrarAjusteCanvasEscritorio();
   } else {
