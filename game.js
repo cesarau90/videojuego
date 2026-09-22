@@ -26,13 +26,11 @@ const NIVELES = [
 
 const VIDAS_INICIALES = 3;
 const PUNTOS_POR_VIRUS = 10;
-const FUENTE_MONO = "'JetBrains Mono', Consolas, monospace";
 
-// Tamaño lógico fijo del tablero (espacio de coordenadas del juego).
-// La nitidez en pantallas de alta resolución se logra con el zoom de
-// cámara y el tamaño físico del canvas, no cambiando estos valores.
-const ANCHO_JUEGO = 800;
-const ALTO_JUEGO = 600;
+// Fuentes: Inter para etiquetas de interfaz, JetBrains Mono solo para
+// cifras y etiquetas técnicas (según la identidad visual del proyecto)
+const FUENTE_INTERFAZ = "'Inter', Arial, sans-serif";
+const FUENTE_MONO = "'JetBrains Mono', Consolas, monospace";
 
 // Paleta visual (debe coincidir con las variables de style.css)
 const PALETA = {
@@ -45,6 +43,12 @@ const PALETA = {
   azul: 0x38bdf8,
   peligro: 0xff5c70,
 };
+
+// Tamaño lógico fijo del tablero (mínimo 1280x720, como pide el diseño).
+// Todas las posiciones del HUD, el servidor y los elementos se calculan
+// en este espacio fijo, sin importar la resolución física de la pantalla.
+const ANCHO_JUEGO = 1280;
+const ALTO_JUEGO = 720;
 
 /* ------------------------------------------------------------------
    2. ESTADO GLOBAL DEL JUEGO
@@ -108,7 +112,7 @@ function reproducirSonido(tipo) {
       oscilador.start();
       oscilador.stop(ctx.currentTime + 0.22);
     } else if (tipo === 'nivelSuperado') {
-      // Melodía corta ascendente
+      // Sonido corto de éxito: melodía ascendente al completar un nivel
       oscilador.type = 'triangle';
       oscilador.frequency.setValueAtTime(440, ctx.currentTime);
       oscilador.frequency.setValueAtTime(660, ctx.currentTime + 0.12);
@@ -153,50 +157,74 @@ function mostrarPantalla(idPantalla) {
   document.getElementById(idPantalla).classList.add('activa');
 }
 
+function prefiereMovimientoReducido() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
+// Anima el contador de puntos de la tarjeta "Nivel superado" desde el
+// puntaje que tenía el jugador al iniciar el nivel hasta el resultado final
+function animarConteoPuntos(desde, hasta, duracion = 650) {
+  const elemento = document.getElementById('conteo-puntos-nivel');
+  if (!elemento) return;
+
+  if (prefiereMovimientoReducido() || desde === hasta) {
+    elemento.textContent = hasta;
+    return;
+  }
+
+  const inicio = performance.now();
+  function paso(ahora) {
+    const progreso = Math.min((ahora - inicio) / duracion, 1);
+    elemento.textContent = Math.round(desde + (hasta - desde) * progreso);
+    if (progreso < 1) requestAnimationFrame(paso);
+  }
+  requestAnimationFrame(paso);
+}
+
 /* ------------------------------------------------------------------
    5. ÍCONOS VECTORIALES (dibujados con Phaser Graphics, sin emojis
-   ni imágenes). Todos usan el mismo grosor de línea (2.2).
+   ni imágenes). Todos usan el mismo grosor de línea.
    ------------------------------------------------------------------ */
 
 // Amenaza real: triángulo de alerta con signo de exclamación
 function dibujarIconoAmenaza(g, color) {
-  g.lineStyle(2.2, color, 1);
+  g.lineStyle(3.5, color, 1);
   g.beginPath();
-  g.moveTo(0, -11);
-  g.lineTo(10, 8);
-  g.lineTo(-10, 8);
+  g.moveTo(0, -18);
+  g.lineTo(16, 13);
+  g.lineTo(-16, 13);
   g.closePath();
   g.strokePath();
-  g.lineBetween(0, -3, 0, 2.5);
+  g.lineBetween(0, -5, 0, 4);
   g.fillStyle(color, 1);
-  g.fillCircle(0, 5.5, 1.3);
+  g.fillCircle(0, 9, 2);
 }
 
 // Elemento seguro: escudo con marca de verificación
 function dibujarIconoSeguro(g, color) {
-  g.lineStyle(2.2, color, 1);
+  g.lineStyle(3.5, color, 1);
   g.beginPath();
-  g.moveTo(0, -11);
-  g.lineTo(9, -7);
-  g.lineTo(9, 2);
-  g.lineTo(0, 11);
-  g.lineTo(-9, 2);
-  g.lineTo(-9, -7);
+  g.moveTo(0, -18);
+  g.lineTo(14, -11);
+  g.lineTo(14, 3);
+  g.lineTo(0, 18);
+  g.lineTo(-14, 3);
+  g.lineTo(-14, -11);
   g.closePath();
   g.strokePath();
   g.beginPath();
-  g.moveTo(-4, 0.5);
-  g.lineTo(-1, 4);
-  g.lineTo(5.5, -4);
+  g.moveTo(-6, 1);
+  g.lineTo(-2, 6);
+  g.lineTo(9, -6);
   g.strokePath();
 }
 
 // Segmento de escudo para representar una vida en el HUD
 function dibujarEscudoVida(g, cx, cy, color, relleno) {
   const puntos = [
-    [0, -9], [7, -6], [7, 2], [0, 10], [-7, 2], [-7, -6],
+    [0, -14], [11, -10], [11, 3], [0, 16], [-11, 3], [-11, -10],
   ];
-  g.lineStyle(1.8, color, 1);
+  g.lineStyle(3, color, 1);
   g.beginPath();
   puntos.forEach(([dx, dy], i) => {
     const px = cx + dx;
@@ -223,7 +251,7 @@ class EscenaJuego extends Phaser.Scene {
   }
 
   create() {
-    // El "mundo" del juego siempre mide 800x600 unidades lógicas: todas
+    // El "mundo" del juego siempre mide 1280x720 unidades lógicas: todas
     // las posiciones (HUD, servidor, elementos) se calculan en este
     // espacio fijo, sin importar la resolución física de la pantalla.
     const ancho = ANCHO_JUEGO;
@@ -233,15 +261,13 @@ class EscenaJuego extends Phaser.Scene {
     // devicePixelRatio (máx. 2): el canvas físico tiene más píxeles que
     // el mundo lógico, así que este contenedor "amplía" el dibujo para
     // llenarlo, dando nitidez sin cambiar ninguna coordenada del juego.
-    const factorResolucion = Math.min(window.devicePixelRatio || 1, 2);
+    this.factorResolucion = Math.min(window.devicePixelRatio || 1, 2);
     this.mundo = this.add.container(0, 0);
-    this.mundo.setScale(factorResolucion);
+    this.mundo.setScale(this.factorResolucion);
 
     // Detecta si el usuario prefiere menos movimiento, para atenuar
     // las animaciones decorativas (partículas, sacudidas, destellos)
-    this.movimientoReducido = !!(
-      window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    );
+    this.movimientoReducido = prefiereMovimientoReducido();
 
     // Fondo oscuro + cuadrícula tenue + red decorativa de nodos
     this.mundo.add(this.add.rectangle(ancho / 2, alto / 2, ancho, alto, PALETA.fondo));
@@ -251,16 +277,21 @@ class EscenaJuego extends Phaser.Scene {
     this.crearHUD(ancho, alto);
     this.crearServidor(ancho, alto);
 
+    // Rectángulo negro para oscurecer el tablero al completar un nivel
+    this.overlayOscurecer = this.add.rectangle(ancho / 2, alto / 2, ancho, alto, 0x000000, 0.6).setAlpha(0);
+    this.mundo.add(this.overlayOscurecer);
+
     // Área donde pueden aparecer los elementos (entre el HUD y el servidor)
     this.areaJuego = {
-      xMin: 60,
-      xMax: ancho - 60,
-      yMin: 132,
-      yMax: alto - 150,
+      xMin: 96,
+      xMax: ancho - 96,
+      yMin: 211,
+      yMax: alto - 240,
     };
 
     this.contadorElementosNivel = 0;
     this.temporizadorSiguienteVirus = null;
+    this.puntuacionInicioNivel = 0;
 
     this.actualizarHUD();
     this.iniciarNivelActual();
@@ -274,23 +305,53 @@ class EscenaJuego extends Phaser.Scene {
       const color = elemento.tipo === 'amenaza' ? PALETA.peligro : PALETA.azul;
 
       elemento.anilloTiempo.clear();
-      elemento.anilloTiempo.lineStyle(2.5, color, 0.55);
+      elemento.anilloTiempo.lineStyle(4, color, 0.55);
       elemento.anilloTiempo.beginPath();
       const inicioAngulo = -Math.PI / 2;
       const finAngulo = inicioAngulo + Math.PI * 2 * restante;
-      elemento.anilloTiempo.arc(0, 0, 35, inicioAngulo, finAngulo, false);
+      elemento.anilloTiempo.arc(0, 0, 56, inicioAngulo, finAngulo, false);
       elemento.anilloTiempo.strokePath();
     });
   }
+
+  /* ---------------- TEXTO (helper con fuente e resolución consistentes) ---------------- */
+
+  // Crea un Phaser.Text dentro del mundo escalado, con resolución alta
+  // (setResolution) para que se vea nítido. Usa Inter para interfaz
+  // general y JetBrains Mono solo para cifras/etiquetas técnicas.
+  crearTexto(x, y, texto, opciones = {}) {
+    const estiloTexto = this.add.text(x, y, texto, {
+      fontFamily: opciones.mono ? FUENTE_MONO : FUENTE_INTERFAZ,
+      fontSize: `${opciones.tamano || 16}px`,
+      color: opciones.color || PALETA.texto,
+      fontStyle: opciones.negrita ? 'bold' : 'normal',
+      align: opciones.alinear || 'left',
+    });
+    estiloTexto.setResolution(this.factorResolucion);
+    if (opciones.origenX !== undefined || opciones.origenY !== undefined) {
+      estiloTexto.setOrigin(opciones.origenX ?? 0, opciones.origenY ?? 0);
+    }
+    this.mundo.add(estiloTexto);
+    return estiloTexto;
+  }
+
+  // Etiqueta (Inter) + valor (JetBrains Mono) alineados a la izquierda.
+  // Devuelve el texto del VALOR, que es el que se actualiza después.
+  crearParEtiquetaValor(x, y, etiqueta, tamano) {
+    const label = this.crearTexto(x, y, etiqueta, { tamano: tamano - 2, color: PALETA.textoSecundario });
+    return this.crearTexto(x + label.width + 10, y, '', { tamano, mono: true, color: PALETA.texto });
+  }
+
+  /* ---------------- FONDO Y AMBIENTACIÓN ---------------- */
 
   // Dibuja unas líneas simples de cuadrícula para ambientar el fondo
   dibujarFondoCircuito(ancho, alto) {
     const graficos = this.add.graphics();
     graficos.lineStyle(1, PALETA.borde, 0.5);
-    for (let x = 0; x < ancho; x += 60) {
+    for (let x = 0; x < ancho; x += 96) {
       graficos.lineBetween(x, 0, x, alto);
     }
-    for (let y = 0; y < alto; y += 60) {
+    for (let y = 0; y < alto; y += 96) {
       graficos.lineBetween(0, y, ancho, y);
     }
     this.mundo.add(graficos);
@@ -306,8 +367,8 @@ class EscenaJuego extends Phaser.Scene {
     const nodos = [];
     for (let i = 0; i < 6; i++) {
       nodos.push({
-        x: Phaser.Math.Between(50, ancho - 50),
-        y: Phaser.Math.Between(140, alto - 160),
+        x: Phaser.Math.Between(80, ancho - 80),
+        y: Phaser.Math.Between(224, alto - 256),
       });
     }
     for (let i = 0; i < nodos.length - 1; i++) {
@@ -315,7 +376,7 @@ class EscenaJuego extends Phaser.Scene {
     }
 
     nodos.forEach((nodo, indice) => {
-      const punto = this.add.circle(nodo.x, nodo.y, 2.2, PALETA.azul, 0.25);
+      const punto = this.add.circle(nodo.x, nodo.y, 3.5, PALETA.azul, 0.25);
       this.mundo.add(punto);
       if (!this.movimientoReducido && indice % 2 === 0) {
         this.tweens.add({
@@ -335,72 +396,72 @@ class EscenaJuego extends Phaser.Scene {
   crearHUD(ancho) {
     // Ícono simple de actividad/datos junto a la puntuación
     const iconoActividad = this.add.graphics();
-    iconoActividad.lineStyle(2, PALETA.azul, 1);
+    iconoActividad.lineStyle(3, PALETA.azul, 1);
     iconoActividad.beginPath();
-    iconoActividad.moveTo(14, 26);
-    iconoActividad.lineTo(19, 26);
-    iconoActividad.lineTo(22, 18);
-    iconoActividad.lineTo(26, 32);
-    iconoActividad.lineTo(29, 24);
-    iconoActividad.lineTo(33, 24);
+    iconoActividad.moveTo(22, 42);
+    iconoActividad.lineTo(30, 42);
+    iconoActividad.lineTo(35, 29);
+    iconoActividad.lineTo(42, 51);
+    iconoActividad.lineTo(46, 38);
+    iconoActividad.lineTo(53, 38);
     iconoActividad.strokePath();
     this.mundo.add(iconoActividad);
 
-    this.textoPuntuacion = this.add.text(40, 17, '', {
-      fontFamily: FUENTE_MONO, fontSize: '15px', color: PALETA.texto,
+    this.textoPuntuacion = this.crearParEtiquetaValor(64, 27, 'PUNTOS', 24);
+
+    // Nivel, alineado a la derecha: se crea el valor primero (para medir
+    // su ancho) y la etiqueta se ubica justo antes, ambos con origen derecho
+    this.textoNivel = this.crearTexto(ancho - 32, 27, '', {
+      tamano: 24, mono: true, origenX: 1, origenY: 0,
+    });
+    this.etiquetaNivel = this.crearTexto(ancho - 32, 27, 'NIVEL', {
+      tamano: 20, origenX: 1, origenY: 0, color: PALETA.textoSecundario,
     });
 
-    this.textoNivel = this.add.text(ancho - 20, 17, '', {
-      fontFamily: FUENTE_MONO, fontSize: '15px', color: PALETA.texto,
-    }).setOrigin(1, 0);
-
-    this.textoAmenazas = this.add.text(20, 49, '', {
-      fontFamily: FUENTE_MONO, fontSize: '12px', color: PALETA.textoSecundario, letterSpacing: 1,
-    });
+    this.textoAmenazas = this.crearParEtiquetaValor(32, 78, 'AMENAZAS', 19);
 
     // Barra de progreso de amenazas eliminadas
-    this.barraProgresoX = 20;
-    this.barraProgresoY = 67;
-    this.barraProgresoAncho = ancho - 40;
+    this.barraProgresoX = 32;
+    this.barraProgresoY = 107;
+    this.barraProgresoAncho = ancho - 64;
     this.graficosProgreso = this.add.graphics();
+    this.mundo.add(this.graficosProgreso);
 
     // Escudos de vida
-    this.escudosX = 28;
-    this.escudosY = 96;
+    this.escudosX = 45;
+    this.escudosY = 154;
     this.graficosEscudos = this.add.graphics();
+    this.mundo.add(this.graficosEscudos);
 
     // Leyenda de colores
-    const leyenda = this.add.text(ancho - 20, 89, 'Rojo: eliminar · Azul: ignorar', {
-      fontFamily: FUENTE_MONO, fontSize: '10.5px', color: PALETA.textoSecundario,
-    }).setOrigin(1, 0);
-
-    this.mundo.add([
-      this.textoPuntuacion, this.textoNivel, this.textoAmenazas,
-      this.graficosProgreso, this.graficosEscudos, leyenda,
-    ]);
+    this.crearTexto(ancho - 32, 142, 'Rojo: eliminar · Azul: ignorar', {
+      tamano: 17, origenX: 1, origenY: 0, color: PALETA.textoSecundario,
+    });
   }
 
   /* ---------------- SERVIDOR INFERIOR ---------------- */
 
   crearServidor(ancho, alto) {
-    this.integridadX = 20;
-    this.integridadY = alto - 116;
-    this.integridadAncho = ancho - 40;
+    this.integridadX = 32;
+    this.integridadY = alto - 186;
+    this.integridadAncho = ancho - 64;
     this.graficosIntegridad = this.add.graphics();
+    this.mundo.add(this.graficosIntegridad);
 
-    const servidorY = alto - 66;
-    const rectServidor = this.add.rectangle(ancho / 2, servidorY, ancho - 40, 56, PALETA.superficie)
+    this.servidorY = alto - 106;
+    const rectServidor = this.add.rectangle(ancho / 2, this.servidorY, ancho - 64, 90, PALETA.superficie)
       .setStrokeStyle(1, PALETA.borde, 1);
-    const textoServidor = this.add.text(ancho / 2, servidorY, 'SERVIDOR CENTRAL', {
-      fontFamily: FUENTE_MONO, fontSize: '14px', color: PALETA.textoSecundario, letterSpacing: 1,
-    }).setOrigin(0.5);
+    const textoServidor = this.crearTexto(ancho / 2, this.servidorY, 'SERVIDOR CENTRAL', {
+      tamano: 22, mono: true, color: PALETA.textoSecundario, origenX: 0.5, origenY: 0.5,
+    });
 
     // Rectángulo superpuesto, invisible por defecto, para el destello rojo
     this.overlayServidor = this.add
-      .rectangle(ancho / 2, servidorY, ancho - 40, 56, PALETA.peligro, 0.5)
+      .rectangle(ancho / 2, this.servidorY, ancho - 64, 90, PALETA.peligro, 0.5)
       .setAlpha(0);
 
-    this.mundo.add([this.graficosIntegridad, rectServidor, textoServidor, this.overlayServidor]);
+    this.mundo.add([rectServidor, this.overlayServidor]);
+    this.mundo.bringToTop(textoServidor);
   }
 
   // Breve destello rojo del servidor (error: amenaza escapada o falso positivo)
@@ -424,6 +485,7 @@ class EscenaJuego extends Phaser.Scene {
   iniciarNivelActual() {
     estado.virusEliminados = 0;
     this.contadorElementosNivel = 0;
+    this.puntuacionInicioNivel = estado.puntuacion;
     this.limpiarVirusActivos();
     this.actualizarHUD();
 
@@ -486,8 +548,8 @@ class EscenaJuego extends Phaser.Scene {
     const contenedor = this.add.container(x, y);
     this.mundo.add(contenedor);
 
-    const circuloFondo = this.add.circle(0, 0, 30, PALETA.superficie, 0.95);
-    circuloFondo.setStrokeStyle(2, color, 1);
+    const circuloFondo = this.add.circle(0, 0, 48, PALETA.superficie, 0.95);
+    circuloFondo.setStrokeStyle(3, color, 1);
 
     const anilloTiempo = this.add.graphics();
 
@@ -499,7 +561,7 @@ class EscenaJuego extends Phaser.Scene {
     }
 
     contenedor.add([circuloFondo, anilloTiempo, icono]);
-    contenedor.setSize(60, 60);
+    contenedor.setSize(96, 96);
     contenedor.setScale(0);
 
     // Animación de aparición: aumenta de tamaño suavemente
@@ -588,9 +650,11 @@ class EscenaJuego extends Phaser.Scene {
       this.mostrarTextoFlotante(
         elemento.contenedor.x,
         elemento.contenedor.y,
-        'Falso positivo\n-1 vida',
-        PALETA.peligro,
-        13
+        [
+          { texto: 'Falso positivo', fuente: FUENTE_INTERFAZ, tamano: 20 },
+          { texto: '-1 vida', fuente: FUENTE_MONO, tamano: 20 },
+        ],
+        PALETA.peligro
       );
     } else {
       // Elemento seguro ignorado correctamente: no ocurre nada
@@ -619,8 +683,8 @@ class EscenaJuego extends Phaser.Scene {
     const cantidad = 8;
     for (let i = 0; i < cantidad; i++) {
       const angulo = (Math.PI * 2 * i) / cantidad + Phaser.Math.FloatBetween(-0.15, 0.15);
-      const distancia = Phaser.Math.Between(26, 42);
-      const particula = this.add.circle(x, y, 3, color, 1);
+      const distancia = Phaser.Math.Between(42, 67);
+      const particula = this.add.circle(x, y, 5, color, 1);
       this.mundo.add(particula);
 
       this.tweens.add({
@@ -636,57 +700,123 @@ class EscenaJuego extends Phaser.Scene {
     }
   }
 
-  // Pequeño texto que sube y se desvanece, como retroalimentación visual
-  mostrarTextoFlotante(x, y, mensaje, color, tamano = 16) {
-    const texto = this.add.text(x, y, mensaje, {
-      fontFamily: FUENTE_MONO,
-      fontSize: `${tamano}px`,
-      color: color,
-      fontStyle: 'bold',
-      align: 'center',
-    }).setOrigin(0.5);
-    this.mundo.add(texto);
+  // Estallido de "datos digitales" (pequeños bloques rectangulares verdes y
+  // azules, no confeti) usado al completar un nivel
+  crearParticulasDatos(x, y) {
+    const cantidad = 14;
+    for (let i = 0; i < cantidad; i++) {
+      const angulo = Math.random() * Math.PI * 2;
+      const distancia = Phaser.Math.Between(60, 160);
+      const color = i % 2 === 0 ? PALETA.verde : PALETA.azul;
+      const bit = this.add.rectangle(x, y, 6, 11, color, 1);
+      bit.setRotation(angulo);
+      this.mundo.add(bit);
+
+      this.tweens.add({
+        targets: bit,
+        x: x + Math.cos(angulo) * distancia,
+        y: y + Math.sin(angulo) * distancia,
+        alpha: 0,
+        duration: 650,
+        ease: 'Quad.Out',
+        onComplete: () => bit.destroy(),
+      });
+    }
+  }
+
+  // Onda que se expande desde un punto (usada en el servidor al superar un nivel)
+  crearOndaExpansiva(x, y, color) {
+    const onda = this.add.graphics();
+    this.mundo.add(onda);
+    const estadoOnda = { radio: 14, alpha: 0.8 };
 
     this.tweens.add({
-      targets: texto,
-      y: y - 50,
+      targets: estadoOnda,
+      radio: 260,
+      alpha: 0,
+      duration: 550,
+      ease: 'Quad.Out',
+      onUpdate: () => {
+        onda.clear();
+        onda.lineStyle(4, color, estadoOnda.alpha);
+        onda.strokeCircle(x, y, estadoOnda.radio);
+      },
+      onComplete: () => onda.destroy(),
+    });
+  }
+
+  // Pequeño texto que sube y se desvanece, como retroalimentación visual.
+  // "contenido" puede ser un string (una sola línea, JetBrains Mono) o un
+  // arreglo de { texto, fuente, tamano } para mensajes de varias líneas.
+  mostrarTextoFlotante(x, y, contenido, color) {
+    const lineas = Array.isArray(contenido) ? contenido : [{ texto: contenido, fuente: FUENTE_MONO, tamano: 26 }];
+
+    const contenedor = this.add.container(x, y);
+    this.mundo.add(contenedor);
+
+    const alturaLinea = 24;
+    const inicioY = -((lineas.length - 1) * alturaLinea) / 2;
+
+    const textos = lineas.map((linea, indice) => {
+      const t = this.add.text(0, inicioY + indice * alturaLinea, linea.texto, {
+        fontFamily: linea.fuente || FUENTE_MONO,
+        fontSize: `${linea.tamano || 26}px`,
+        color: color,
+        fontStyle: 'bold',
+        align: 'center',
+      }).setOrigin(0.5);
+      t.setResolution(this.factorResolucion);
+      return t;
+    });
+    contenedor.add(textos);
+
+    this.tweens.add({
+      targets: contenedor,
+      y: y - 80,
       alpha: 0,
       duration: this.movimientoReducido ? 400 : 700,
-      onComplete: () => texto.destroy(),
+      onComplete: () => contenedor.destroy(),
     });
   }
 
   /* ---------------- HUD (actualización de valores) ---------------- */
 
-  actualizarHUD() {
-    const configuracionNivel = NIVELES[estado.indiceNivel];
-    const vidasActuales = Math.max(estado.vidas, 0);
-
-    this.textoPuntuacion.setText(`PUNTOS  ${estado.puntuacion}`);
-    this.textoNivel.setText(`NIVEL ${configuracionNivel.numero}/${NIVELES.length}`);
-    this.textoAmenazas.setText(`AMENAZAS  ${estado.virusEliminados}/${configuracionNivel.virusRequeridos}`);
-
-    // Barra de progreso (amenazas eliminadas / objetivo del nivel)
-    const proporcion = Phaser.Math.Clamp(
-      estado.virusEliminados / configuracionNivel.virusRequeridos, 0, 1
-    );
+  dibujarBarraProgreso(proporcion) {
     this.graficosProgreso.clear();
     this.graficosProgreso.fillStyle(PALETA.borde, 1);
     this.graficosProgreso.fillRoundedRect(
-      this.barraProgresoX, this.barraProgresoY, this.barraProgresoAncho, 8, 4
+      this.barraProgresoX, this.barraProgresoY, this.barraProgresoAncho, 13, 6
     );
     if (proporcion > 0) {
       this.graficosProgreso.fillStyle(PALETA.verde, 1);
       this.graficosProgreso.fillRoundedRect(
         this.barraProgresoX, this.barraProgresoY,
-        Math.max(this.barraProgresoAncho * proporcion, 8), 8, 4
+        Math.max(this.barraProgresoAncho * proporcion, 13), 13, 6
       );
     }
+  }
+
+  actualizarHUD() {
+    const configuracionNivel = NIVELES[estado.indiceNivel];
+    const vidasActuales = Math.max(estado.vidas, 0);
+
+    this.textoPuntuacion.setText(`${estado.puntuacion}`);
+
+    this.textoNivel.setText(`${configuracionNivel.numero}/${NIVELES.length}`);
+    this.etiquetaNivel.x = this.textoNivel.x - this.textoNivel.width - 10;
+
+    this.textoAmenazas.setText(`${estado.virusEliminados}/${configuracionNivel.virusRequeridos}`);
+
+    // Barra de progreso (amenazas eliminadas / objetivo del nivel)
+    const proporcion = Phaser.Math.Clamp(
+      estado.virusEliminados / configuracionNivel.virusRequeridos, 0, 1
+    );
+    this.dibujarBarraProgreso(proporcion);
 
     // Escudos de vida (3 segmentos)
     this.graficosEscudos.clear();
     for (let i = 0; i < VIDAS_INICIALES; i++) {
-      const cx = this.escudosX + i * 24;
+      const cx = this.escudosX + i * 38;
       const activo = i < vidasActuales;
       dibujarEscudoVida(this.graficosEscudos, cx, this.escudosY, activo ? PALETA.verde : PALETA.borde, activo);
     }
@@ -696,14 +826,14 @@ class EscenaJuego extends Phaser.Scene {
     this.graficosIntegridad.clear();
     this.graficosIntegridad.fillStyle(PALETA.borde, 1);
     this.graficosIntegridad.fillRoundedRect(
-      this.integridadX, this.integridadY, this.integridadAncho, 6, 3
+      this.integridadX, this.integridadY, this.integridadAncho, 10, 5
     );
     if (proporcionIntegridad > 0) {
       this.graficosIntegridad.fillStyle(
         proporcionIntegridad > 0.34 ? PALETA.verde : PALETA.peligro, 1
       );
       this.graficosIntegridad.fillRoundedRect(
-        this.integridadX, this.integridadY, this.integridadAncho * proporcionIntegridad, 6, 3
+        this.integridadX, this.integridadY, this.integridadAncho * proporcionIntegridad, 10, 5
       );
     }
   }
@@ -732,30 +862,88 @@ class EscenaJuego extends Phaser.Scene {
     mostrarPantalla('pantalla-derrota');
   }
 
+  // Secuencia visual que se reproduce en el canvas antes de mostrar la
+  // tarjeta HTML de "Nivel superado": no se generan más elementos (los
+  // clics ya están bloqueados porque no hay nada que clickear), se
+  // resalta la barra de progreso, una onda sale del servidor con
+  // partículas de datos, y el tablero se oscurece antes de cambiar de
+  // pantalla.
+  reproducirSecuenciaLogro(callback) {
+    reproducirSonido('nivelSuperado');
+
+    if (this.movimientoReducido) {
+      // Con movimiento reducido, solo un breve cambio de opacidad
+      this.tweens.add({
+        targets: this.overlayOscurecer,
+        alpha: { from: 0, to: 1 },
+        duration: 1,
+        onComplete: () => {
+          callback();
+          this.overlayOscurecer.setAlpha(0);
+        },
+      });
+      return;
+    }
+
+    const cx = ANCHO_JUEGO / 2;
+    const cy = this.servidorY;
+
+    // 2) Resaltar la barra de progreso (ya está completa)
+    this.tweens.add({
+      targets: this.graficosProgreso,
+      alpha: { from: 1, to: 0.35 },
+      duration: 150,
+      yoyo: true,
+      ease: 'Quad.InOut',
+    });
+
+    // 3) Onda expandiéndose desde el servidor + partículas de datos
+    this.crearOndaExpansiva(cx, cy, PALETA.verde);
+    this.crearParticulasDatos(cx, cy);
+
+    // 5) Oscurecer el tablero antes de mostrar la tarjeta
+    this.time.delayedCall(350, () => {
+      this.mundo.bringToTop(this.overlayOscurecer);
+      this.tweens.add({
+        targets: this.overlayOscurecer,
+        alpha: { from: 0, to: 1 },
+        duration: 250,
+        onComplete: () => {
+          callback();
+          this.overlayOscurecer.setAlpha(0);
+        },
+      });
+    });
+  }
+
   finalizarPorNivelCompletado() {
     estado.juegoActivo = false;
     this.limpiarVirusActivos();
 
     const esUltimoNivel = estado.indiceNivel === NIVELES.length - 1;
+    const puntuacionInicial = this.puntuacionInicioNivel;
 
-    if (esUltimoNivel) {
-      reproducirSonido('victoria');
-      document.getElementById('texto-puntaje-victoria').textContent =
-        `Puntuación final: ${estado.puntuacion} puntos`;
-      mostrarPantalla('pantalla-victoria');
-    } else {
-      reproducirSonido('nivelSuperado');
-      const configuracionNivel = NIVELES[estado.indiceNivel];
-      document.getElementById('texto-nivel-completado').textContent =
-        `Superaste el nivel ${configuracionNivel.numero} con ${estado.puntuacion} puntos.`;
-      mostrarPantalla('pantalla-nivel-completado');
-    }
+    this.reproducirSecuenciaLogro(() => {
+      if (esUltimoNivel) {
+        reproducirSonido('victoria');
+        document.getElementById('texto-puntaje-victoria').textContent =
+          `Puntuación final: ${estado.puntuacion} puntos`;
+        mostrarPantalla('pantalla-victoria');
+      } else {
+        const configuracionNivel = NIVELES[estado.indiceNivel];
+        document.getElementById('texto-nivel-completado').textContent =
+          `Superaste el nivel ${configuracionNivel.numero} con ${estado.puntuacion} puntos.`;
+        animarConteoPuntos(puntuacionInicial, estado.puntuacion);
+        mostrarPantalla('pantalla-nivel-completado');
+      }
+    });
   }
 }
 
 /* ------------------------------------------------------------------
    7. CONFIGURACIÓN Y CREACIÓN DEL JUEGO PHASER
    ------------------------------------------------------------------ */
+
 // Factor de nitidez: más píxeles físicos en pantallas de alta densidad
 // (Retina, etc.), limitado a 2x para no exigir demasiado a equipos modestos.
 const FACTOR_RESOLUCION = Math.min(window.devicePixelRatio || 1, 2);
@@ -763,9 +951,10 @@ const FACTOR_RESOLUCION = Math.min(window.devicePixelRatio || 1, 2);
 const configuracionPhaser = {
   type: Phaser.AUTO,
   parent: 'contenedor-phaser',
-  // El canvas físico es más grande que el mundo lógico (800x600); la
-  // escena compensa con zoom de cámara para que las coordenadas del
-  // juego no cambien. Así el tablero se ve nítido y no pixelado.
+  // El canvas físico es más grande que el mundo lógico (1280x720); la
+  // escena compensa con el contenedor "mundo" escalado para que las
+  // coordenadas del juego no cambien. Así el tablero se ve nítido y no
+  // pixelado, tanto en pantallas normales como de alta densidad.
   width: Math.round(ANCHO_JUEGO * FACTOR_RESOLUCION),
   height: Math.round(ALTO_JUEGO * FACTOR_RESOLUCION),
   backgroundColor: '#07110f',
@@ -810,13 +999,34 @@ function iniciarJuegoDesdeCero() {
   }
 }
 
+// Se ejecuta al presionar "Continuar" en la tarjeta de nivel superado:
+// 1) desvanece la tarjeta, 2) muestra una pantalla breve de transición
+// con una línea de escaneo, 3) comienza el siguiente nivel. Todo dura
+// menos de dos segundos (o casi nada con movimiento reducido).
 function continuarAlSiguienteNivel() {
-  estado.indiceNivel += 1;
-  estado.juegoActivo = true;
-  mostrarPantalla('pantalla-juego');
+  const panel = document.getElementById('panel-nivel-completado');
+  const reducido = prefiereMovimientoReducido();
+  const duracionSalida = reducido ? 30 : 200;
+  const duracionTransicion = reducido ? 350 : 900;
 
-  const escena = juegoPhaser.scene.keys['EscenaJuego'];
-  escena.iniciarNivelActual();
+  panel.classList.add('saliendo');
+
+  setTimeout(() => {
+    estado.indiceNivel += 1;
+    const siguienteNivel = NIVELES[estado.indiceNivel];
+    document.getElementById('texto-transicion').textContent =
+      `Inicializando nivel ${siguienteNivel.numero}/${NIVELES.length}`;
+    mostrarPantalla('pantalla-transicion');
+
+    setTimeout(() => {
+      panel.classList.remove('saliendo');
+      estado.juegoActivo = true;
+      mostrarPantalla('pantalla-juego');
+
+      const escena = juegoPhaser.scene.keys['EscenaJuego'];
+      escena.iniciarNivelActual();
+    }, duracionTransicion);
+  }, duracionSalida);
 }
 
 /* ------------------------------------------------------------------

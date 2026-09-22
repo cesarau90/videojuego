@@ -511,6 +511,134 @@ body {
   justify-content: center;
 }
 
+/* ============ TARJETA "NIVEL SUPERADO" (secuencia animada) ============ */
+.panel-nivel-completado {
+  opacity: 0;
+  transform: translateY(24px) scale(0.85);
+  animation: nivel-entrada 450ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.panel-nivel-completado.saliendo {
+  animation: none;
+  transition: opacity 200ms ease;
+  opacity: 0;
+}
+
+@keyframes nivel-entrada {
+  from { opacity: 0; transform: translateY(24px) scale(0.85); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.icono-logro-circulo,
+.icono-logro-check {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: logro-trazo 350ms ease-out forwards;
+}
+
+.icono-logro-circulo { animation-delay: 60ms; }
+.icono-logro-check { animation-delay: 260ms; }
+
+@keyframes logro-trazo {
+  to { stroke-dashoffset: 0; }
+}
+
+.titulo-logro,
+.texto-logro {
+  opacity: 0;
+  animation: aparecer 350ms ease forwards;
+}
+.titulo-logro { animation-delay: 300ms; }
+.texto-logro { animation-delay: 340ms; }
+
+.puntaje-logro {
+  opacity: 0;
+  animation: aparecer 300ms ease forwards;
+  animation-delay: 380ms;
+}
+
+.puntaje-unidad {
+  font-size: 0.75em;
+  color: var(--texto-sec);
+}
+
+.boton-logro {
+  animation: aparecer 300ms ease 420ms both !important;
+}
+
+/* Con movimiento reducido, la secuencia se reduce a simples cambios de opacidad */
+@media (prefers-reduced-motion: reduce) {
+  .panel-nivel-completado {
+    transform: none;
+    animation: fundido 200ms ease forwards;
+  }
+  .icono-logro-circulo,
+  .icono-logro-check {
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+    animation: fundido 200ms ease forwards;
+  }
+  .titulo-logro, .texto-logro, .puntaje-logro, .boton-logro {
+    animation-name: fundido !important;
+    animation-duration: 200ms !important;
+  }
+}
+
+@keyframes fundido {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ============ TRANSICIÓN ENTRE NIVELES ============ */
+#pantalla-transicion.activa {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.transicion-panel {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  padding: 30px 0;
+  text-align: center;
+  overflow: hidden;
+}
+
+.transicion-linea-escaneo {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--azul) 30%, var(--verde) 70%, transparent);
+  animation: transicion-escaneo 900ms ease-in-out infinite;
+}
+
+@keyframes transicion-escaneo {
+  0% { top: 0; opacity: 0; }
+  15% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+.transicion-texto {
+  font-family: var(--fuente-mono);
+  font-size: 0.95rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--texto-sec);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transicion-linea-escaneo {
+    animation: none;
+    opacity: 0.5;
+    top: 50%;
+  }
+}
+
 /* ============ PANTALLA DE JUEGO ============ */
 #pantalla-juego {
   padding: 0;

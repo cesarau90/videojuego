@@ -149,19 +149,32 @@
   <!-- PANTALLA 3: NIVEL COMPLETADO                   -->
   <!-- ============================================= -->
   <div id="pantalla-nivel-completado" class="pantalla">
-    <div class="panel">
-      <svg class="panel-icono icono-verde" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5" />
-        <path d="M7.5 12.5 L10.3 15.3 L16.5 8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+    <div class="panel panel-nivel-completado" id="panel-nivel-completado">
+      <svg class="panel-icono icono-verde icono-logro" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle class="icono-logro-circulo" cx="12" cy="12" r="10" pathLength="1" stroke="currentColor" stroke-width="1.5" />
+        <path class="icono-logro-check" d="M7.5 12.5 L10.3 15.3 L16.5 8.5" pathLength="1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
-      <h1 class="panel-titulo">Nivel superado</h1>
-      <p id="texto-nivel-completado" class="panel-texto"></p>
-      <button id="btn-siguiente-nivel" class="boton-primario">
+      <h1 class="panel-titulo titulo-logro">Nivel superado</h1>
+      <p id="texto-nivel-completado" class="panel-texto texto-logro"></p>
+      <p class="panel-puntaje puntaje-logro">
+        <span id="conteo-puntos-nivel">0</span><span class="puntaje-unidad"> pts</span>
+      </p>
+      <button id="btn-siguiente-nivel" class="boton-primario boton-logro">
         Continuar
         <svg class="boton-flecha" viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden="true">
           <path d="M4 2.5 L12 8 L4 13.5 Z" fill="currentColor" />
         </svg>
       </button>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- PANTALLA 3B: TRANSICIÓN AL SIGUIENTE NIVEL     -->
+  <!-- ============================================= -->
+  <div id="pantalla-transicion" class="pantalla">
+    <div class="transicion-panel">
+      <div class="transicion-linea-escaneo" aria-hidden="true"></div>
+      <p id="texto-transicion" class="transicion-texto">Inicializando nivel 2/3</p>
     </div>
   </div>
 
