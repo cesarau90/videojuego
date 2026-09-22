@@ -64,6 +64,34 @@ genérica de IA:
   diseño, animaciones, contador de cargas y funcionamiento con clic, toque
   y tecla **S**.
 
+## 3B. Vista móvil responsive (≤768px, cualquier orientación)
+
+En escritorio el tablero sigue siendo el mundo lógico fijo 1280×720 con
+`Phaser.Scale.FIT` (sin cambios). En móvil, Phaser calcula un **mundo
+lógico vertical** acorde a la pantalla real, en vez de forzar el mismo
+16:9 horizontal dentro de una pantalla angosta:
+
+- Detección de "vista móvil": la dimensión más chica del viewport
+  (ancho o alto) es ≤768px **y** el dispositivo no tiene puntero fino
+  (`(hover: none), (pointer: coarse)`), para no confundir una laptop de
+  pantalla corta (p. ej. 1366×768) con un teléfono. Se reevalúa en cada
+  `resize`/`orientationchange`, así que un teléfono sigue siendo "móvil"
+  al rotarlo.
+- Alto lógico fijo (1280) y ancho lógico calculado a partir de la
+  proporción real ancho/alto de la pantalla (acotado entre 480 y 900),
+  para llenar el espacio disponible sin estirar ni recortar nada.
+- HUD, fondo, red decorativa y servidores viven en una capa
+  reconstruible que se destruye y rearma en vivo al rotar o cambiar el
+  tamaño de ventana, conservando puntuación, servidores caídos y
+  elementos activos (reubicados con `Phaser.Math.Clamp()` dentro de la
+  nueva área de juego).
+- CSS: `#pantalla-juego.activa` usa `height: 100dvh` +
+  `env(safe-area-inset-*)`; el canvas usa `width`/`height`/`max-*` al
+  100% del contenedor sin deformarse (misma proporción lógica que la
+  pantalla real); el botón "ESCÁNER" permanece debajo del canvas.
+- Nada de esto cambia el escritorio: mismo mundo 1280×720, mismo modo
+  `FIT`, mismas coordenadas.
+
 ## 4. Elementos y mecánicas normales de cada nivel
 
 - Generación procedural, con **varios elementos simultáneos** en pantalla
@@ -170,6 +198,17 @@ derrota. Tras derrotar al jefe se reproduce la animación existente de
 
 ## 6. Pantallas y transiciones
 
+- **Intro de nivel** ("NIVEL X"): al comenzar cada nivel (incluido el
+  nivel 1), dentro del propio canvas, aparece una pantalla oscura
+  semitransparente con el texto "NIVEL 1/2/3" y debajo una frase breve
+  ("Preparando defensa…"). Fade de entrada, pausa breve y fade de salida,
+  ~1.5 s en total (mucho menos con `prefers-reduced-motion`). Las
+  amenazas y sus temporizadores **no arrancan hasta que termina** esta
+  animación, y mientras dura, el jugador no puede pulsar amenazas
+  (todavía no existen) ni usar el escáner (bloqueado explícitamente). Se
+  cancela limpiamente (sin objetos ni timers sueltos) si se reinicia la
+  partida o se cambia de nivel a mitad de la animación. Funciona igual en
+  escritorio y en móvil, en cualquier orientación.
 - Nivel superado: secuencia con barra de progreso resaltada, onda verde
   desde el servidor, partículas de "datos digitales" (no confeti),
   oscurecimiento de 250 ms, y la tarjeta entra con opacidad 0→1, escala
@@ -179,10 +218,13 @@ derrota. Tras derrotar al jefe se reproduce la animación existente de
   último el botón "Continuar".
 - Al presionar "Continuar": la tarjeta se desvanece, aparece una pantalla
   breve con línea de escaneo y "Inicializando nivel X/3" (~1 s), se
-  reinicia la barra de progreso y comienza el siguiente nivel. Todo en
-  menos de 2 segundos.
-- Derrota: ícono de error, mensaje, puntuación final, botón "Volver a
-  Intentar".
+  reinicia la barra de progreso y comienza el siguiente nivel (que a su
+  vez muestra su propia intro "NIVEL X"). Todo en menos de 2 segundos.
+- **Derrota**: primero un destello rojo breve (~280 ms, dentro del
+  canvas) y una vibración ligera de cámara, y solo después aparece la
+  pantalla HTML de "Derrota" con ícono de error, mensaje, puntuación
+  final y botón "Volver a Intentar". Nada de esto se muestra si
+  `prefers-reduced-motion` está activo (va directo a la pantalla).
 - Victoria final: ícono de escudo con check, puntuación final, botón
   "Volver a Intentar".
 

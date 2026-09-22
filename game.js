@@ -595,6 +595,11 @@ class EscenaJuego extends Phaser.Scene {
     this.limiteElementosExtra = 0;
     this.temporizadorSobrecarga = null;
 
+    // Intro de nivel ("NIVEL X"): bloquea clics y escáner hasta terminar
+    this.introNivelActiva = false;
+    this.introObjetos = null;
+    this.introTimerEspera = null;
+
     this.actualizarHUD();
     this.actualizarBotonEscaner();
     this.iniciarNivelActual();
@@ -1102,8 +1107,14 @@ class EscenaJuego extends Phaser.Scene {
     this.actualizarBotonEscaner();
     this.actualizarLeyendaExtra();
 
-    // Arranca el generador de elementos (ver iniciarGeneracionElementos).
-    this.iniciarGeneracionElementos();
+    // Muestra la pantalla "NIVEL X" (ver mostrarIntroNivel) y solo cuando
+    // termina arranca el generador de elementos: las amenazas y sus
+    // temporizadores no empiezan hasta que la animación de entrada acaba.
+    this.introNivelActiva = true;
+    this.mostrarIntroNivel(() => {
+      this.introNivelActiva = false;
+      this.iniciarGeneracionElementos();
+    });
   }
 
   // Temporizador repetitivo: en cada intervalo ("tiempoAparicion") trata
@@ -1138,7 +1149,7 @@ class EscenaJuego extends Phaser.Scene {
   }
 
   intentarGenerarElemento() {
-    if (!estado.juegoActivo || estado.jefeActivo) return;
+    if (!estado.juegoActivo || estado.jefeActivo || this.introNivelActiva) return;
     const configuracionNivel = NIVELES[estado.indiceNivel];
     // Ya se alcanzó el objetivo del nivel: se detiene la generación
     // (el jefe se encarga de retirar lo que quede en pantalla).
@@ -1174,6 +1185,10 @@ class EscenaJuego extends Phaser.Scene {
     this.sobrecargaActiva = false;
     this.limiteElementosExtra = 0;
 
+    // Cancela la animación "NIVEL X" si quedó a mitad de camino (por
+    // ejemplo, al reiniciar la partida o cambiar de nivel muy rápido)
+    this.cancelarIntroNivel();
+
     estado.virusActivos.forEach((elemento) => {
       if (elemento.temporizador) elemento.temporizador.remove();
       if (elemento.lineaObjetivo) elemento.lineaObjetivo.destroy();
@@ -1181,6 +1196,83 @@ class EscenaJuego extends Phaser.Scene {
       elemento.contenedor.destroy();
     });
     estado.virusActivos = [];
+  }
+
+  /* ---------------- INTRO DE NIVEL ("NIVEL X") ---------------- */
+
+  // Pantalla oscura semitransparente con el nombre del nivel y una frase
+  // breve, dentro del propio canvas (funciona igual en escritorio y en
+  // móvil, en cualquier orientación, porque usa las dimensiones lógicas
+  // actuales). Fade de entrada, pausa breve y fade de salida, ~1.5s en
+  // total (mucho menos con movimiento reducido). El generador de
+  // elementos no arranca hasta que el callback se ejecuta al terminar.
+  mostrarIntroNivel(callback) {
+    const nivel = NIVELES[estado.indiceNivel];
+    const reducido = this.movimientoReducido;
+    const duracionFade = reducido ? 60 : 350;
+    const espera = reducido ? 80 : 800;
+
+    const overlay = this.add.rectangle(
+      this.anchoLogico / 2, this.altoLogico / 2, this.anchoLogico, this.altoLogico, 0x000000, 0.72
+    ).setAlpha(0);
+    const titulo = this.crearTexto(this.anchoLogico / 2, this.altoLogico / 2 - 22, `NIVEL ${nivel.numero}`, {
+      tamano: this.esVistaMovilActual ? 34 : 42, mono: true, negrita: true,
+      origenX: 0.5, origenY: 0.5, alinear: 'center',
+    });
+    const subtitulo = this.crearTexto(this.anchoLogico / 2, this.altoLogico / 2 + 32, 'Preparando defensa…', {
+      tamano: this.esVistaMovilActual ? 15 : 18, color: PALETA.textoSecundario,
+      origenX: 0.5, origenY: 0.5, alinear: 'center',
+    });
+    titulo.setAlpha(0);
+    subtitulo.setAlpha(0);
+    this.mundo.bringToTop(overlay);
+    this.mundo.bringToTop(titulo);
+    this.mundo.bringToTop(subtitulo);
+
+    this.introObjetos = [overlay, titulo, subtitulo];
+
+    const terminar = () => {
+      this.introObjetos = null;
+      this.introTimerEspera = null;
+      overlay.destroy();
+      titulo.destroy();
+      subtitulo.destroy();
+      callback();
+    };
+
+    this.tweens.add({
+      targets: this.introObjetos,
+      alpha: { from: 0, to: 1 },
+      duration: duracionFade,
+      ease: 'Quad.Out',
+      onComplete: () => {
+        this.introTimerEspera = this.time.delayedCall(espera, () => {
+          this.introTimerEspera = null;
+          this.tweens.add({
+            targets: this.introObjetos,
+            alpha: 0,
+            duration: duracionFade,
+            ease: 'Quad.In',
+            onComplete: terminar,
+          });
+        });
+      },
+    });
+  }
+
+  // Corta la animación "NIVEL X" si está en curso (sin dejar objetos ni
+  // temporizadores sueltos) y desactiva el bloqueo de clics/escáner.
+  cancelarIntroNivel() {
+    if (this.introTimerEspera) {
+      this.introTimerEspera.remove();
+      this.introTimerEspera = null;
+    }
+    if (this.introObjetos) {
+      this.tweens.killTweensOf(this.introObjetos);
+      this.introObjetos.forEach((objeto) => objeto.destroy());
+      this.introObjetos = null;
+    }
+    this.introNivelActiva = false;
   }
 
   /* ---------------- GENERACIÓN PROCEDURAL DE ELEMENTOS ---------------- */
@@ -1831,7 +1923,7 @@ class EscenaJuego extends Phaser.Scene {
   // corresponde) durante 2s, y revela una etiqueta "AMENAZA"/"SEGURO"
   // sobre cada uno. No elimina nada ni entrega puntos.
   activarEscaner() {
-    if (!estado.juegoActivo || this.escanerCargas <= 0 || this.escanerActivo) return;
+    if (!estado.juegoActivo || this.escanerCargas <= 0 || this.escanerActivo || this.introNivelActiva) return;
 
     this.escanerCargas -= 1;
     this.actualizarHUD();
@@ -1914,9 +2006,37 @@ class EscenaJuego extends Phaser.Scene {
     this.limpiarJefe();
     reproducirSonido('derrota');
 
-    document.getElementById('texto-puntaje-derrota').textContent =
-      `Puntuación final: ${estado.puntuacion} puntos`;
-    mostrarPantalla('pantalla-derrota');
+    const mostrarPantallaDerrota = () => {
+      document.getElementById('texto-puntaje-derrota').textContent =
+        `Puntuación final: ${estado.puntuacion} puntos`;
+      mostrarPantalla('pantalla-derrota');
+    };
+
+    if (this.movimientoReducido) {
+      mostrarPantallaDerrota();
+      return;
+    }
+
+    // Destello rojo breve + vibración ligera del tablero antes de mostrar
+    // la pantalla de derrota (no es exagerado: dura ~280ms en total)
+    const destello = this.add
+      .rectangle(this.anchoLogico / 2, this.altoLogico / 2, this.anchoLogico, this.altoLogico, 0xff1f3d, 0)
+      .setAlpha(0);
+    this.mundo.add(destello);
+    this.mundo.bringToTop(destello);
+    this.cameras.main.shake(220, 0.006);
+
+    this.tweens.add({
+      targets: destello,
+      alpha: { from: 0, to: 0.55 },
+      duration: 140,
+      yoyo: true,
+      ease: 'Quad.InOut',
+      onComplete: () => {
+        destello.destroy();
+        mostrarPantallaDerrota();
+      },
+    });
   }
 
   // Secuencia visual que se reproduce en el canvas antes de mostrar la
