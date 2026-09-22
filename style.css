@@ -754,7 +754,7 @@ body {
 #contenedor-phaser {
   position: relative;
   width: 100%;
-  max-width: 960px;
+  max-width: 1120px;
   margin: 0 auto;
   line-height: 0;
 }
@@ -769,7 +769,7 @@ body {
 
 .barra-escaner {
   width: 100%;
-  max-width: 960px;
+  max-width: 1120px;
   margin: 12px auto 0;
   display: flex;
   justify-content: center;

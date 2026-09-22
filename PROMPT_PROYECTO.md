@@ -289,9 +289,19 @@ activaba la vista móvil con cualquier ventana de alto ≤768px, mientras
 1280×720 terminaba mostrado a 1900×694: se ampliaba y deformaba.
 
 Las reglas móviles del CSS ahora exigen las mismas condiciones de tamaño
-y puntero que JavaScript. Así, una PC conserva el límite de 960px y la
+y puntero que JavaScript. Así, una PC conserva el modo de escritorio y la
 proporción 16:9 del tablero, incluidos los círculos y textos. No eliminar
 esa condición de puntero al modificar los estilos responsive.
+
+### Tamaño del tablero en escritorio
+
+El tablero puede crecer hasta 1120px de ancho en monitores con espacio.
+`ajustarCanvasEscritorio()` también calcula el límite según la altura real
+de la ventana, reservando el alto de la barra del escáner y 20px de margen.
+El ancho y el alto visibles se fijan en píxeles enteros y con proporción
+16:9, por lo que el aumento no introduce desenfoque ni oculta el botón.
+Un `ResizeObserver` reaplica el cálculo si Phaser escribe sus propias
+medidas después del arranque; una vez estabilizado no modifica el canvas.
 
 ### Corrección posterior: deformación al girar el teléfono
 
@@ -309,7 +319,7 @@ reconstruye el tablero y conserva el progreso, los elementos y los jefes.
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=5` y `game.js?v=4`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=6` y `game.js?v=5`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la

@@ -627,6 +627,10 @@ class EscenaJuego extends Phaser.Scene {
     this.actualizarHUD();
     this.actualizarBotonEscaner();
     this.iniciarNivelActual();
+
+    if (!this.esVistaMovilActual) {
+      registrarObservadorCanvasEscritorio(this.game.canvas);
+    }
   }
 
   // Factor de lentitud aplicado por el escáner (2s) a elementos y, si
@@ -2732,21 +2736,25 @@ function iniciarJuegoDesdeCero() {
   }
 
   ajustarCanvasEscritorio();
+  // Phaser termina de crear y estilizar el canvas de forma asíncrona. Este
+  // segundo ajuste ocurre cuando sus medidas definitivas ya están listas.
+  programarAjusteCanvasEscritorio(120);
 }
 
 // En escritorio (no en vista móvil, que ya maneja su propio tamaño), fija
-// el ancho y el alto del canvas en CSS a números enteros de píxel exactos
-// en vez de dejar que "width:100%" (en style.css) resuelva a una medida
-// fraccionaria: una altura como 540.875px obliga al navegador a repartir
-// los píxeles del canvas en un número no entero de píxeles de pantalla,
-// lo que introduce un ligero desenfoque de subpíxel en texto e íconos.
+// el ancho y el alto del canvas en CSS a números enteros de píxel exactos.
+// Además de respetar el ancho máximo del contenedor, limita el tablero por
+// la altura de la ventana y reserva sitio para la barra del escáner. Así se
+// puede mostrar más grande en monitores amplios sin ocultar el botón ni
+// introducir medidas fraccionarias que desenfoquen texto e íconos.
 // Se usa "important" en el propio estilo en línea para ganarle tanto al
 // !important de style.css como a cualquier estilo que Phaser reaplique.
 function ajustarCanvasEscritorio() {
   if (!juegoPhaser || esVistaMovil()) return;
   const canvas = juegoPhaser.canvas;
   const contenedor = document.getElementById('contenedor-phaser');
-  if (!canvas || !contenedor) return;
+  const barraEscaner = document.querySelector('.barra-escaner');
+  if (!canvas || !contenedor || !barraEscaner) return;
 
   // La causa real de la medida fraccionaria (p. ej. 540.875px): el canvas
   // tiene un borde de 1px y usa box-sizing:border-box (regla global), así
@@ -2757,10 +2765,23 @@ function ajustarCanvasEscritorio() {
   // contenido (ya sin el borde) y fijar el tamaño en esos mismos términos
   // (box-sizing:content-box solo aquí, por estilo en línea): así el
   // navegador nunca tiene que repartir un borde no entero para cumplir la
-  // proporción, y el total visible sigue ocupando exactamente el mismo
-  // ancho que el contenedor.
+  // proporción. La altura disponible se calcula antes de elegir el ancho,
+  // de modo que el canvas y el botón siempre caben en la ventana.
   const bordeTotal = 2; // 1px arriba/abajo y 1px izquierda/derecha
-  const anchoContenido = contenedor.clientWidth - bordeTotal;
+  const estilosBarra = window.getComputedStyle(barraEscaner);
+  const altoBarra = barraEscaner.offsetHeight
+    + (parseFloat(estilosBarra.marginTop) || 0)
+    + (parseFloat(estilosBarra.marginBottom) || 0);
+  const margenVertical = 20;
+  const altoMaximoContenido = Math.max(
+    1,
+    Math.floor(window.innerHeight - altoBarra - margenVertical - bordeTotal)
+  );
+  const anchoMaximoContenido = contenedor.clientWidth - bordeTotal;
+  const anchoLimitadoPorAltura = Math.floor(
+    altoMaximoContenido * (ANCHO_JUEGO / ALTO_JUEGO)
+  );
+  const anchoContenido = Math.min(anchoMaximoContenido, anchoLimitadoPorAltura);
   if (anchoContenido <= 0) return;
   const altoContenido = Math.round(anchoContenido * (ALTO_JUEGO / ANCHO_JUEGO));
 
@@ -2775,6 +2796,31 @@ function ajustarCanvasEscritorio() {
 
 let temporizadorAjusteCanvas = null;
 let listenerAjusteCanvasRegistrado = false;
+let observadorCanvasEscritorio = null;
+
+function programarAjusteCanvasEscritorio(retraso = 120) {
+  clearTimeout(temporizadorAjusteCanvas);
+  temporizadorAjusteCanvas = setTimeout(() => {
+    temporizadorAjusteCanvas = null;
+    ajustarCanvasEscritorio();
+  }, retraso);
+}
+
+// Phaser puede volver a escribir width/height unos instantes después de
+// arrancar. El observador detecta ese único cambio tardío y recupera el
+// tamaño entero calculado; al quedar estable ya no realiza más escrituras.
+function registrarObservadorCanvasEscritorio(canvas) {
+  if (observadorCanvasEscritorio || !canvas) return;
+  if (!window.ResizeObserver) {
+    programarAjusteCanvasEscritorio(700);
+    return;
+  }
+
+  observadorCanvasEscritorio = new ResizeObserver(() => {
+    if (!esVistaMovil()) programarAjusteCanvasEscritorio(0);
+  });
+  observadorCanvasEscritorio.observe(canvas);
+}
 
 // Registra un único listener de resize (con debounce) que recalcula el
 // tamaño entero del canvas en escritorio. Se registra una sola vez por
@@ -2784,8 +2830,7 @@ function registrarAjusteCanvasEscritorio() {
   listenerAjusteCanvasRegistrado = true;
   window.addEventListener('resize', () => {
     if (esVistaMovil()) return; // el reajuste móvil lo maneja la escena
-    clearTimeout(temporizadorAjusteCanvas);
-    temporizadorAjusteCanvas = setTimeout(ajustarCanvasEscritorio, 120);
+    programarAjusteCanvasEscritorio();
   });
 }
 
