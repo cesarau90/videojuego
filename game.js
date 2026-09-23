@@ -41,6 +41,54 @@ const NIVELES = [
 
 const VIDAS_INICIALES = 3;
 
+/* ------------------------------------------------------------------
+   1B. PREGUNTAS DE SEGURIDAD (una por nivel)
+   Aparecen tras derrotar al jefe, antes de la tarjeta "Nivel superado"
+   o "Victoria". No quitan vidas ni provocan derrota: solo dan un bono
+   de puntos si se acierta dentro del tiempo. Ver mostrarPreguntaNivel().
+   ------------------------------------------------------------------ */
+const SEGUNDOS_PREGUNTA = 10;
+const PUNTOS_POR_SEGUNDO_PREGUNTA = 5;
+
+const PREGUNTAS_NIVEL = [
+  {
+    // Nivel 1: malware
+    pregunta: '¿Cuál de las siguientes es una señal común de que un dispositivo está infectado con malware?',
+    opciones: [
+      'El dispositivo funciona más lento de lo normal y aparecen ventanas emergentes inesperadas',
+      'El antivirus se actualiza automáticamente',
+      'El sistema operativo se actualiza sin errores',
+      'El navegador recuerda tus marcadores favoritos',
+    ],
+    correcta: 0,
+    explicacion: 'El malware suele consumir recursos del equipo y generar anuncios o ventanas emergentes no solicitadas; por eso el dispositivo se vuelve más lento de lo normal.',
+  },
+  {
+    // Nivel 2: protección de cuentas
+    pregunta: '¿Cuál es la forma más segura de proteger una cuenta, además de usar una contraseña fuerte?',
+    opciones: [
+      'Usar la misma contraseña en todos los sitios para no olvidarla',
+      'Activar la verificación en dos pasos (2FA)',
+      'Compartir la contraseña solo con amigos de confianza',
+      'Guardar la contraseña en un papel pegado a la pantalla',
+    ],
+    correcta: 1,
+    explicacion: 'La verificación en dos pasos agrega una segunda prueba de identidad (como un código temporal), así que aunque alguien robe tu contraseña no podrá entrar solo con eso.',
+  },
+  {
+    // Nivel 3: copias de seguridad
+    pregunta: '¿Cuál es la mejor práctica al hacer copias de seguridad (backups) de información importante?',
+    opciones: [
+      'Guardar una sola copia en el mismo disco donde está el original',
+      'Hacer una copia una sola vez y nunca volver a revisarla',
+      'Mantener varias copias en lugares distintos, incluida una fuera del equipo principal',
+      'Confiar únicamente en la memoria del dispositivo',
+    ],
+    correcta: 2,
+    explicacion: 'Si el original y la copia están en el mismo lugar, un solo incidente (como un ransomware) puede destruir ambos; por eso conviene tener varias copias en medios distintos, con al menos una fuera del equipo principal.',
+  },
+];
+
 // Probabilidad de que aparezca el elemento de reparación cuando hay al
 // menos un servidor fuera de línea (máximo una vez por nivel)
 const PROBABILIDAD_REPARACION = 0.22;
@@ -462,6 +510,98 @@ function animarConteoPuntos(desde, hasta, duracion = 650) {
     if (progreso < 1) requestAnimationFrame(paso);
   }
   requestAnimationFrame(paso);
+}
+
+/* ------------------------------------------------------------------
+   4A. PREGUNTA DE SEGURIDAD (entre el jefe derrotado y "Nivel superado")
+   Muestra la pregunta del nivel indicado, corre un contador de 10s y,
+   al responder (clic/toque) o agotarse el tiempo, revela la respuesta
+   correcta y una explicación breve. Llama a "callback(bono)" una sola
+   vez, cuando el jugador pulsa "Continuar", con el bono de puntos ya
+   calculado (0 si falló o se acabó el tiempo). No toca vidas ni el
+   estado de derrota: el juego ya está en pausa en este punto porque
+   quien llama a esta función ya detuvo la generación y limpió los
+   elementos activos (ver finalizarPorNivelCompletado).
+   ------------------------------------------------------------------ */
+function mostrarPreguntaNivel(indiceNivel, callback) {
+  const datos = PREGUNTAS_NIVEL[indiceNivel];
+
+  const elementoTexto = document.getElementById('texto-pregunta');
+  const elementoOpciones = document.getElementById('opciones-pregunta');
+  const elementoContador = document.getElementById('contador-pregunta');
+  const elementoBarra = document.getElementById('barra-tiempo-pregunta');
+  const elementoExplicacion = document.getElementById('texto-explicacion-pregunta');
+  const botonContinuar = document.getElementById('btn-continuar-pregunta');
+
+  elementoTexto.textContent = datos.pregunta;
+  elementoOpciones.innerHTML = '';
+  elementoExplicacion.textContent = '';
+  elementoExplicacion.hidden = true;
+  botonContinuar.hidden = true;
+  botonContinuar.onclick = null;
+
+  let segundosRestantes = SEGUNDOS_PREGUNTA;
+  elementoContador.textContent = segundosRestantes;
+
+  // Barra de tiempo: se reinicia sin transición y, en el siguiente frame,
+  // se le agrega la clase que anima su ancho a 0 en 10s (ver style.css).
+  elementoBarra.classList.remove('en-marcha');
+  elementoBarra.style.width = '100%';
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => elementoBarra.classList.add('en-marcha'));
+  });
+
+  const botones = datos.opciones.map((textoOpcion, indice) => {
+    const boton = document.createElement('button');
+    boton.type = 'button';
+    boton.className = 'opcion-pregunta';
+    boton.textContent = textoOpcion;
+    boton.addEventListener('click', () => resolver(indice));
+    elementoOpciones.appendChild(boton);
+    return boton;
+  });
+
+  let respondida = false;
+  const intervalo = setInterval(() => {
+    segundosRestantes -= 1;
+    elementoContador.textContent = Math.max(segundosRestantes, 0);
+    if (segundosRestantes <= 0) resolver(null);
+  }, 1000);
+
+  // Resuelve la pregunta una sola vez (clic en una opción o tiempo agotado
+  // con indiceElegido = null), sin importar cuántas veces se llame después.
+  function resolver(indiceElegido) {
+    if (respondida) return;
+    respondida = true;
+    clearInterval(intervalo);
+    elementoBarra.classList.remove('en-marcha');
+    elementoBarra.style.width = '0%';
+
+    const acierto = indiceElegido === datos.correcta;
+    const segundosParaBono = Math.max(segundosRestantes, 0);
+    const bono = acierto
+      ? Math.min(SEGUNDOS_PREGUNTA * PUNTOS_POR_SEGUNDO_PREGUNTA, segundosParaBono * PUNTOS_POR_SEGUNDO_PREGUNTA)
+      : 0;
+
+    botones.forEach((boton, indice) => {
+      boton.disabled = true;
+      if (indice === datos.correcta) boton.classList.add('opcion-correcta');
+      else if (indice === indiceElegido) boton.classList.add('opcion-incorrecta');
+    });
+
+    let prefijo;
+    if (acierto) prefijo = `¡Correcto! +${bono} puntos.`;
+    else if (indiceElegido === null) prefijo = 'Se acabó el tiempo.';
+    else prefijo = 'Respuesta incorrecta.';
+
+    elementoExplicacion.textContent = `${prefijo} ${datos.explicacion}`;
+    elementoExplicacion.hidden = false;
+
+    botonContinuar.hidden = false;
+    botonContinuar.onclick = () => callback(bono);
+  }
+
+  mostrarPantalla('pantalla-pregunta');
 }
 
 /* ------------------------------------------------------------------
@@ -2348,19 +2488,26 @@ class EscenaJuego extends Phaser.Scene {
     const puntuacionInicial = this.puntuacionInicioNivel;
 
     this.reproducirSecuenciaLogro(() => {
-      if (esUltimoNivel) {
-        reproducirSonido('victoria');
-        document.getElementById('texto-puntaje-victoria').textContent =
-          `Puntuación final: ${estado.puntuacion} puntos`;
-        prepararClasificacionVictoria();
-        mostrarPantalla('pantalla-victoria');
-      } else {
-        const configuracionNivel = NIVELES[estado.indiceNivel];
-        document.getElementById('texto-nivel-completado').textContent =
-          `Superaste el nivel ${configuracionNivel.numero} con ${estado.puntuacion} puntos.`;
-        animarConteoPuntos(puntuacionInicial, estado.puntuacion);
-        mostrarPantalla('pantalla-nivel-completado');
-      }
+      // Pregunta de seguridad del nivel: el juego ya está en pausa (sin
+      // generación ni elementos activos), así que no hay riesgo de perder
+      // vidas ni servidores mientras el jugador responde.
+      mostrarPreguntaNivel(estado.indiceNivel, (bonoPregunta) => {
+        estado.puntuacion += bonoPregunta;
+
+        if (esUltimoNivel) {
+          reproducirSonido('victoria');
+          document.getElementById('texto-puntaje-victoria').textContent =
+            `Puntuación final: ${estado.puntuacion} puntos`;
+          prepararClasificacionVictoria();
+          mostrarPantalla('pantalla-victoria');
+        } else {
+          const configuracionNivel = NIVELES[estado.indiceNivel];
+          document.getElementById('texto-nivel-completado').textContent =
+            `Superaste el nivel ${configuracionNivel.numero} con ${estado.puntuacion} puntos.`;
+          animarConteoPuntos(puntuacionInicial, estado.puntuacion);
+          mostrarPantalla('pantalla-nivel-completado');
+        }
+      });
     });
   }
 

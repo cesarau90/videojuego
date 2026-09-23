@@ -208,6 +208,41 @@ las vidas llegan a cero durante el combate, se detiene todo y aparece la
 derrota. Tras derrotar al jefe se reproduce la animación existente de
 "Nivel superado" y se habilita continuar.
 
+## 5B. Pregunta de seguridad (tras derrotar a cada jefe)
+
+Después de la secuencia de "jefe derrotado" (oscurecimiento del tablero)
+y **antes** de la tarjeta "Nivel superado"/"Victoria final" (antes del
+botón "Continuar"), aparece una pantalla HTML propia —mismo lenguaje
+visual que el resto de tarjetas de resultado— con una pregunta de
+opción múltiple sobre ciberseguridad, distinta por nivel y relacionada
+con sus mecánicas: **nivel 1 → malware**, **nivel 2 → protección de
+cuentas**, **nivel 3 → copias de seguridad**. Cada pregunta tiene 4
+opciones y una sola respuesta correcta (`PREGUNTAS_NIVEL` en `game.js`).
+
+- Al aparecer, arranca un contador visible de **10 segundos** (número +
+  barra que se vacía) con `mostrarPreguntaNivel()`. El juego ya está
+  completamente en pausa en este punto (sin generación ni elementos
+  activos, ver `finalizarPorNivelCompletado()`), así que no hay riesgo
+  de perder vidas ni servidores mientras el jugador responde.
+- Acertar da un bono de **5 puntos por cada segundo restante en el
+  momento del clic/toque** (máximo 50, con 10s completos). Fallar o
+  agotar el tiempo da **0 puntos extra**; en ningún caso se pierde una
+  vida ni se provoca derrota.
+- Tras responder (o agotar el tiempo), se deshabilitan las opciones, se
+  resalta en verde la correcta y —si aplica— en rojo la elegida, y se
+  muestra una explicación breve antes de habilitar "Continuar". El bono
+  se aplica una sola vez por pregunta (bandera `respondida` interna:
+  clics repetidos tras responder no hacen nada).
+- Las opciones son botones reales (`<button>`), así que funcionan igual
+  con clic y con toque en móvil, sin lógica táctil aparte.
+- Nota de implementación: el atributo nativo `hidden` en el botón
+  "Continuar" y en el texto de explicación necesita las reglas CSS
+  `#btn-continuar-pregunta[hidden]` / `#texto-explicacion-pregunta[hidden]`
+  porque `.boton-primario { display: inline-flex }` (regla de autor) le
+  gana en cascada al `[hidden] { display: none }` nativo (de origen
+  "user agent"). No quitar esas reglas ni el atributo `hidden` al tocar
+  esta pantalla.
+
 ## 6. Pantallas y transiciones
 
 - **Intro de nivel** ("NIVEL X"): al comenzar cada nivel (incluido el
@@ -377,7 +412,7 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=9` y `game.js?v=12`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=11` y `game.js?v=14`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la
