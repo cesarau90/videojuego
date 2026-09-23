@@ -848,6 +848,7 @@ body {
 
 .mensaje-gamertag.exito { color: var(--verde); }
 .mensaje-gamertag.error { color: var(--peligro); }
+.mensaje-gamertag.info { color: var(--azul); }
 
 .clasificacion {
   margin: 18px 0 20px;

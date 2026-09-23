@@ -516,14 +516,17 @@ function animarConteoPuntos(desde, hasta, duracion = 650) {
    4A. PREGUNTA DE SEGURIDAD (entre el jefe derrotado y "Nivel superado")
    Muestra la pregunta del nivel indicado, corre un contador de 10s y,
    al responder (clic/toque) o agotarse el tiempo, revela la respuesta
-   correcta y una explicación breve. Llama a "callback(bono)" una sola
-   vez, cuando el jugador pulsa "Continuar", con el bono de puntos ya
-   calculado (0 si falló o se acabó el tiempo). No toca vidas ni el
-   estado de derrota: el juego ya está en pausa en este punto porque
-   quien llama a esta función ya detuvo la generación y limpió los
-   elementos activos (ver finalizarPorNivelCompletado).
+   correcta y una explicación breve. Acertar da un bono de puntos; fallar
+   o agotar el tiempo desactiva un servidor al azar (igual que un falso
+   positivo, ver desactivarServidorAleatorio en "escena"), lo que puede
+   provocar una derrota si era el último servidor en línea. Llama a
+   "callback(bono)" una sola vez, cuando el jugador pulsa "Continuar",
+   con el bono de puntos ya calculado (0 si falló o se acabó el tiempo);
+   quien llama a esta función es responsable de revisar estado.vidas
+   después, por si hay que mostrar la derrota en vez de continuar (ver
+   finalizarPorNivelCompletado).
    ------------------------------------------------------------------ */
-function mostrarPreguntaNivel(indiceNivel, callback) {
+function mostrarPreguntaNivel(indiceNivel, escena, callback) {
   const datos = PREGUNTAS_NIVEL[indiceNivel];
 
   const elementoTexto = document.getElementById('texto-pregunta');
@@ -583,6 +586,10 @@ function mostrarPreguntaNivel(indiceNivel, callback) {
       ? Math.min(SEGUNDOS_PREGUNTA * PUNTOS_POR_SEGUNDO_PREGUNTA, segundosParaBono * PUNTOS_POR_SEGUNDO_PREGUNTA)
       : 0;
 
+    // Fallar o agotar el tiempo apaga un servidor al azar, igual que un
+    // falso positivo (nunca dos: solo se llama una vez por pregunta).
+    if (!acierto) escena.desactivarServidorAleatorio();
+
     botones.forEach((boton, indice) => {
       boton.disabled = true;
       if (indice === datos.correcta) boton.classList.add('opcion-correcta');
@@ -591,8 +598,8 @@ function mostrarPreguntaNivel(indiceNivel, callback) {
 
     let prefijo;
     if (acierto) prefijo = `¡Correcto! +${bono} puntos.`;
-    else if (indiceElegido === null) prefijo = 'Se acabó el tiempo.';
-    else prefijo = 'Respuesta incorrecta.';
+    else if (indiceElegido === null) prefijo = 'Se acabó el tiempo. Un servidor quedó fuera de línea.';
+    else prefijo = 'Respuesta incorrecta. Un servidor quedó fuera de línea.';
 
     elementoExplicacion.textContent = `${prefijo} ${datos.explicacion}`;
     elementoExplicacion.hidden = false;
@@ -752,30 +759,52 @@ async function guardarPuntuacionGlobal(evento) {
   mostrarMensajeGamertag('Enviando puntuación…');
 
   try {
-    const respuesta = await fetch(`${SUPABASE_URL}/rest/v1/${TABLA_PUNTUACIONES}`, {
+    // Se llama a la función guardar_puntuacion() (ver SUPABASE_SETUP.sql)
+    // en vez de insertar directamente: esa función conserva solo el mejor
+    // puntaje de cada gamertag, así que jugar de nuevo con el mismo
+    // gamertag reemplaza tu registro anterior únicamente si lo superaste.
+    const respuesta = await fetch(`${SUPABASE_URL}/rest/v1/rpc/guardar_puntuacion`, {
       method: 'POST',
       headers: {
         apikey: SUPABASE_PUBLISHABLE_KEY,
         'Content-Type': 'application/json',
-        Prefer: 'return=minimal',
       },
       body: JSON.stringify({
-        gamertag,
-        puntuacion: puntuacionVictoriaPendiente,
-        partida_id: idPartidaVictoria,
+        p_gamertag: gamertag,
+        p_puntuacion: puntuacionVictoriaPendiente,
+        p_partida_id: idPartidaVictoria,
       }),
     });
     if (!respuesta.ok) throw new Error(`Supabase respondió ${respuesta.status}`);
 
-    partidaGlobalGuardada = true;
+    const [resultado] = await respuesta.json();
+    const guardado = !!resultado?.guardado;
+    const mejorPuntaje = resultado?.mejor_puntaje ?? puntuacionVictoriaPendiente;
+
     try {
       localStorage.setItem(CLAVE_GAMERTAG_RECORDADO, gamertag);
     } catch (error) {
-      // El registro global ya se guardó; recordar el nombre es opcional.
+      // El registro global ya se guardó (o se comparó); recordar el
+      // nombre es opcional.
     }
-    campo.disabled = true;
-    boton.textContent = 'Puntuación guardada';
-    mostrarMensajeGamertag('Tu puntuación ya aparece en la clasificación global.', 'exito');
+
+    if (guardado) {
+      // Ya quedó como el mejor puntaje de este gamertag: no tiene caso
+      // volver a intentarlo con la misma partida, así que se bloquea.
+      partidaGlobalGuardada = true;
+      campo.disabled = true;
+      boton.textContent = 'Puntuación guardada';
+      mostrarMensajeGamertag('Nuevo mejor puntaje: ya aparece en la clasificación global.', 'exito');
+    } else {
+      // No se reemplazó nada: se deja el formulario activo por si el
+      // jugador quiere intentarlo con otro gamertag.
+      boton.disabled = false;
+      boton.textContent = 'Guardar puntuación';
+      mostrarMensajeGamertag(
+        `Con "${gamertag}" ya tienes ${mejorPuntaje} puntos guardados, así que esta puntuación no lo reemplazó. Puedes probar con otro gamertag.`,
+        'info'
+      );
+    }
     await cargarTablaGlobal();
   } catch (error) {
     console.warn('No se pudo guardar la puntuación global:', error);
@@ -2488,11 +2517,17 @@ class EscenaJuego extends Phaser.Scene {
     const puntuacionInicial = this.puntuacionInicioNivel;
 
     this.reproducirSecuenciaLogro(() => {
-      // Pregunta de seguridad del nivel: el juego ya está en pausa (sin
-      // generación ni elementos activos), así que no hay riesgo de perder
-      // vidas ni servidores mientras el jugador responde.
-      mostrarPreguntaNivel(estado.indiceNivel, (bonoPregunta) => {
+      // Pregunta de seguridad del nivel: la generación ya está detenida
+      // (sin elementos activos), pero fallarla sí puede apagar un
+      // servidor (ver mostrarPreguntaNivel), así que hay que revisar las
+      // vidas después de responder por si eso provoca una derrota.
+      mostrarPreguntaNivel(estado.indiceNivel, this, (bonoPregunta) => {
         estado.puntuacion += bonoPregunta;
+
+        if (estado.vidas <= 0) {
+          this.finalizarPorDerrota();
+          return;
+        }
 
         if (esUltimoNivel) {
           reproducirSonido('victoria');

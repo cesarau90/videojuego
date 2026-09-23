@@ -220,19 +220,23 @@ cuentas**, **nivel 3 → copias de seguridad**. Cada pregunta tiene 4
 opciones y una sola respuesta correcta (`PREGUNTAS_NIVEL` en `game.js`).
 
 - Al aparecer, arranca un contador visible de **10 segundos** (número +
-  barra que se vacía) con `mostrarPreguntaNivel()`. El juego ya está
-  completamente en pausa en este punto (sin generación ni elementos
-  activos, ver `finalizarPorNivelCompletado()`), así que no hay riesgo
-  de perder vidas ni servidores mientras el jugador responde.
+  barra que se vacía) con `mostrarPreguntaNivel()`. La generación de
+  amenazas ya está completamente detenida en este punto (sin elementos
+  activos, ver `finalizarPorNivelCompletado()`).
 - Acertar da un bono de **5 puntos por cada segundo restante en el
-  momento del clic/toque** (máximo 50, con 10s completos). Fallar o
-  agotar el tiempo da **0 puntos extra**; en ningún caso se pierde una
-  vida ni se provoca derrota.
+  momento del clic/toque** (máximo 50, con 10s completos).
+- Fallar o agotar el tiempo da **0 puntos extra** y además apaga **un
+  servidor al azar** (igual que un falso positivo, mismo
+  `desactivarServidorAleatorio()`; nunca dos por una sola pregunta). Si
+  ese servidor era el último en línea, provoca una derrota normal (se
+  revisa `estado.vidas` justo después de responder, antes de mostrar
+  "Nivel superado"/"Victoria").
 - Tras responder (o agotar el tiempo), se deshabilitan las opciones, se
   resalta en verde la correcta y —si aplica— en rojo la elegida, y se
-  muestra una explicación breve antes de habilitar "Continuar". El bono
-  se aplica una sola vez por pregunta (bandera `respondida` interna:
-  clics repetidos tras responder no hacen nada).
+  muestra una explicación breve (mencionando el servidor apagado si
+  aplica) antes de habilitar "Continuar". El bono/penalización se aplica
+  una sola vez por pregunta (bandera `respondida` interna: clics
+  repetidos tras responder no hacen nada).
 - Las opciones son botones reales (`<button>`), así que funcionan igual
   con clic y con toque en móvil, sin lógica táctil aparte.
 - Nota de implementación: el atributo nativo `hidden` en el botón
@@ -412,7 +416,7 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=11` y `game.js?v=14`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=12` y `game.js?v=15`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la
@@ -447,10 +451,33 @@ caracteres junto con su puntuación. La pantalla muestra los 10 mejores
 resultados globales ordenados por puntuación y fecha. Los registros se guardan
 en la tabla `puntuaciones` de Supabase, creada con `SUPABASE_SETUP.sql`.
 
-La aplicación utiliza únicamente la URL del proyecto y una clave publicable.
-Row Level Security permite leer e insertar registros válidos, pero impide que
-el navegador edite o borre puntuaciones existentes. Cada victoria genera un
-identificador único y solo puede enviarse una vez desde la interfaz.
+**Cada gamertag guarda solo su mejor puntuación** (sin distinguir
+mayúsculas/minúsculas): un índice único sobre `lower(gamertag)` hace que,
+si vuelves a jugar y ganar con el mismo gamertag, tu fila existente se
+reemplace únicamente si el puntaje nuevo es mayor; si es igual o menor,
+no se toca la fila guardada y la interfaz lo indica ("ya tienes un mejor
+puntaje guardado") dejando el formulario disponible por si se quiere
+probar con otro gamertag. Esto se resuelve con una función de Postgres,
+`guardar_puntuacion(gamertag, puntuacion, partida_id)`
+(`security definer`, en `SUPABASE_SETUP.sql`), a la que el navegador
+llama por RPC (`/rest/v1/rpc/guardar_puntuacion`) en vez de insertar
+directamente en la tabla.
+
+La aplicación utiliza únicamente la URL del proyecto y una clave
+publicable. Row Level Security permite **leer** libremente, pero ya no
+concede `insert`/`update` directos sobre la tabla al navegador: toda
+escritura pasa por esa función (que sí puede escribir porque corre con
+los permisos de quien la creó), así el navegador nunca puede insertar
+filas fuera de esa regla ni editar/borrar puntuaciones ajenas. Cada
+intento de guardado sigue usando un identificador de partida único para
+que la interfaz nunca envíe el mismo resultado dos veces por accidente.
+
+**Importante:** `SUPABASE_SETUP.sql` cambió de raíz (tabla con índice
+único por gamertag + función `guardar_puntuacion` + permisos nuevos).
+Hay que volver a ejecutar el archivo completo en el SQL Editor del
+proyecto de Supabase para que este cambio tenga efecto; el archivo está
+escrito para poder reejecutarse sin problema sobre una base ya
+existente (limpia duplicados antes de crear el índice único).
 
 El último gamertag utilizado se conserva en `localStorage`, por lo que aparece
 rellenado al volver a jugar desde el mismo navegador, incluso después de cerrar
