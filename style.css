@@ -1049,7 +1049,7 @@ body {
 .barra-escaner {
   width: 100%;
   max-width: 1120px;
-  margin: 12px auto 0;
+  margin: 20px auto 0;
   display: flex;
   justify-content: center;
 }

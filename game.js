@@ -1561,23 +1561,23 @@ class EscenaJuego extends Phaser.Scene {
     const anchoCaja = (anchoUtil - gap * 2) / 3;
     // Tarjetas angostas (teléfono en vertical): ícono arriba y texto debajo
     const vertical = anchoCaja < 200;
-    const altoCaja = horizontalMovil ? 50 : vertical ? 92 : 84;
+    const altoCaja = horizontalMovil ? 50 : vertical ? 96 : 96;
 
     // La franja de la leyenda reserva el alto de su versión más larga, para
     // no cambiar de tamaño al pasar de nivel
-    const tamanoLeyenda = 14;
+    const tamanoLeyenda = horizontalMovil ? 14 : 15;
     const filasLeyenda = this.medirFilasLeyenda(anchoUtil - 24, tamanoLeyenda);
-    const altoLeyenda = filasLeyenda * (tamanoLeyenda + 8) + (horizontalMovil ? 2 : 8);
+    const altoLeyenda = filasLeyenda * (tamanoLeyenda + 8) + (horizontalMovil ? 2 : 10);
 
-    const margenInferior = horizontalMovil ? 6 : 12;
-    const separacion = horizontalMovil ? 6 : 10;
+    const margenInferior = horizontalMovil ? 6 : 14;
+    const separacion = horizontalMovil ? 6 : 14;
     const leyendaY = alto - margenInferior - altoLeyenda / 2;
     const cajaY = alto - margenInferior - altoLeyenda - separacion - altoCaja / 2;
     const bordeSuperiorCajas = cajaY - altoCaja / 2;
 
     // El encabezado "ESTADO DE RED" solo aparece si cabe sin tocar el área
     // de juego (en móvil horizontal no hay espacio y se omite)
-    const encabezadoY = bordeSuperiorCajas - 15;
+    const encabezadoY = bordeSuperiorCajas - 14;
     const mostrarEncabezado = encabezadoY - 8 >= limiteSuperior;
 
     return {
@@ -1613,13 +1613,13 @@ class EscenaJuego extends Phaser.Scene {
   crearEncabezadoRed(ancho, y) {
     const capa = this.capaTablero;
     const titulo = this.crearTexto(32, y, 'ESTADO DE RED', {
-      tamano: 12, mono: true, negrita: true, color: PALETA.textoSecundario, origenX: 0, origenY: 0.5, contenedor: capa,
+      tamano: 13, mono: true, negrita: true, color: PALETA.textoSecundario, origenX: 0, origenY: 0.5, contenedor: capa,
     });
     this.anchoTituloRed = titulo.width;
     this.lineaEncabezadoRed = this.add.graphics();
     capa.add(this.lineaEncabezadoRed);
     this.textoResumenRed = this.crearTexto(ancho - 32, y, '', {
-      tamano: 12, mono: true, color: PALETA.verdeTexto, origenX: 1, origenY: 0.5, contenedor: capa,
+      tamano: 13, mono: true, color: PALETA.verdeTexto, origenX: 1, origenY: 0.5, contenedor: capa,
     });
     this.actualizarResumenRed();
   }
@@ -1676,7 +1676,7 @@ class EscenaJuego extends Phaser.Scene {
       servidor.iconoLado = 28;
       icono.setPosition(0, -H / 2 + pad + 14);
       tamanoNombre = 13;
-      tamanoEstado = 11;
+      tamanoEstado = 12;
       nombreX = 0;
       nombreY = -H / 2 + pad + 28 + 13;
       anchoNombreMax = W - pad * 2;
@@ -1694,10 +1694,10 @@ class EscenaJuego extends Phaser.Scene {
       const colX = -W / 2 + pad + 3 + lado + 12;
       const colFin = W / 2 - pad;
       nombreX = colX;
-      tamanoNombre = compacta ? 15 : 14;
-      tamanoEstado = compacta ? 13 : 12;
-      const tamanoPorcentaje = compacta ? 12 : 11;
-      const anchoPorcentaje = 42;
+      tamanoNombre = compacta ? 15 : 15;
+      tamanoEstado = compacta ? 13 : 14;
+      const tamanoPorcentaje = compacta ? 13 : 13;
+      const anchoPorcentaje = compacta ? 46 : 50;
 
       if (compacta) {
         // Dos filas: nombre + estado (a la derecha) / barra + porcentaje
@@ -1709,15 +1709,21 @@ class EscenaJuego extends Phaser.Scene {
         servidor.barraGeo = { x: colX, y: barraY, ancho: colFin - colX - anchoPorcentaje };
       } else {
         // Tres filas: nombre / estado / "INTEGRIDAD" + barra + porcentaje
-        nombreY = -21;
+        nombreY = -28;
         anchoNombreMax = colFin - colX;
         servidor.alineacionEstado = 'izquierda';
-        servidor.filaEstado = { x: colX, y: 1 };
-        const barraY = 24;
+        servidor.filaEstado = { x: colX, y: -3 };
+        const barraY = 29;
         const etiqueta = this.crearTexto(colX, barraY, 'INTEGRIDAD', {
-          tamano: 10, mono: true, color: PALETA.textoSecundario, origenX: 0, origenY: 0.5, contenedor: contenedor,
+          tamano: 13, mono: true, color: PALETA.textoSecundario, origenX: 0, origenY: 0.5, contenedor: contenedor,
         });
-        const inicioBarra = colX + etiqueta.width + 10;
+        let inicioBarra = colX + etiqueta.width + 10;
+        // En tarjetas angostas la etiqueta dejaría la barra casi sin ancho:
+        // se omite y la barra ocupa toda la fila
+        if (colFin - inicioBarra - anchoPorcentaje < 70) {
+          etiqueta.destroy();
+          inicioBarra = colX;
+        }
         servidor.barraGeo = { x: inicioBarra, y: barraY, ancho: colFin - inicioBarra - anchoPorcentaje };
       }
       servidor.porcentajeTexto = this.crearTexto(colFin, servidor.barraGeo.y, '100%', {
