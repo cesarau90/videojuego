@@ -911,6 +911,67 @@ function dibujarIconoPorTipo(g, tipo, color) {
 }
 
 /* ------------------------------------------------------------------
+   5B. PANEL DE ESTADO DE RED (servidores inferiores)
+   Íconos sencillos de cada servidor y colores de cada estado. Todos los
+   íconos usan el mismo grosor de línea (2px) y se dibujan centrados en
+   (0, 0) dentro de un cuadrado de lado 2*r.
+   ------------------------------------------------------------------ */
+
+// Estilo visual de cada estado posible de un servidor
+const ESTILO_ESTADO_SERVIDOR = {
+  linea: { color: PALETA.verde, colorTexto: PALETA.verdeTexto, etiqueta: 'EN LÍNEA', relleno: PALETA.superficie },
+  ataque: { color: PALETA.naranja, colorTexto: PALETA.naranjaTexto, etiqueta: 'BAJO ATAQUE', relleno: 0x3a2408 },
+  caido: { color: PALETA.peligro, colorTexto: PALETA.peligroTexto, etiqueta: 'FUERA DE LÍNEA', relleno: 0x1a0d10 },
+};
+
+// Media elipse inferior (usada para dar volumen al ícono de base de datos)
+function trazarMediaElipseInferior(g, cx, cy, rx, ry) {
+  g.beginPath();
+  for (let i = 0; i <= 16; i++) {
+    const angulo = (Math.PI * i) / 16;
+    const px = cx + Math.cos(angulo) * rx;
+    const py = cy + Math.sin(angulo) * ry;
+    if (i === 0) g.moveTo(px, py);
+    else g.lineTo(px, py);
+  }
+  g.strokePath();
+}
+
+// Servidor web: globo terráqueo (meridiano + ecuador)
+function dibujarIconoServidorWeb(g, color, r) {
+  g.lineStyle(2, color, 1);
+  g.strokeCircle(0, 0, r);
+  g.strokeEllipse(0, 0, r, r * 2);
+  g.lineBetween(-r, 0, r, 0);
+}
+
+// Base de datos: cilindro con dos anillos
+function dibujarIconoBaseDatos(g, color, r) {
+  const rx = r * 0.85;
+  const ry = r * 0.3;
+  g.lineStyle(2, color, 1);
+  g.strokeEllipse(0, -r + ry, rx * 2, ry * 2);
+  g.lineBetween(-rx, -r + ry, -rx, r - ry);
+  g.lineBetween(rx, -r + ry, rx, r - ry);
+  trazarMediaElipseInferior(g, 0, 0, rx, ry);
+  trazarMediaElipseInferior(g, 0, r - ry, rx, ry);
+}
+
+// Servidor de respaldo: caja de archivo (tapa + cuerpo + asa)
+function dibujarIconoRespaldo(g, color, r) {
+  g.lineStyle(2, color, 1);
+  g.strokeRoundedRect(-r, -r * 0.85, r * 2, r * 0.55, 2);
+  g.strokeRoundedRect(-r * 0.82, -r * 0.3, r * 1.64, r * 1.15, 2);
+  g.lineBetween(-r * 0.3, r * 0.12, r * 0.3, r * 0.12);
+}
+
+function dibujarIconoServidor(g, id, color, r) {
+  if (id === 'web') dibujarIconoServidorWeb(g, color, r);
+  else if (id === 'bd') dibujarIconoBaseDatos(g, color, r);
+  else dibujarIconoRespaldo(g, color, r);
+}
+
+/* ------------------------------------------------------------------
    6. ESCENA PRINCIPAL DE PHASER
    Aquí ocurre toda la generación procedural de elementos y el
    dibujo del tablero (HUD, servidor y fondo de red).
@@ -1033,7 +1094,7 @@ class EscenaJuego extends Phaser.Scene {
         elemento.lineaObjetivo.lineStyle(1.5, elemento.colorLinea, 0.28);
         elemento.lineaObjetivo.lineBetween(
           elemento.contenedor.x, elemento.contenedor.y,
-          elemento.servidorObjetivoX, this.servidorY
+          elemento.servidorObjetivoX, this.servidorLineaY
         );
       }
 
@@ -1214,7 +1275,10 @@ class EscenaJuego extends Phaser.Scene {
     // curso (parpadearServidorAtaque) se detenga sin tocar objetos que
     // están a punto de eliminarse.
     const estadosServidores = (this.servidores || []).map((s) => ({ id: s.id, activo: s.activo }));
-    (this.servidores || []).forEach((s) => { s.destruido = true; });
+    (this.servidores || []).forEach((s) => {
+      this.detenerAnimacionesServidor(s);
+      s.destruido = true;
+    });
 
     // Destruye explícitamente cada hijo antes que el contenedor, para no
     // dejar gráficos ni textos sueltos del tablero anterior
@@ -1371,77 +1435,490 @@ class EscenaJuego extends Phaser.Scene {
     // Cargas del escáner
     this.textoEscaner = this.crearParEtiquetaValor(32, 140, 'ESCÁNER', 15, capa);
 
-    // Leyenda de colores (una entrada por tipo de elemento)
-    this.crearTexto(ancho - 32, 140, 'Rojo·Naranja·Morado: eliminar · Azul: ignorar', {
-      tamano: 14, origenX: 1, origenY: 0, color: PALETA.textoSecundario, contenedor: capa,
-    });
-
-    // Segunda línea de leyenda para las mecánicas nuevas (se completa en
-    // actualizarLeyendaExtra según el nivel, sin saturar el HUD)
-    this.textoLeyendaExtra = this.crearTexto(ancho - 32, 164, '', {
-      tamano: 13, origenX: 1, origenY: 0, color: PALETA.textoSecundario, contenedor: capa,
-    });
+    // La leyenda de colores ya no vive aquí: ahora es una franja compacta
+    // en la parte inferior, debajo de los servidores (ver crearLeyendaInferior)
   }
 
-  // Actualiza la segunda línea de leyenda según las mecánicas disponibles
-  // en el nivel actual (la reparación existe desde el nivel 1, el
-  // duplicador se agrega a partir del nivel 2)
+  /* ---------------- LEYENDA DE COLORES (franja inferior) ---------------- */
+
+  // Entradas de la leyenda. "desdeNivel" indica a partir de qué nivel
+  // (índice 0 = nivel 1) se muestra: la reparación existe desde el nivel 1
+  // y el duplicador se agrega a partir del nivel 2.
+  obtenerEntradasLeyenda(todas) {
+    const entradas = [
+      { colores: [PALETA.peligro, PALETA.naranja, PALETA.morado], etiqueta: 'Eliminar', desdeNivel: 0 },
+      { colores: [PALETA.azul], etiqueta: 'Ignorar', desdeNivel: 0 },
+      { colores: [PALETA.verde], etiqueta: 'Reparación', desdeNivel: 0 },
+      { colores: [PALETA.magenta], etiqueta: 'Duplicador', desdeNivel: 1 },
+    ];
+    return todas ? entradas : entradas.filter((e) => estado.indiceNivel >= e.desdeNivel);
+  }
+
+  // Crea (dentro de "contenedor") los puntos de color y textos de la
+  // leyenda, repartidos en filas centradas que nunca superan "anchoMaximo".
+  // Devuelve cuántas filas ocupó, para reservar el alto de la franja.
+  dibujarContenidoLeyenda(contenedor, entradas, anchoMaximo, tamano) {
+    const radioPunto = 5;
+    const separacionPuntos = 9;
+    const separacionEntradas = 22;
+    const altoFila = tamano + 8;
+
+    // 1) Crea cada entrada en un subcontenedor y mide su ancho
+    const piezas = entradas.map((entrada) => {
+      const pieza = this.add.container(0, 0);
+      entrada.colores.forEach((color, i) => {
+        const punto = this.add.circle(radioPunto + i * separacionPuntos, 0, radioPunto, color, 1)
+          .setStrokeStyle(1.5, PALETA.fondo, 1);
+        pieza.add(punto);
+      });
+      const inicioTexto = radioPunto * 2 + (entrada.colores.length - 1) * separacionPuntos + 7;
+      const texto = this.crearTexto(inicioTexto, 0, entrada.etiqueta, {
+        tamano, color: PALETA.texto, origenX: 0, origenY: 0.5, contenedor: pieza,
+      });
+      contenedor.add(pieza);
+      return { pieza, ancho: inicioTexto + texto.width };
+    });
+
+    // 2) Reparte las entradas en filas (se pasa a la siguiente fila solo
+    //    si la actual ya no tiene espacio)
+    const filas = [];
+    piezas.forEach((p) => {
+      const fila = filas[filas.length - 1];
+      if (fila && fila.ancho + separacionEntradas + p.ancho <= anchoMaximo) {
+        fila.piezas.push(p);
+        fila.ancho += separacionEntradas + p.ancho;
+      } else {
+        filas.push({ piezas: [p], ancho: p.ancho });
+      }
+    });
+
+    // 3) Centra cada fila horizontalmente y el bloque completo en vertical
+    filas.forEach((fila, indiceFila) => {
+      let x = -fila.ancho / 2;
+      const y = (indiceFila - (filas.length - 1) / 2) * altoFila;
+      fila.piezas.forEach((p) => {
+        p.pieza.setPosition(x, y);
+        x += p.ancho + separacionEntradas;
+      });
+    });
+    return filas.length;
+  }
+
+  // Calcula cuántas filas necesita la leyenda en su versión más larga
+  // (todas las entradas), para que la franja no cambie de alto al avanzar
+  // de nivel.
+  medirFilasLeyenda(anchoMaximo, tamano) {
+    const temporal = this.add.container(0, 0);
+    const filas = this.dibujarContenidoLeyenda(temporal, this.obtenerEntradasLeyenda(true), anchoMaximo, tamano);
+    temporal.destroy();
+    return filas;
+  }
+
+  // Franja de la leyenda: fondo discreto + contenido (rehecho en
+  // actualizarLeyendaExtra según el nivel actual)
+  crearLeyendaInferior(disposicion) {
+    const { anchoUtil, leyendaY, altoLeyenda } = disposicion;
+    const fondo = this.add.graphics();
+    fondo.fillStyle(PALETA.superficie, 0.75);
+    fondo.fillRoundedRect(32, leyendaY - altoLeyenda / 2, anchoUtil, altoLeyenda, 6);
+    fondo.lineStyle(1, PALETA.borde, 1);
+    fondo.strokeRoundedRect(32, leyendaY - altoLeyenda / 2, anchoUtil, altoLeyenda, 6);
+    this.capaTablero.add(fondo);
+
+    this.contenedorLeyenda = this.add.container(32 + anchoUtil / 2, leyendaY);
+    this.capaTablero.add(this.contenedorLeyenda);
+    this.configLeyenda = { anchoMaximo: anchoUtil - 24, tamano: disposicion.tamanoLeyenda };
+  }
+
+  // Rehace el contenido de la leyenda según las mecánicas disponibles en
+  // el nivel actual (se llama al iniciar cada nivel y al reconstruir el
+  // tablero)
   actualizarLeyendaExtra() {
-    let texto = 'Verde: reparación';
-    if (estado.indiceNivel >= 1) texto += ' · Magenta: duplicador';
-    this.textoLeyendaExtra.setText(texto);
+    if (!this.contenedorLeyenda) return;
+    this.contenedorLeyenda.removeAll(true);
+    this.dibujarContenidoLeyenda(
+      this.contenedorLeyenda,
+      this.obtenerEntradasLeyenda(false),
+      this.configLeyenda.anchoMaximo,
+      this.configLeyenda.tamano
+    );
   }
 
-  /* ---------------- SERVIDORES INFERIORES (sistema de vidas) ---------------- */
+  /* ---------------- PANEL DE ESTADO DE RED (servidores = sistema de vidas) ---------------- */
+
+  // Calcula la distribución de la zona inferior (encabezado, tarjetas de
+  // servidores y franja de la leyenda) de abajo hacia arriba. Nunca invade
+  // el área donde aparecen las amenazas: su límite es el borde inferior del
+  // área de juego más el anillo de tiempo de una amenaza (56px). El área de
+  // juego en sí no cambia.
+  calcularDisposicionInferior(ancho, alto) {
+    const horizontalMovil = this.esVistaMovilActual && ancho > alto;
+    const area = this.calcularAreaJuego(ancho, alto);
+    const limiteSuperior = area.yMax + 56 + 4;
+
+    const anchoUtil = ancho - 64;
+    const gap = 16;
+    const anchoCaja = (anchoUtil - gap * 2) / 3;
+    // Tarjetas angostas (teléfono en vertical): ícono arriba y texto debajo
+    const vertical = anchoCaja < 200;
+    const altoCaja = horizontalMovil ? 50 : vertical ? 92 : 84;
+
+    // La franja de la leyenda reserva el alto de su versión más larga, para
+    // no cambiar de tamaño al pasar de nivel
+    const tamanoLeyenda = 14;
+    const filasLeyenda = this.medirFilasLeyenda(anchoUtil - 24, tamanoLeyenda);
+    const altoLeyenda = filasLeyenda * (tamanoLeyenda + 8) + (horizontalMovil ? 2 : 8);
+
+    const margenInferior = horizontalMovil ? 6 : 12;
+    const separacion = horizontalMovil ? 6 : 10;
+    const leyendaY = alto - margenInferior - altoLeyenda / 2;
+    const cajaY = alto - margenInferior - altoLeyenda - separacion - altoCaja / 2;
+    const bordeSuperiorCajas = cajaY - altoCaja / 2;
+
+    // El encabezado "ESTADO DE RED" solo aparece si cabe sin tocar el área
+    // de juego (en móvil horizontal no hay espacio y se omite)
+    const encabezadoY = bordeSuperiorCajas - 15;
+    const mostrarEncabezado = encabezadoY - 8 >= limiteSuperior;
+
+    return {
+      horizontalMovil, anchoUtil, gap, anchoCaja, vertical, altoCaja, cajaY, bordeSuperiorCajas,
+      leyendaY, altoLeyenda, tamanoLeyenda, encabezadoY, mostrarEncabezado,
+    };
+  }
 
   crearServidoresInferior(ancho, alto) {
-    const capa = this.capaTablero;
-    const horizontalMovil = this.esVistaMovilActual && ancho > alto;
-    this.servidorY = alto - (horizontalMovil ? 55 : 106);
-    const gap = 16;
-    const anchoCaja = (ancho - 64 - gap * 2) / 3;
-    const altoCaja = horizontalMovil ? 70 : 90;
-    const separacionTexto = horizontalMovil ? 13 : 16;
-    // En pantallas angostas se reduce un poco el texto y se permite que se
-    // envuelva en dos líneas en vez de desbordar fuera de su recuadro.
-    const tamanoNombre = anchoCaja < 170 ? 11 : 13;
-    const definiciones = [
-      { id: 'web', nombre: 'SERVIDOR WEB' },
-      { id: 'bd', nombre: 'BASE DE DATOS' },
-      { id: 'respaldo', nombre: 'SERVIDOR DE RESPALDO' },
-    ];
+    const d = this.calcularDisposicionInferior(ancho, alto);
+    this.servidorY = d.cajaY;
+    // Las líneas de las amenazas apuntan al borde superior de la tarjeta
+    this.servidorLineaY = d.bordeSuperiorCajas;
 
+    const definiciones = [
+      { id: 'web', nombre: 'SERVIDOR WEB', nombreCorto: 'SERVIDOR WEB' },
+      { id: 'bd', nombre: 'BASE DE DATOS', nombreCorto: 'BASE DE DATOS' },
+      { id: 'respaldo', nombre: 'SERVIDOR DE RESPALDO', nombreCorto: 'RESPALDO' },
+    ];
     this.servidores = definiciones.map((def, indice) => {
-      const x = 32 + anchoCaja / 2 + indice * (anchoCaja + gap);
-      const rect = this.add.rectangle(x, this.servidorY, anchoCaja, altoCaja, PALETA.superficie, 0.95)
-        .setStrokeStyle(2, PALETA.verde, 1);
-      const nombreTexto = this.crearTexto(x, this.servidorY - separacionTexto, def.nombre, {
-        tamano: tamanoNombre, mono: true, color: PALETA.texto, origenX: 0.5, origenY: 0.5, alinear: 'center',
-        anchoMaximo: anchoCaja - 10, contenedor: capa,
-      });
-      const estadoTexto = this.crearTexto(x, this.servidorY + separacionTexto, 'EN LÍNEA', {
-        tamano: 12, mono: true, color: PALETA.verdeTexto, origenX: 0.5, origenY: 0.5, alinear: 'center',
-        contenedor: capa,
-      });
-      capa.add(rect);
-      capa.bringToTop(nombreTexto);
-      capa.bringToTop(estadoTexto);
-      return { id: def.id, nombre: def.nombre, x, rect, nombreTexto, estadoTexto, activo: true, parpadeando: false };
+      const x = 32 + d.anchoCaja / 2 + indice * (d.anchoCaja + d.gap);
+      return this.crearTarjetaServidor(def, x, d);
     });
+
+    this.textoResumenRed = null;
+    if (d.mostrarEncabezado) this.crearEncabezadoRed(ancho, d.encabezadoY);
+    this.crearLeyendaInferior(d);
+    this.actualizarLeyendaExtra();
   }
 
-  dibujarEstadoServidor(servidor) {
-    if (servidor.activo) {
-      servidor.rect.setStrokeStyle(2, PALETA.verde, 1);
-      servidor.rect.setFillStyle(PALETA.superficie, 0.95);
-      servidor.estadoTexto.setText('EN LÍNEA');
-      servidor.estadoTexto.setColor(PALETA.verdeTexto);
+  // Encabezado del panel: "ESTADO DE RED" a la izquierda, línea divisoria
+  // y el resumen "3/3 EN LÍNEA" a la derecha
+  crearEncabezadoRed(ancho, y) {
+    const capa = this.capaTablero;
+    const titulo = this.crearTexto(32, y, 'ESTADO DE RED', {
+      tamano: 12, mono: true, negrita: true, color: PALETA.textoSecundario, origenX: 0, origenY: 0.5, contenedor: capa,
+    });
+    this.anchoTituloRed = titulo.width;
+    this.lineaEncabezadoRed = this.add.graphics();
+    capa.add(this.lineaEncabezadoRed);
+    this.textoResumenRed = this.crearTexto(ancho - 32, y, '', {
+      tamano: 12, mono: true, color: PALETA.verdeTexto, origenX: 1, origenY: 0.5, contenedor: capa,
+    });
+    this.actualizarResumenRed();
+  }
+
+  actualizarResumenRed() {
+    if (!this.textoResumenRed || !this.servidores) return;
+    const enLinea = this.servidores.filter((s) => s.activo).length;
+    const total = this.servidores.length;
+    this.textoResumenRed.setText(`${enLinea}/${total} EN LÍNEA`);
+    let color = PALETA.verdeTexto;
+    if (enLinea < total) color = enLinea > 1 ? PALETA.naranjaTexto : PALETA.peligroTexto;
+    this.textoResumenRed.setColor(color);
+
+    const g = this.lineaEncabezadoRed;
+    const y = this.textoResumenRed.y;
+    g.clear();
+    g.lineStyle(1, PALETA.borde, 1);
+    g.lineBetween(32 + this.anchoTituloRed + 14, y, this.textoResumenRed.x - this.textoResumenRed.width - 14, y);
+  }
+
+  // Crea la tarjeta de un servidor: fondo, ícono, nombre, estado (punto +
+  // texto) y barra de integridad. Todo vive en un contenedor propio para
+  // poder sacudirlo o escalarlo como una sola pieza.
+  crearTarjetaServidor(def, x, d) {
+    const W = d.anchoCaja;
+    const H = d.altoCaja;
+    const contenedor = this.add.container(x, d.cajaY);
+    this.capaTablero.add(contenedor);
+
+    const fondo = this.add.graphics();
+    const icono = this.add.graphics();
+    const barra = this.add.graphics();
+    const punto = this.add.circle(0, 0, 4, PALETA.verde, 1);
+    contenedor.add([fondo, icono, barra, punto]);
+
+    const servidor = {
+      id: def.id, nombre: def.nombre, x, contenedor, fondo, icono, barra, punto,
+      ancho: W, alto: H, vertical: d.vertical,
+      activo: true, parpadeando: false, destruido: false,
+      estadoVisual: 'linea', destelloAtaque: false, integridad: 1,
+      animaciones: [], pulsos: [], porcentajeTexto: null,
+    };
+
+    let tamanoNombre;
+    let tamanoEstado;
+    let nombreX;
+    let nombreY;
+    let anchoNombreMax;
+
+    if (d.vertical) {
+      // Tarjeta angosta: ícono arriba, nombre, estado y barra centrados
+      const pad = 8;
+      servidor.pad = pad;
+      servidor.iconoLado = 28;
+      icono.setPosition(0, -H / 2 + pad + 14);
+      tamanoNombre = 13;
+      tamanoEstado = 11;
+      nombreX = 0;
+      nombreY = -H / 2 + pad + 28 + 13;
+      anchoNombreMax = W - pad * 2;
+      servidor.alineacionEstado = 'centro';
+      servidor.filaEstado = { x: 0, y: nombreY + 19 };
+      servidor.barraGeo = { x: -W / 2 + pad, y: H / 2 - pad - 3, ancho: W - pad * 2 };
     } else {
-      servidor.rect.setStrokeStyle(2, PALETA.peligro, 1);
-      servidor.rect.setFillStyle(0x1a0d10, 0.95);
-      servidor.estadoTexto.setText('FUERA DE LÍNEA');
-      servidor.estadoTexto.setColor(PALETA.peligroTexto);
+      // Tarjeta ancha: ícono a la izquierda y columna de texto a la derecha
+      const compacta = H < 70;
+      const pad = compacta ? 8 : 12;
+      servidor.pad = pad;
+      const lado = Math.min(H - pad * 2, 44);
+      servidor.iconoLado = lado;
+      icono.setPosition(-W / 2 + pad + 3 + lado / 2, 0);
+      const colX = -W / 2 + pad + 3 + lado + 12;
+      const colFin = W / 2 - pad;
+      nombreX = colX;
+      tamanoNombre = compacta ? 15 : 14;
+      tamanoEstado = compacta ? 13 : 12;
+      const tamanoPorcentaje = compacta ? 12 : 11;
+      const anchoPorcentaje = 42;
+
+      if (compacta) {
+        // Dos filas: nombre + estado (a la derecha) / barra + porcentaje
+        nombreY = -H / 2 + pad + 9;
+        anchoNombreMax = colFin - colX - 125;
+        servidor.alineacionEstado = 'derecha';
+        servidor.filaEstado = { x: colFin, y: nombreY };
+        const barraY = H / 2 - pad - 5;
+        servidor.barraGeo = { x: colX, y: barraY, ancho: colFin - colX - anchoPorcentaje };
+      } else {
+        // Tres filas: nombre / estado / "INTEGRIDAD" + barra + porcentaje
+        nombreY = -21;
+        anchoNombreMax = colFin - colX;
+        servidor.alineacionEstado = 'izquierda';
+        servidor.filaEstado = { x: colX, y: 1 };
+        const barraY = 24;
+        const etiqueta = this.crearTexto(colX, barraY, 'INTEGRIDAD', {
+          tamano: 10, mono: true, color: PALETA.textoSecundario, origenX: 0, origenY: 0.5, contenedor: contenedor,
+        });
+        const inicioBarra = colX + etiqueta.width + 10;
+        servidor.barraGeo = { x: inicioBarra, y: barraY, ancho: colFin - inicioBarra - anchoPorcentaje };
+      }
+      servidor.porcentajeTexto = this.crearTexto(colFin, servidor.barraGeo.y, '100%', {
+        tamano: tamanoPorcentaje, mono: true, color: PALETA.textoSecundario, origenX: 1, origenY: 0.5, contenedor: contenedor,
+      });
     }
+
+    servidor.nombreTexto = this.crearTexto(nombreX, nombreY, def.nombre, {
+      tamano: tamanoNombre, mono: true, negrita: true, color: PALETA.texto,
+      origenX: d.vertical ? 0.5 : 0, origenY: 0.5, alinear: d.vertical ? 'center' : 'left', contenedor: contenedor,
+    });
+    // Si el nombre completo no cabe, se usa el corto; si aun así no cabe,
+    // se reduce un poco para que nunca se salga de la tarjeta
+    if (servidor.nombreTexto.width > anchoNombreMax) servidor.nombreTexto.setText(def.nombreCorto);
+    if (servidor.nombreTexto.width > anchoNombreMax) servidor.nombreTexto.setScale(anchoNombreMax / servidor.nombreTexto.width);
+
+    servidor.estadoTexto = this.crearTexto(0, servidor.filaEstado.y, '', {
+      tamano: tamanoEstado, mono: true, color: PALETA.verdeTexto, origenX: 0, origenY: 0.5, contenedor: contenedor,
+    });
+
+    this.dibujarTarjetaServidor(servidor);
+    return servidor;
+  }
+
+  // Redibuja la tarjeta completa según servidor.estadoVisual
+  // ('linea' | 'ataque' | 'caido') y servidor.integridad (0 a 1)
+  dibujarTarjetaServidor(servidor) {
+    if (servidor.destruido) return;
+    const estilo = ESTILO_ESTADO_SERVIDOR[servidor.estadoVisual];
+    const W = servidor.ancho;
+    const H = servidor.alto;
+
+    // Fondo y borde (durante un ataque el fondo alterna para parpadear)
+    const fondo = servidor.fondo;
+    const relleno = servidor.estadoVisual === 'ataque' && !servidor.destelloAtaque ? PALETA.superficie : estilo.relleno;
+    fondo.clear();
+    fondo.fillStyle(relleno, 0.95);
+    fondo.fillRoundedRect(-W / 2, -H / 2, W, H, 8);
+    fondo.lineStyle(servidor.estadoVisual === 'ataque' ? 2 : 1.5, estilo.color, servidor.estadoVisual === 'linea' ? 0.55 : 0.9);
+    fondo.strokeRoundedRect(-W / 2, -H / 2, W, H, 8);
+    // Franja de acento con el color del estado (arriba en tarjetas
+    // angostas, a la izquierda en las anchas)
+    fondo.fillStyle(estilo.color, 1);
+    if (servidor.vertical) fondo.fillRoundedRect(-16, -H / 2 + 4, 32, 3, 1.5);
+    else fondo.fillRoundedRect(-W / 2 + Math.max(4, servidor.pad - 5), -H / 2 + 10, 3, H - 20, 1.5);
+
+    // Ícono dentro de un cuadro teñido con el color del estado
+    const icono = servidor.icono;
+    const lado = servidor.iconoLado;
+    icono.clear();
+    icono.fillStyle(estilo.color, 0.1);
+    icono.fillRoundedRect(-lado / 2, -lado / 2, lado, lado, 6);
+    icono.lineStyle(1, estilo.color, 0.35);
+    icono.strokeRoundedRect(-lado / 2, -lado / 2, lado, lado, 6);
+    dibujarIconoServidor(icono, servidor.id, estilo.color, lado * 0.28);
+    icono.setAlpha(servidor.estadoVisual === 'caido' ? 0.75 : 1);
+
+    servidor.nombreTexto.setColor(servidor.estadoVisual === 'caido' ? PALETA.textoSecundario : PALETA.texto);
+
+    // Estado: punto de color + texto, alineado según el tipo de tarjeta
+    servidor.estadoTexto.setText(estilo.etiqueta);
+    servidor.estadoTexto.setColor(estilo.colorTexto);
+    servidor.punto.setFillStyle(estilo.color, 1);
+    const fila = servidor.filaEstado;
+    const anchoTexto = servidor.estadoTexto.width;
+    let inicio = fila.x;
+    if (servidor.alineacionEstado === 'derecha') inicio = fila.x - anchoTexto - 13;
+    else if (servidor.alineacionEstado === 'centro') inicio = -(anchoTexto + 13) / 2;
+    servidor.punto.setPosition(inicio + 4, fila.y);
+    servidor.estadoTexto.setPosition(inicio + 13, fila.y);
+
+    this.dibujarBarraIntegridad(servidor);
+  }
+
+  // Barra de integridad (solo visual: llena si está en línea, se vacía
+  // durante un ataque y vuelve a llenarse al reparar el servidor)
+  dibujarBarraIntegridad(servidor) {
+    if (servidor.destruido) return;
+    const estilo = ESTILO_ESTADO_SERVIDOR[servidor.estadoVisual];
+    const { x, y, ancho } = servidor.barraGeo;
+    const valor = Phaser.Math.Clamp(servidor.integridad, 0, 1);
+    const barra = servidor.barra;
+    barra.clear();
+    barra.fillStyle(PALETA.borde, 1);
+    barra.fillRoundedRect(x, y - 2.5, ancho, 5, 2.5);
+    if (valor > 0.01) {
+      barra.fillStyle(estilo.color, 1);
+      barra.fillRoundedRect(x, y - 2.5, Math.max(5, ancho * valor), 5, 2.5);
+    }
+    if (servidor.porcentajeTexto) {
+      servidor.porcentajeTexto.setText(`${Math.round(valor * 100)}%`);
+      servidor.porcentajeTexto.setColor(servidor.estadoVisual === 'linea' ? PALETA.textoSecundario : estilo.colorTexto);
+    }
+  }
+
+  // Dibuja el estado final del servidor según servidor.activo
+  dibujarEstadoServidor(servidor) {
+    servidor.estadoVisual = servidor.activo ? 'linea' : 'caido';
+    servidor.integridad = servidor.activo ? 1 : 0;
+    this.dibujarTarjetaServidor(servidor);
+    this.actualizarResumenRed();
+  }
+
+  /* ---- Animaciones breves de las tarjetas (ataque, caída, reparación) ---- */
+
+  // Detiene cualquier animación en curso de una tarjeta, para que dos
+  // animaciones nunca peleen por el mismo objeto (por ejemplo, una
+  // reparación que llega a mitad de un ataque) y deja la tarjeta en su
+  // posición y escala originales.
+  detenerAnimacionesServidor(servidor) {
+    (servidor.animaciones || []).forEach((tween) => tween.stop());
+    servidor.animaciones = [];
+    (servidor.pulsos || []).forEach((pulso) => pulso.destroy());
+    servidor.pulsos = [];
+    if (!servidor.destruido) {
+      servidor.contenedor.setPosition(servidor.x, this.servidorY);
+      servidor.contenedor.setScale(1);
+    }
+  }
+
+  // Contorno que se expande y se desvanece alrededor de la tarjeta
+  crearPulsoTarjeta(servidor, color) {
+    if (this.movimientoReducido) return;
+    const W = servidor.ancho;
+    const H = servidor.alto;
+    const pulso = this.add.graphics();
+    pulso.lineStyle(2, color, 1);
+    pulso.strokeRoundedRect(-W / 2, -H / 2, W, H, 8);
+    servidor.contenedor.add(pulso);
+    servidor.pulsos.push(pulso);
+    servidor.animaciones.push(this.tweens.add({
+      targets: pulso,
+      scaleX: 1 + 12 / W,
+      scaleY: 1 + 12 / H,
+      alpha: { from: 0.9, to: 0 },
+      duration: 420,
+      ease: 'Quad.Out',
+      onComplete: () => {
+        pulso.destroy();
+        servidor.pulsos = servidor.pulsos.filter((p) => p !== pulso);
+      },
+    }));
+  }
+
+  // Ataque: la barra de integridad se vacía y la tarjeta tiembla un poco
+  animarAtaqueServidor(servidor, duracion) {
+    this.detenerAnimacionesServidor(servidor);
+    if (this.movimientoReducido) {
+      servidor.integridad = 0;
+      this.dibujarBarraIntegridad(servidor);
+      return;
+    }
+    servidor.animaciones.push(this.tweens.add({
+      targets: servidor,
+      integridad: 0,
+      duration: duracion,
+      ease: 'Quad.In',
+      onUpdate: () => this.dibujarBarraIntegridad(servidor),
+    }));
+    // Sacudida horizontal de ±3px que se amortigua
+    servidor.animaciones.push(this.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: 380,
+      onUpdate: (tween) => {
+        if (servidor.destruido) return;
+        const t = tween.getValue();
+        servidor.contenedor.x = servidor.x + Math.sin(t * Math.PI * 6) * 3 * (1 - t);
+      },
+      onComplete: () => {
+        if (!servidor.destruido) servidor.contenedor.x = servidor.x;
+      },
+    }));
+  }
+
+  // Fuera de línea: un contorno rojo se expande y se apaga
+  animarCaidaServidor(servidor) {
+    this.crearPulsoTarjeta(servidor, PALETA.peligro);
+  }
+
+  // Reparación: la barra vuelve a llenarse, contorno verde y un leve "pop"
+  animarReparacionServidor(servidor) {
+    this.detenerAnimacionesServidor(servidor);
+    if (this.movimientoReducido) return;
+    servidor.integridad = 0;
+    this.dibujarBarraIntegridad(servidor);
+    servidor.animaciones.push(this.tweens.add({
+      targets: servidor,
+      integridad: 1,
+      duration: 650,
+      ease: 'Cubic.Out',
+      onUpdate: () => this.dibujarBarraIntegridad(servidor),
+    }));
+    servidor.animaciones.push(this.tweens.add({
+      targets: servidor.contenedor,
+      scale: 1.03,
+      duration: 140,
+      yoyo: true,
+      ease: 'Quad.Out',
+    }));
+    this.crearPulsoTarjeta(servidor, PALETA.verde);
   }
 
   // Parpadeo naranja ("bajo ataque") antes de asentarse en su estado final.
@@ -1452,17 +1929,23 @@ class EscenaJuego extends Phaser.Scene {
   parpadearServidorAtaque(servidor, callback) {
     servidor.parpadeando = true;
     const ciclos = this.movimientoReducido ? 1 : 3;
+    const intervalo = this.movimientoReducido ? 30 : 110;
+    this.animarAtaqueServidor(servidor, (ciclos * 2 - 1) * intervalo);
     let paso = 0;
     const alternar = () => {
       if (servidor.destruido) return;
-      const encendido = paso % 2 === 0;
-      servidor.rect.setStrokeStyle(3, PALETA.naranja, 1);
-      servidor.rect.setFillStyle(encendido ? 0x3a2408 : PALETA.superficie, 0.95);
-      servidor.estadoTexto.setText('BAJO ATAQUE');
-      servidor.estadoTexto.setColor(PALETA.naranjaTexto);
+      // Si una reparación recuperó este servidor a mitad del parpadeo, la
+      // reparación ya dibujó su estado final: no se sobrescribe.
+      if (servidor.activo) {
+        servidor.parpadeando = false;
+        return;
+      }
+      servidor.estadoVisual = 'ataque';
+      servidor.destelloAtaque = paso % 2 === 0;
+      this.dibujarTarjetaServidor(servidor);
       paso += 1;
       if (paso < ciclos * 2) {
-        this.time.delayedCall(this.movimientoReducido ? 30 : 110, alternar);
+        this.time.delayedCall(intervalo, alternar);
       } else {
         servidor.parpadeando = false;
         callback();
@@ -1480,7 +1963,11 @@ class EscenaJuego extends Phaser.Scene {
     const objetivo = Phaser.Utils.Array.GetRandom(activos);
     objetivo.activo = false;
     estado.vidas = this.servidores.filter((s) => s.activo).length;
-    this.parpadearServidorAtaque(objetivo, () => this.dibujarEstadoServidor(objetivo));
+    this.actualizarResumenRed();
+    this.parpadearServidorAtaque(objetivo, () => {
+      this.dibujarEstadoServidor(objetivo);
+      this.animarCaidaServidor(objetivo);
+    });
   }
 
   // Elige a qué servidor "apunta" una amenaza real recién generada:
@@ -2011,7 +2498,7 @@ class EscenaJuego extends Phaser.Scene {
       servidorCaido.activo = true;
       estado.vidas = this.servidores.filter((s) => s.activo).length;
       this.dibujarEstadoServidor(servidorCaido);
-      this.crearOndaExpansiva(servidorCaido.rect.x, this.servidorY, PALETA.verde);
+      this.animarReparacionServidor(servidorCaido);
       reproducirSonido('combo');
       this.mostrarTextoFlotante(elemento.contenedor.x, elemento.contenedor.y, 'SERVIDOR RESTAURADO', PALETA.verde);
     }

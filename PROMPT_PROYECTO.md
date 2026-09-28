@@ -56,6 +56,7 @@ genérica de IA:
   estados verde (en línea), rojo (fuera de línea) y parpadeo naranja
   (bajo ataque). Internamente se mantiene una variable de vidas
   sincronizada para no romper la lógica de derrota.
+- **Panel de estado de red** (zona inferior, ver sección 3C).
 - Fondo con cuadrícula tenue y una pequeña red decorativa de nodos
   animados, sin llenar la pantalla.
 - El botón "ESCÁNER" vive **fuera del canvas**, en una barra propia
@@ -63,6 +64,36 @@ genérica de IA:
   no cubrir el servidor de respaldo ni ningún elemento del juego. Conserva
   diseño, animaciones, contador de cargas y funcionamiento con clic, toque
   y tecla **S**.
+
+## 3C. Panel de estado de red (zona inferior del tablero)
+
+- Encabezado "ESTADO DE RED" con línea divisoria y resumen "3/3 EN LÍNEA"
+  (verde con todos, naranja con 2, rojo con 1). Solo se dibuja si cabe sin
+  invadir el área de amenazas (en móvil horizontal se omite).
+- Cada servidor es una tarjeta con ícono propio dibujado con Graphics
+  (globo = Web, cilindro = Base de Datos, caja de archivo = Respaldo, todos
+  con trazo de 2px), nombre, estado (punto + texto: EN LÍNEA / BAJO ATAQUE
+  / FUERA DE LÍNEA) y una barra de **integridad** puramente visual (100% en
+  línea, 0% fuera de línea). Tres disposiciones automáticas: ancha de tres
+  filas (PC), ancha compacta de dos filas (móvil horizontal) y angosta con
+  ícono arriba (móvil vertical); si el nombre no cabe se usa uno corto.
+- Animaciones breves (desactivadas o casi instantáneas con
+  `prefers-reduced-motion`): **ataque** = parpadeo naranja, barra que se
+  vacía y sacudida amortiguada de ±3px; **fuera de línea** = contorno rojo
+  que se expande y se apaga; **reparación** = barra que se rellena, contorno
+  verde y un leve "pop" de escala (1.03). `detenerAnimacionesServidor()`
+  evita que dos animaciones peleen (p. ej. reparar a mitad de un ataque) y
+  se llama antes de reconstruir el tablero.
+- La **leyenda de colores** salió del HUD superior y ahora es una franja
+  compacta bajo las tarjetas (puntos de color + "Eliminar / Ignorar /
+  Reparación / Duplicador"; el duplicador aparece desde el nivel 2). Se
+  reparte en filas centradas si no cabe y reserva el alto de su versión
+  más larga para no cambiar de tamaño entre niveles.
+- `calcularDisposicionInferior()` coloca todo de abajo hacia arriba sin
+  pasar nunca del borde inferior del área de juego + 56px (anillo de una
+  amenaza). `calcularAreaJuego()` no cambió: mismas reglas, dificultad y
+  área jugable. Las líneas de objetivo de las amenazas apuntan al borde
+  superior de la tarjeta (`servidorLineaY`).
 
 ## 3B. Vista móvil responsive (≤768px, cualquier orientación)
 
@@ -416,7 +447,7 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=12` y `game.js?v=15`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=12` y `game.js?v=16`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la
