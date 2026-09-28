@@ -248,7 +248,11 @@ visual que el resto de tarjetas de resultado— con una pregunta de
 opción múltiple sobre ciberseguridad, distinta por nivel y relacionada
 con sus mecánicas: **nivel 1 → malware**, **nivel 2 → protección de
 cuentas**, **nivel 3 → copias de seguridad**. Cada pregunta tiene 4
-opciones y una sola respuesta correcta (`PREGUNTAS_NIVEL` en `game.js`).
+opciones y una sola respuesta correcta. `PREGUNTAS_NIVEL` en `game.js` es un
+banco de **5 preguntas por nivel**; al completar el nivel
+`elegirPreguntaAleatoria()` elige una al azar y mezcla el orden de las 4
+opciones (Fisher-Yates), devolviendo el nuevo índice de la correcta. Tiempo y
+puntos no cambian.
 
 - Al aparecer, arranca un contador visible de **10 segundos** (número +
   barra que se vacía) con `mostrarPreguntaNivel()`. La generación de
@@ -447,7 +451,7 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=14` y `game.js?v=19`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=14` y `game.js?v=20`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la

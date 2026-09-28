@@ -42,7 +42,7 @@ const NIVELES = [
 const VIDAS_INICIALES = 3;
 
 /* ------------------------------------------------------------------
-   1B. PREGUNTAS DE SEGURIDAD (una por nivel)
+   1B. PREGUNTAS DE SEGURIDAD (banco de 5 por nivel, una al azar)
    Aparecen tras derrotar al jefe, antes de la tarjeta "Nivel superado"
    o "Victoria". No quitan vidas ni provocan derrota: solo dan un bono
    de puntos si se acierta dentro del tiempo. Ver mostrarPreguntaNivel().
@@ -50,44 +50,208 @@ const VIDAS_INICIALES = 3;
 const SEGUNDOS_PREGUNTA = 10;
 const PUNTOS_POR_SEGUNDO_PREGUNTA = 5;
 
+// Banco de preguntas: 5 por nivel (índice 0 = nivel 1). Al completar un nivel
+// se elige una al azar y sus 4 opciones se mezclan (ver mostrarPreguntaNivel).
+// "correcta" es el índice de la única respuesta válida dentro de "opciones";
+// el orden escrito aquí no es el que ve el jugador.
 const PREGUNTAS_NIVEL = [
-  {
-    // Nivel 1: malware
-    pregunta: '¿Cuál de las siguientes es una señal común de que un dispositivo está infectado con malware?',
-    opciones: [
-      'El dispositivo funciona más lento de lo normal y aparecen ventanas emergentes inesperadas',
-      'El antivirus se actualiza automáticamente',
-      'El sistema operativo se actualiza sin errores',
-      'El navegador recuerda tus marcadores favoritos',
-    ],
-    correcta: 0,
-    explicacion: 'El malware suele consumir recursos del equipo y generar anuncios o ventanas emergentes no solicitadas; por eso el dispositivo se vuelve más lento de lo normal.',
-  },
-  {
-    // Nivel 2: protección de cuentas
-    pregunta: '¿Cuál es la forma más segura de proteger una cuenta, además de usar una contraseña fuerte?',
-    opciones: [
-      'Usar la misma contraseña en todos los sitios para no olvidarla',
-      'Activar la verificación en dos pasos (2FA)',
-      'Compartir la contraseña solo con amigos de confianza',
-      'Guardar la contraseña en un papel pegado a la pantalla',
-    ],
-    correcta: 1,
-    explicacion: 'La verificación en dos pasos agrega una segunda prueba de identidad (como un código temporal), así que aunque alguien robe tu contraseña no podrá entrar solo con eso.',
-  },
-  {
-    // Nivel 3: copias de seguridad
-    pregunta: '¿Cuál es la mejor práctica al hacer copias de seguridad (backups) de información importante?',
-    opciones: [
-      'Guardar una sola copia en el mismo disco donde está el original',
-      'Hacer una copia una sola vez y nunca volver a revisarla',
-      'Mantener varias copias en lugares distintos, incluida una fuera del equipo principal',
-      'Confiar únicamente en la memoria del dispositivo',
-    ],
-    correcta: 2,
-    explicacion: 'Si el original y la copia están en el mismo lugar, un solo incidente (como un ransomware) puede destruir ambos; por eso conviene tener varias copias en medios distintos, con al menos una fuera del equipo principal.',
-  },
+  // ---------- Nivel 1: malware ----------
+  [
+    {
+      pregunta: '¿Cuál de las siguientes es una señal común de que un dispositivo está infectado con malware?',
+      opciones: [
+        'El dispositivo funciona más lento de lo normal y aparecen ventanas emergentes inesperadas',
+        'El antivirus se actualiza automáticamente',
+        'El sistema operativo se actualiza sin errores',
+        'El navegador recuerda tus marcadores favoritos',
+      ],
+      correcta: 0,
+      explicacion: 'El malware suele consumir recursos del equipo y generar anuncios o ventanas emergentes no solicitadas; por eso el dispositivo se vuelve más lento de lo normal.',
+    },
+    {
+      pregunta: '¿Qué tipo de malware cifra tus archivos y exige un pago para devolverte el acceso?',
+      opciones: [
+        'Spyware',
+        'Adware',
+        'Ransomware',
+        'Un cortafuegos (firewall)',
+      ],
+      correcta: 2,
+      explicacion: 'El ransomware secuestra la información cifrándola y pide un rescate a cambio de la clave; por eso es importante tener copias de seguridad.',
+    },
+    {
+      pregunta: 'Recibes un correo con un archivo adjunto de un remitente que no conoces. ¿Qué es lo más seguro?',
+      opciones: [
+        'Abrirlo para ver qué contiene',
+        'Reenviarlo a tus contactos para que lo revisen',
+        'Desactivar el antivirus y abrirlo con calma',
+        'No abrirlo y eliminarlo o reportarlo como sospechoso',
+      ],
+      correcta: 3,
+      explicacion: 'Los adjuntos de remitentes desconocidos son una vía muy común para instalar malware. Lo más prudente es no abrirlos y reportarlos o eliminarlos.',
+    },
+    {
+      pregunta: '¿Qué caracteriza a un troyano?',
+      opciones: [
+        'Se copia solo por la red sin necesitar ninguna acción del usuario',
+        'Se hace pasar por un programa legítimo para que el usuario lo instale',
+        'Es una pieza física que se conecta a la computadora',
+        'Solo aparece cuando el equipo está apagado',
+      ],
+      correcta: 1,
+      explicacion: 'Como el caballo de Troya, este malware se disfraza de algo útil o inofensivo para que el propio usuario lo ejecute y le abra la puerta al atacante.',
+    },
+    {
+      pregunta: '¿Dónde es más seguro descargar aplicaciones y programas?',
+      opciones: [
+        'En enlaces enviados por mensaje por desconocidos',
+        'En sitios que regalan versiones "gratis" de programas de pago',
+        'En la tienda oficial o en el sitio web oficial del fabricante',
+        'En ventanas emergentes que dicen "descarga ahora"',
+      ],
+      correcta: 2,
+      explicacion: 'Las tiendas y sitios oficiales revisan el software que publican. Las copias "gratis" y los enlaces desconocidos suelen esconder malware.',
+    },
+  ],
+
+  // ---------- Nivel 2: protección de cuentas ----------
+  [
+    {
+      pregunta: '¿Cuál es la forma más segura de proteger una cuenta, además de usar una contraseña fuerte?',
+      opciones: [
+        'Usar la misma contraseña en todos los sitios para no olvidarla',
+        'Activar la verificación en dos pasos (2FA)',
+        'Compartir la contraseña solo con amigos de confianza',
+        'Guardar la contraseña en un papel pegado a la pantalla',
+      ],
+      correcta: 1,
+      explicacion: 'La verificación en dos pasos agrega una segunda prueba de identidad (como un código temporal), así que aunque alguien robe tu contraseña no podrá entrar solo con eso.',
+    },
+    {
+      pregunta: '¿Cuál de estas contraseñas es la más segura?',
+      opciones: [
+        '123456',
+        'password',
+        'Mi nombre y mi año de nacimiento',
+        'Una frase larga con letras, números y símbolos, como "Tren-Luna-Azul-98!"',
+      ],
+      correcta: 3,
+      explicacion: 'La longitud y la variedad hacen que una contraseña sea muy difícil de adivinar. Las claves comunes o con datos personales se descubren en segundos.',
+    },
+    {
+      pregunta: 'Te llega un correo "del banco" que dice que tu cuenta se bloqueará y te pide entrar desde un enlace. ¿Qué haces?',
+      opciones: [
+        'Entras desde el enlace lo antes posible para evitar el bloqueo',
+        'No haces clic y accedes escribiendo tú mismo la dirección oficial, o llamas al banco',
+        'Respondes el correo con tu contraseña para verificar tu identidad',
+        'Reenvías el correo a tus amigos para avisarles',
+      ],
+      correcta: 1,
+      explicacion: 'Es un intento de phishing: usa la urgencia para que entregues tus datos en un sitio falso. Siempre entra por la dirección oficial que tú escribas.',
+    },
+    {
+      pregunta: '¿Para qué sirve un gestor de contraseñas?',
+      opciones: [
+        'Para usar una sola contraseña en todas las cuentas',
+        'Para enviar tus contraseñas por correo a tus contactos',
+        'Para que cualquiera pueda entrar a tus cuentas si lo necesita',
+        'Para guardar de forma cifrada contraseñas distintas y fuertes para cada sitio',
+      ],
+      correcta: 3,
+      explicacion: 'Un gestor recuerda por ti contraseñas largas y únicas, así que si una se filtra, las demás cuentas siguen protegidas.',
+    },
+    {
+      pregunta: 'Sospechas que alguien entró a tu cuenta. ¿Qué debes hacer primero?',
+      opciones: [
+        'Esperar unos días a ver si vuelve a pasar',
+        'Cambiar la contraseña de inmediato, activar 2FA y cerrar las sesiones abiertas',
+        'Borrar la aplicación y olvidarte del asunto',
+        'Publicar tu contraseña anterior para avisar a otros',
+      ],
+      correcta: 1,
+      explicacion: 'Cambiar la contraseña, activar la verificación en dos pasos y cerrar sesiones activas le corta el acceso al atacante cuanto antes.',
+    },
+  ],
+
+  // ---------- Nivel 3: copias de seguridad ----------
+  [
+    {
+      pregunta: '¿Cuál es la mejor práctica al hacer copias de seguridad (backups) de información importante?',
+      opciones: [
+        'Guardar una sola copia en el mismo disco donde está el original',
+        'Hacer una copia una sola vez y nunca volver a revisarla',
+        'Mantener varias copias en lugares distintos, incluida una fuera del equipo principal',
+        'Confiar únicamente en la memoria del dispositivo',
+      ],
+      correcta: 2,
+      explicacion: 'Si el original y la copia están en el mismo lugar, un solo incidente (como un ransomware) puede destruir ambos; por eso conviene tener varias copias en medios distintos, con al menos una fuera del equipo principal.',
+    },
+    {
+      pregunta: '¿En qué consiste la regla de respaldo 3-2-1?',
+      opciones: [
+        '3 copias de los datos, en 2 tipos de medios distintos, con 1 copia fuera del lugar principal',
+        '3 contraseñas, 2 antivirus y 1 cortafuegos',
+        '3 copias en el mismo disco, 2 veces al año, durante 1 día',
+        '3 dispositivos, 2 usuarios y 1 clave compartida',
+      ],
+      correcta: 0,
+      explicacion: 'Tener 3 copias en 2 tipos de medios y 1 fuera del sitio reduce mucho el riesgo de perder todo por una falla, un robo o un ataque.',
+    },
+    {
+      pregunta: '¿Por qué conviene probar de vez en cuando que una copia de seguridad se puede restaurar?',
+      opciones: [
+        'Porque así se borra el original y ocupa menos espacio',
+        'Porque restaurar una copia la hace más rápida',
+        'Para comprobar que la copia funciona antes de necesitarla de verdad',
+        'No es necesario: toda copia funciona siempre',
+      ],
+      correcta: 2,
+      explicacion: 'Una copia dañada o incompleta solo se descubre al intentar restaurarla. Probarla a tiempo evita sorpresas cuando ocurre un incidente.',
+    },
+    {
+      pregunta: 'Un ransomware cifra los archivos de tu equipo, pero tienes una copia reciente guardada aparte y desconectada. ¿Qué te permite hacer?',
+      opciones: [
+        'Pagar el rescate para recuperar los archivos',
+        'Restaurar tus datos desde la copia sin depender del atacante',
+        'Nada: los archivos ya no se pueden recuperar',
+        'Volver a infectarte para deshacer el cifrado',
+      ],
+      correcta: 1,
+      explicacion: 'Una copia reciente y aislada permite recuperar la información sin pagar el rescate; por eso los respaldos son la mejor defensa contra el ransomware.',
+    },
+    {
+      pregunta: 'Si la información cambia todos los días, ¿cada cuánto deberían hacerse las copias?',
+      opciones: [
+        'Una vez al año',
+        'Solo cuando el equipo falle',
+        'Con regularidad y de forma automática, por ejemplo a diario',
+        'Nunca: basta con la primera copia',
+      ],
+      correcta: 2,
+      explicacion: 'Cuanto más seguido cambia la información, más frecuentes deben ser las copias; automatizarlas evita olvidos y limita cuánto trabajo se pierde.',
+    },
+  ],
 ];
+
+// Devuelve una pregunta al azar del nivel indicado, con sus 4 opciones
+// mezcladas (Fisher-Yates). La respuesta válida se identifica por el valor
+// de cada opción (no por su posición original), así que sigue siendo
+// correcta aunque el orden cambie: devuelve el nuevo índice de la correcta.
+function elegirPreguntaAleatoria(indiceNivel) {
+  const banco = PREGUNTAS_NIVEL[indiceNivel];
+  const original = banco[Math.floor(Math.random() * banco.length)];
+  const opciones = original.opciones.map((texto, indice) => ({ texto, esCorrecta: indice === original.correcta }));
+  for (let i = opciones.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [opciones[i], opciones[j]] = [opciones[j], opciones[i]];
+  }
+  return {
+    pregunta: original.pregunta,
+    opciones: opciones.map((o) => o.texto),
+    correcta: opciones.findIndex((o) => o.esCorrecta),
+    explicacion: original.explicacion,
+  };
+}
 
 // Probabilidad de que aparezca el elemento de reparación cuando hay al
 // menos un servidor fuera de línea (máximo una vez por nivel)
@@ -531,7 +695,7 @@ function animarConteoPuntos(desde, hasta, duracion = 650) {
 const ALPHA_TABLERO_PREGUNTA = 0.85;
 
 function mostrarPreguntaNivel(indiceNivel, escena, callback) {
-  const datos = PREGUNTAS_NIVEL[indiceNivel];
+  const datos = elegirPreguntaAleatoria(indiceNivel);
 
   const elementoTexto = document.getElementById('texto-pregunta');
   const elementoOpciones = document.getElementById('opciones-pregunta');
