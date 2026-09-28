@@ -526,6 +526,10 @@ function animarConteoPuntos(desde, hasta, duracion = 650) {
    después, por si hay que mostrar la derrota en vez de continuar (ver
    finalizarPorNivelCompletado).
    ------------------------------------------------------------------ */
+// Opacidad con la que queda oscurecido el tablero mientras se muestra la
+// pregunta de seguridad (la tarjeta HTML va encima)
+const ALPHA_TABLERO_PREGUNTA = 0.85;
+
 function mostrarPreguntaNivel(indiceNivel, escena, callback) {
   const datos = PREGUNTAS_NIVEL[indiceNivel];
 
@@ -546,30 +550,61 @@ function mostrarPreguntaNivel(indiceNivel, escena, callback) {
   let segundosRestantes = SEGUNDOS_PREGUNTA;
   elementoContador.textContent = segundosRestantes;
 
-  // Barra de tiempo: se reinicia sin transición y, en el siguiente frame,
-  // se le agrega la clase que anima su ancho a 0 en 10s (ver style.css).
+  // La barra queda llena y detenida hasta que todas las opciones estén
+  // listas (ver iniciarRespuesta): los 10 segundos no corren durante la
+  // animación de entrada.
   elementoBarra.classList.remove('en-marcha');
-  elementoBarra.style.width = '100%';
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => elementoBarra.classList.add('en-marcha'));
-  });
+  elementoBarra.style.width = ''; // sin ancho en línea: manda la hoja de estilos (100%, o 0% con .en-marcha)
+
+  // Las opciones entran una tras otra, con 50 ms de separación, cuando la
+  // tarjeta ya empezó a aparecer (350 ms). Con movimiento reducido no hay
+  // retardos: todo aparece a la vez.
+  const reducido = prefiereMovimientoReducido();
+  const DURACION_TARJETA_MS = reducido ? 0 : 350;
+  const RETARDO_ENTRE_OPCIONES_MS = reducido ? 0 : 50;
+  const DURACION_OPCION_MS = reducido ? 0 : 240;
+  const inicioOpciones = reducido ? 0 : Math.round(DURACION_TARJETA_MS * 0.5);
+
+  let respondida = false;
+  let intervalo = null;
+  let temporizadorListo = null;
 
   const botones = datos.opciones.map((textoOpcion, indice) => {
     const boton = document.createElement('button');
     boton.type = 'button';
     boton.className = 'opcion-pregunta';
     boton.textContent = textoOpcion;
-    boton.addEventListener('click', () => resolver(indice));
+    boton.style.animationDelay = `${inicioOpciones + indice * RETARDO_ENTRE_OPCIONES_MS}ms`;
+    boton.addEventListener('click', () => {
+      // Ignora cualquier toque anterior a que las opciones estén listas
+      // (por ejemplo, el clic sobre el último golpe al jefe)
+      if (boton.classList.contains('lista')) resolver(indice);
+    });
     elementoOpciones.appendChild(boton);
     return boton;
   });
 
-  let respondida = false;
-  const intervalo = setInterval(() => {
-    segundosRestantes -= 1;
-    elementoContador.textContent = Math.max(segundosRestantes, 0);
-    if (segundosRestantes <= 0) resolver(null);
-  }, 1000);
+  // Se ejecuta cuando ya se ven las cuatro opciones: las habilita para
+  // pulsarse y solo entonces arranca el contador y la barra de 10 s.
+  function iniciarRespuesta() {
+    if (respondida) return;
+    botones.forEach((boton) => boton.classList.add('lista'));
+    // Barra: transición de ancho a 0 en 10s (ver style.css), iniciada en
+    // el siguiente frame para que parta del 100%
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!respondida) elementoBarra.classList.add('en-marcha');
+      });
+    });
+    intervalo = setInterval(() => {
+      segundosRestantes -= 1;
+      elementoContador.textContent = Math.max(segundosRestantes, 0);
+      if (segundosRestantes <= 0) resolver(null);
+    }, 1000);
+  }
+
+  const esperaListo = inicioOpciones + (botones.length - 1) * RETARDO_ENTRE_OPCIONES_MS + DURACION_OPCION_MS;
+  temporizadorListo = setTimeout(iniciarRespuesta, esperaListo);
 
   // Resuelve la pregunta una sola vez (clic en una opción o tiempo agotado
   // con indiceElegido = null), sin importar cuántas veces se llame después.
@@ -577,6 +612,7 @@ function mostrarPreguntaNivel(indiceNivel, escena, callback) {
     if (respondida) return;
     respondida = true;
     clearInterval(intervalo);
+    clearTimeout(temporizadorListo);
     elementoBarra.classList.remove('en-marcha');
     elementoBarra.style.width = '0%';
 
@@ -605,10 +641,23 @@ function mostrarPreguntaNivel(indiceNivel, escena, callback) {
     elementoExplicacion.hidden = false;
 
     botonContinuar.hidden = false;
-    botonContinuar.onclick = () => callback(bono);
+    botonContinuar.onclick = () => {
+      // La capa de la pregunta se cierra antes de mostrar lo siguiente
+      document.getElementById('pantalla-pregunta').classList.remove('activa');
+      callback(bono);
+    };
   }
 
-  mostrarPantalla('pantalla-pregunta');
+  // La pregunta NO reemplaza al tablero: se muestra como capa encima de él
+  // (que sigue visible y oscurecido), sin cambiar el tamaño de la página.
+  // Se reinicia la animación de entrada de la tarjeta.
+  const pantallaPregunta = document.getElementById('pantalla-pregunta');
+  const panelPregunta = document.getElementById('panel-pregunta');
+  panelPregunta.style.animation = 'none';
+  pantallaPregunta.classList.add('activa');
+  pantallaPregunta.scrollTop = 0;
+  void panelPregunta.offsetWidth; // fuerza el reflujo para reiniciar la animación
+  panelPregunta.style.animation = '';
 }
 
 /* ------------------------------------------------------------------
@@ -3099,15 +3148,9 @@ class EscenaJuego extends Phaser.Scene {
 
     if (this.movimientoReducido) {
       // Con movimiento reducido, solo un breve cambio de opacidad
-      this.tweens.add({
-        targets: this.overlayOscurecer,
-        alpha: { from: 0, to: 1 },
-        duration: 1,
-        onComplete: () => {
-          callback();
-          this.overlayOscurecer.setAlpha(0);
-        },
-      });
+      this.mundo.bringToTop(this.overlayOscurecer);
+      this.overlayOscurecer.setAlpha(ALPHA_TABLERO_PREGUNTA);
+      callback();
       return;
     }
 
@@ -3127,18 +3170,36 @@ class EscenaJuego extends Phaser.Scene {
     this.crearOndaExpansiva(cx, cy, PALETA.verde);
     this.crearParticulasDatos(cx, cy);
 
-    // 5) Oscurecer el tablero antes de mostrar la tarjeta
-    this.time.delayedCall(350, () => {
-      this.mundo.bringToTop(this.overlayOscurecer);
-      this.tweens.add({
-        targets: this.overlayOscurecer,
-        alpha: { from: 0, to: 1 },
-        duration: 250,
-        onComplete: () => {
-          callback();
-          this.overlayOscurecer.setAlpha(0);
-        },
-      });
+    // 4) Mensaje "NIVEL COMPLETADO" visible ~700 ms (150 entrada, 400
+    //    fijo, 150 salida)
+    const mensaje = this.crearTexto(this.anchoLogico / 2, this.altoLogico / 2 - 30, 'NIVEL COMPLETADO', {
+      tamano: this.esVistaMovilActual ? 26 : 34, mono: true, negrita: true, color: PALETA.verdeTexto,
+      origenX: 0.5, origenY: 0.5, alinear: 'center', anchoMaximo: this.anchoLogico - 48,
+    });
+    mensaje.setAlpha(0);
+    this.mundo.bringToTop(mensaje);
+    this.tweens.add({
+      targets: mensaje,
+      alpha: { from: 0, to: 1 },
+      duration: 150,
+      hold: 400,
+      yoyo: true,
+      ease: 'Sine.Out',
+      onComplete: () => {
+        mensaje.destroy();
+
+        // 5) Oscurecer el tablero con suavidad (300 ms) y dejarlo así
+        //    mientras se muestra la pregunta encima; se restablece al
+        //    pulsar "Continuar" (ver finalizarPorNivelCompletado)
+        this.mundo.bringToTop(this.overlayOscurecer);
+        this.tweens.add({
+          targets: this.overlayOscurecer,
+          alpha: { from: 0, to: ALPHA_TABLERO_PREGUNTA },
+          duration: 300,
+          ease: 'Sine.InOut',
+          onComplete: () => callback(),
+        });
+      },
     });
   }
 
@@ -3156,6 +3217,7 @@ class EscenaJuego extends Phaser.Scene {
       // vidas después de responder por si eso provoca una derrota.
       mostrarPreguntaNivel(estado.indiceNivel, this, (bonoPregunta) => {
         estado.puntuacion += bonoPregunta;
+        this.overlayOscurecer.setAlpha(0);
 
         if (estado.vidas <= 0) {
           this.finalizarPorDerrota();
