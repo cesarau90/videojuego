@@ -2285,7 +2285,7 @@ class EscenaJuego extends Phaser.Scene {
     const anguloMovimiento = Math.random() * Math.PI * 2;
 
     const elemento = {
-      contenedor, circuloFondo, anilloTiempo, tipo, temporizador: null,
+      contenedor, circuloFondo, anilloTiempo, icono, tipo, temporizador: null, tweenSacudida: null,
       escudoGrafico,
       golpesRestantes: tipo === 'resistente' ? 2 : 1,
       movil,
@@ -2357,11 +2357,13 @@ class EscenaJuego extends Phaser.Scene {
     elemento.procesado = true;
     if (elemento.temporizador) elemento.temporizador.remove();
     if (elemento.lineaObjetivo) elemento.lineaObjetivo.destroy();
+    this.detenerSacudidaResistente(elemento);
 
     const indice = estado.virusActivos.indexOf(elemento);
     if (indice !== -1) estado.virusActivos.splice(indice, 1);
 
-    const duracionSalida = this.movimientoReducido ? 1 : 220;
+    const rotoEnFragmentos = elemento.tipo === 'resistente' && fueEliminadoPorClic;
+    const duracionSalida = this.movimientoReducido ? 1 : rotoEnFragmentos ? 160 : 220;
     const color = colorPorTipo(elemento.tipo);
 
     if (esAmenazaReal(elemento.tipo) && fueEliminadoPorClic) {
@@ -2376,6 +2378,9 @@ class EscenaJuego extends Phaser.Scene {
       if (elemento.tipo === 'critica') {
         reproducirSonido('eliminar');
         this.destelloNaranja(elemento.contenedor.x, elemento.contenedor.y);
+      } else if (rotoEnFragmentos) {
+        reproducirSonido('eliminar');
+        this.crearFragmentos(elemento.contenedor.x, elemento.contenedor.y, PALETA.morado);
       } else {
         reproducirSonido('eliminar');
         this.crearParticulas(elemento.contenedor.x, elemento.contenedor.y, color);
@@ -2384,7 +2389,7 @@ class EscenaJuego extends Phaser.Scene {
 
       this.tweens.add({
         targets: elemento.contenedor,
-        scale: 1.5,
+        scale: rotoEnFragmentos ? 1.12 : 1.5,
         alpha: 0,
         duration: duracionSalida,
         onComplete: () => elemento.contenedor.destroy(),
@@ -2541,33 +2546,79 @@ class EscenaJuego extends Phaser.Scene {
     reproducirSonido('eliminar');
     this.crearParticulas(x, y, PALETA.magenta);
 
-    const duracionSalida = this.movimientoReducido ? 1 : 200;
-    this.tweens.add({
-      targets: elemento.contenedor,
-      scale: 1.3,
-      alpha: 0,
-      duration: duracionSalida,
-      onComplete: () => elemento.contenedor.destroy(),
-    });
+    // Se comprime y se expande rápido antes de desaparecer (~260 ms)
+    if (this.movimientoReducido) {
+      elemento.contenedor.setAlpha(0);
+      this.time.delayedCall(1, () => elemento.contenedor.destroy());
+    } else {
+      this.tweens.chain({
+        targets: elemento.contenedor,
+        tweens: [
+          { scaleX: 0.7, scaleY: 1.18, duration: 100, ease: 'Quad.Out' },
+          { scaleX: 1.4, scaleY: 1.4, alpha: 0, duration: 160, ease: 'Back.Out' },
+        ],
+        onComplete: () => elemento.contenedor.destroy(),
+      });
+    }
 
     const configuracionNivel = NIVELES[estado.indiceNivel];
     const grupo = { perdidoServidor: false };
     const duracionPequenas = Math.round(configuracionNivel.tiempoVidaVirus * 0.9);
     const area = this.areaJuego;
-    const offsets = [[-46, -18], [46, 18]];
-    offsets.forEach(([dx, dy]) => {
-      const nx = Phaser.Math.Clamp(x + dx, area.xMin, area.xMax);
-      const ny = Phaser.Math.Clamp(y + dy, area.yMin, area.yMax);
-      this.crearElementoVisual('duplicado_pequeno', nx, ny, {
+
+    // Las dos amenazas pequeñas salen en direcciones opuestas (un ángulo
+    // aleatorio, más lateral que vertical) desde el punto de la duplicadora,
+    // con una breve estela rosa. Nacen ya con su temporizador en marcha, así
+    // que la duración y las reglas no cambian.
+    const anguloBase = Phaser.Math.FloatBetween(-0.55, 0.55);
+    const distancia = 78;
+    [0, Math.PI].forEach((giro) => {
+      const angulo = anguloBase + giro;
+      const nx = Phaser.Math.Clamp(x + Math.cos(angulo) * distancia, area.xMin, area.xMax);
+      const ny = Phaser.Math.Clamp(y + Math.sin(angulo) * distancia, area.yMin, area.yMax);
+      const reducido = this.movimientoReducido;
+      const pequeno = this.crearElementoVisual('duplicado_pequeno', reducido ? nx : x, reducido ? ny : y, {
         grupo,
         escalaVisual: 0.68,
         movilForzado: false,
         duracionVida: duracionPequenas,
         servidorObjetivo: this.elegirServidorObjetivo(),
       });
+      if (!reducido) this.lanzarPequenaDuplicada(pequeno, nx, ny);
     });
 
     this.actualizarHUD();
+  }
+
+  // Desplaza una amenaza pequeña desde el centro hasta su destino en 260 ms
+  // dejando una estela corta de partículas rosas.
+  lanzarPequenaDuplicada(pequeno, destinoX, destinoY) {
+    const contenedor = pequeno.contenedor;
+    let ultimo = 0;
+    this.tweens.add({
+      targets: contenedor,
+      x: destinoX,
+      y: destinoY,
+      duration: 260,
+      ease: 'Cubic.Out',
+      onUpdate: (tween) => {
+        if (!contenedor.active) return;
+        const progreso = tween.progress;
+        if (progreso - ultimo < 0.17) return;
+        ultimo = progreso;
+        const rastro = this.add.circle(contenedor.x, contenedor.y, 5, PALETA.magenta, 0.8);
+        this.mundo.add(rastro);
+        this.mundo.moveBelow(rastro, contenedor);
+        this.tweens.add({
+          targets: rastro,
+          alpha: 0,
+          scale: 0.3,
+          duration: 240,
+          ease: 'Quad.Out',
+          onComplete: () => rastro.destroy(),
+        });
+      },
+    });
   }
 
   /* ---------------- SOBRECARGA DE RED ---------------- */
@@ -2651,7 +2702,96 @@ class EscenaJuego extends Phaser.Scene {
       });
     }
     this.crearParticulas(elemento.contenedor.x, elemento.contenedor.y, PALETA.morado);
+    this.sacudirResistente(elemento);
     this.mostrarTextoFlotante(elemento.contenedor.x, elemento.contenedor.y, 'ESCUDO ROTO', PALETA.morado);
+  }
+
+  // Temblor visual del malware resistente tras el primer golpe: solo se
+  // desplazan sus partes internas (círculo, ícono y anillo), nunca el
+  // contenedor, para no pelear con el movimiento de los objetivos móviles.
+  // Además dibuja un destello y una grieta sobre el escudo, que se
+  // desvanecen junto con él (~280 ms en total).
+  sacudirResistente(elemento) {
+    if (this.movimientoReducido) return;
+    const partes = [elemento.circuloFondo, elemento.icono, elemento.anilloTiempo].filter(Boolean);
+    const contenedor = elemento.contenedor;
+
+    // Destello de impacto + grieta en zigzag sobre el borde del escudo
+    const impacto = this.add.graphics();
+    impacto.lineStyle(3, 0xffffff, 0.95);
+    impacto.beginPath();
+    impacto.moveTo(30, -54);
+    impacto.lineTo(20, -38);
+    impacto.lineTo(31, -26);
+    impacto.lineTo(18, -10);
+    impacto.strokePath();
+    impacto.lineStyle(2, PALETA.morado, 1);
+    impacto.strokeCircle(0, 0, 60);
+    contenedor.add(impacto);
+    this.tweens.add({
+      targets: impacto,
+      alpha: 0,
+      scale: 1.15,
+      duration: 280,
+      ease: 'Quad.Out',
+      onComplete: () => impacto.destroy(),
+    });
+
+    // Vaivén lateral que se amortigua (3 idas y vueltas, ±6px)
+    this.detenerSacudidaResistente(elemento);
+    elemento.tweenSacudida = this.tweens.addCounter({
+      from: 0,
+      to: 1,
+      duration: 280,
+      onUpdate: (tween) => {
+        if (!contenedor.active) return;
+        const t = tween.getValue();
+        const desplazamiento = Math.sin(t * Math.PI * 6) * 6 * (1 - t);
+        partes.forEach((parte) => { parte.x = desplazamiento; });
+      },
+      onComplete: () => {
+        if (contenedor.active) partes.forEach((parte) => { parte.x = 0; });
+        elemento.tweenSacudida = null;
+      },
+    });
+  }
+
+  // Detiene el temblor en curso (por ejemplo, si el segundo clic llega a
+  // mitad de la animación) y deja las partes en su sitio.
+  detenerSacudidaResistente(elemento) {
+    if (!elemento.tweenSacudida) return;
+    elemento.tweenSacudida.stop();
+    elemento.tweenSacudida = null;
+    [elemento.circuloFondo, elemento.icono, elemento.anilloTiempo].forEach((parte) => {
+      if (parte && parte.active) parte.x = 0;
+    });
+  }
+
+  // Rotura en fragmentos pequeños (rectángulos y puntos que salen girando
+  // en todas direcciones), usada al eliminar el malware resistente.
+  crearFragmentos(x, y, color) {
+    if (this.movimientoReducido) return;
+    const cantidad = 16;
+    for (let i = 0; i < cantidad; i++) {
+      const angulo = (Math.PI * 2 * i) / cantidad + Phaser.Math.FloatBetween(-0.2, 0.2);
+      const distancia = Phaser.Math.Between(48, 92);
+      const fragmento = i % 3 === 0
+        ? this.add.circle(x, y, 3, color, 1)
+        : this.add.rectangle(x, y, Phaser.Math.Between(4, 7), Phaser.Math.Between(6, 11), color, 1);
+      fragmento.setRotation(Math.random() * Math.PI);
+      this.mundo.add(fragmento);
+      this.tweens.add({
+        targets: fragmento,
+        x: x + Math.cos(angulo) * distancia,
+        y: y + Math.sin(angulo) * distancia,
+        rotation: fragmento.rotation + Phaser.Math.FloatBetween(-2.5, 2.5),
+        alpha: 0,
+        scale: 0.3,
+        duration: 360,
+        ease: 'Cubic.Out',
+        onComplete: () => fragmento.destroy(),
+      });
+    }
   }
 
   // Destello naranja al eliminar una amenaza crítica (además de las
