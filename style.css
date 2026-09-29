@@ -1318,3 +1318,43 @@ html.vista-movil .barra-escaner {
 .formulario-gamertag.gamertag-fijo .mensaje-gamertag {
   margin-top: 0;
 }
+
+/* ============ CÓDIGO QR ============ */
+.qr-bloque {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-top: 18px;
+  font-family: var(--fuente-mono);
+}
+
+.qr-img {
+  flex: none;
+  width: 104px;
+  height: 104px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.qr-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.76rem;
+  min-width: 0;
+}
+
+.qr-titulo {
+  color: var(--texto);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.qr-sub {
+  opacity: 0.7;
+}
+
+.qr-enlace {
+  color: inherit;
+  overflow-wrap: anywhere;
+}
