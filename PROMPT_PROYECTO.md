@@ -451,7 +451,7 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=14` y `game.js?v=20`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=15` y `game.js?v=21`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la
@@ -514,9 +514,19 @@ proyecto de Supabase para que este cambio tenga efecto; el archivo está
 escrito para poder reejecutarse sin problema sobre una base ya
 existente (limpia duplicados antes de crear el índice único).
 
-El último gamertag utilizado se conserva en `localStorage`, por lo que aparece
-rellenado al volver a jugar desde el mismo navegador, incluso después de cerrar
-y abrir la página. No se guarda ninguna contraseña ni clave secreta.
+**Gamertag fijo por dispositivo.** La primera vez que se completa el juego en
+un dispositivo se muestra el formulario; cuando el servidor acepta el nombre
+(`guardado = true`) se guarda en `localStorage` (`eliminaMalware.gamertag`). En
+las partidas siguientes de ese dispositivo el formulario **no se muestra**, el
+nombre no se puede cambiar desde la pantalla de resultados y la puntuación se
+envía sola con ese gamertag (`prepararClasificacionVictoria()` /
+`enviarPuntuacionGlobal()`): si supera el récord se actualiza conservando el
+nombre; si no, se conserva el anterior y se informa. Si el envío automático
+falla aparece solo un botón "Reintentar". No se crean filas duplicadas porque
+siempre se usa el mismo nombre y `guardar_puntuacion` solo reemplaza si el
+puntaje es mayor. Si el nombre escrito la primera vez ya tiene un récord igual
+o mayor, no se guarda ni se recuerda y se puede probar con otro. No se guarda
+ninguna contraseña ni clave secreta.
 
 ## Reglas de trabajo durante todo el proyecto
 

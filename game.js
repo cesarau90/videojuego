@@ -927,6 +927,25 @@ async function cargarTablaGlobal() {
   }
 }
 
+// Lee el gamertag guardado en este dispositivo ('' si no hay uno válido o si
+// el navegador bloquea localStorage)
+function leerGamertagGuardado() {
+  try {
+    const guardado = normalizarGamertag(localStorage.getItem(CLAVE_GAMERTAG_RECORDADO));
+    return guardado.length >= 2 ? guardado : '';
+  } catch (error) {
+    return '';
+  }
+}
+
+let guardandoPuntuacionGlobal = false;
+
+// Prepara la pantalla de victoria. Hay dos modos:
+// - Primera vez en este dispositivo (no hay gamertag guardado): se muestra
+//   el formulario para escribirlo y guardarlo.
+// - Dispositivo con gamertag guardado: el formulario NO se muestra, no se
+//   puede cambiar el nombre, y la puntuación se envía automáticamente con
+//   ese gamertag (solo reemplaza su récord si lo supera).
 function prepararClasificacionVictoria() {
   const formulario = document.getElementById('formulario-gamertag');
   const campo = document.getElementById('campo-gamertag');
@@ -934,48 +953,53 @@ function prepararClasificacionVictoria() {
   if (!formulario || !campo || !boton) return;
 
   partidaGlobalGuardada = false;
+  guardandoPuntuacionGlobal = false;
   idPartidaVictoria = crearIdPartida();
   puntuacionVictoriaPendiente = estado.puntuacion;
   formulario.reset();
-
-  try {
-    campo.value = normalizarGamertag(localStorage.getItem(CLAVE_GAMERTAG_RECORDADO));
-  } catch (error) {
-    // El formulario sigue funcionando si el navegador bloquea localStorage.
-  }
+  formulario.classList.remove('gamertag-fijo', 'reintentar');
+  delete formulario.dataset.gamertagFijo;
 
   campo.disabled = false;
   boton.disabled = false;
   boton.textContent = 'Guardar puntuación';
-  mostrarMensajeGamertag('El gamertag se recordará en este dispositivo.');
   cargarTablaGlobal();
-  setTimeout(() => campo.focus({ preventScroll: true }), 500);
-}
 
-async function guardarPuntuacionGlobal(evento) {
-  evento.preventDefault();
-  if (partidaGlobalGuardada) return;
-
-  const campo = document.getElementById('campo-gamertag');
-  const boton = document.getElementById('btn-guardar-gamertag');
-  const gamertag = normalizarGamertag(campo.value);
-  campo.value = gamertag;
-
-  if (gamertag.length < 2) {
-    mostrarMensajeGamertag('Escribe un gamertag de al menos 2 caracteres.', 'error');
-    campo.focus();
+  const gamertagGuardado = leerGamertagGuardado();
+  if (gamertagGuardado) {
+    campo.value = gamertagGuardado;
+    formulario.dataset.gamertagFijo = gamertagGuardado;
+    formulario.classList.add('gamertag-fijo');
+    enviarPuntuacionGlobal(gamertagGuardado, true);
     return;
   }
 
+  mostrarMensajeGamertag('El gamertag se guardará en este dispositivo y no podrá cambiarse después.');
+  setTimeout(() => campo.focus({ preventScroll: true }), 500);
+}
+
+// Envía la puntuación de esta partida a Supabase con el gamertag indicado.
+// "automatico" es true cuando el nombre viene del dispositivo (no hay campo
+// que editar); en ese caso, si falla el envío, se ofrece solo "Reintentar".
+async function enviarPuntuacionGlobal(gamertag, automatico) {
+  if (partidaGlobalGuardada || guardandoPuntuacionGlobal) return;
+  guardandoPuntuacionGlobal = true;
+
+  const formulario = document.getElementById('formulario-gamertag');
+  const campo = document.getElementById('campo-gamertag');
+  const boton = document.getElementById('btn-guardar-gamertag');
+
+  formulario.classList.remove('reintentar');
   boton.disabled = true;
   boton.textContent = 'Guardando…';
-  mostrarMensajeGamertag('Enviando puntuación…');
+  mostrarMensajeGamertag(automatico ? `Guardando tu puntuación como "${gamertag}"…` : 'Enviando puntuación…');
 
   try {
     // Se llama a la función guardar_puntuacion() (ver SUPABASE_SETUP.sql)
     // en vez de insertar directamente: esa función conserva solo el mejor
-    // puntaje de cada gamertag, así que jugar de nuevo con el mismo
-    // gamertag reemplaza tu registro anterior únicamente si lo superaste.
+    // puntaje de cada gamertag (sin distinguir mayúsculas), así que jugar de
+    // nuevo con el mismo nombre nunca crea filas duplicadas y reemplaza el
+    // registro anterior únicamente si esta partida lo supera.
     const respuesta = await fetch(`${SUPABASE_URL}/rest/v1/rpc/guardar_puntuacion`, {
       method: 'POST',
       headers: {
@@ -994,27 +1018,38 @@ async function guardarPuntuacionGlobal(evento) {
     const guardado = !!resultado?.guardado;
     const mejorPuntaje = resultado?.mejor_puntaje ?? puntuacionVictoriaPendiente;
 
-    try {
-      localStorage.setItem(CLAVE_GAMERTAG_RECORDADO, gamertag);
-    } catch (error) {
-      // El registro global ya se guardó (o se comparó); recordar el
-      // nombre es opcional.
-    }
-
     if (guardado) {
-      // Ya quedó como el mejor puntaje de este gamertag: no tiene caso
-      // volver a intentarlo con la misma partida, así que se bloquea.
+      // Solo se recuerda el gamertag cuando el servidor lo aceptó con esta
+      // puntuación (primer registro o nuevo récord)
+      try {
+        localStorage.setItem(CLAVE_GAMERTAG_RECORDADO, gamertag);
+      } catch (error) {
+        // Recordar el nombre es opcional: el registro global ya se guardó.
+      }
       partidaGlobalGuardada = true;
       campo.disabled = true;
       boton.textContent = 'Puntuación guardada';
-      mostrarMensajeGamertag('Nuevo mejor puntaje: ya aparece en la clasificación global.', 'exito');
+      mostrarMensajeGamertag(
+        automatico
+          ? `Nuevo récord de ${puntuacionVictoriaPendiente} puntos guardado para "${gamertag}".`
+          : 'Puntuación guardada: ya aparece en la clasificación global.',
+        'exito'
+      );
+    } else if (automatico) {
+      // El récord anterior se conserva; no hay nada más que hacer
+      partidaGlobalGuardada = true;
+      mostrarMensajeGamertag(
+        `Tu récord con "${gamertag}" es de ${mejorPuntaje} puntos. Esta partida (${puntuacionVictoriaPendiente}) no lo superó, así que se conserva el anterior.`,
+        'info'
+      );
     } else {
-      // No se reemplazó nada: se deja el formulario activo por si el
-      // jugador quiere intentarlo con otro gamertag.
+      // Primera vez en este dispositivo y ese nombre ya tiene un récord
+      // igual o mayor (por ejemplo, de otro jugador): no se guarda ni se
+      // recuerda, y se deja escribir otro gamertag.
       boton.disabled = false;
       boton.textContent = 'Guardar puntuación';
       mostrarMensajeGamertag(
-        `Con "${gamertag}" ya tienes ${mejorPuntaje} puntos guardados, así que esta puntuación no lo reemplazó. Puedes probar con otro gamertag.`,
+        `Con "${gamertag}" ya hay ${mejorPuntaje} puntos guardados, así que esta puntuación no lo reemplazó. Prueba con otro gamertag.`,
         'info'
       );
     }
@@ -1022,9 +1057,37 @@ async function guardarPuntuacionGlobal(evento) {
   } catch (error) {
     console.warn('No se pudo guardar la puntuación global:', error);
     boton.disabled = false;
-    boton.textContent = 'Guardar puntuación';
+    boton.textContent = automatico ? 'Reintentar' : 'Guardar puntuación';
+    if (automatico) formulario.classList.add('reintentar');
     mostrarMensajeGamertag('No se pudo guardar. Inténtalo nuevamente.', 'error');
+  } finally {
+    guardandoPuntuacionGlobal = false;
   }
+}
+
+// Envío del formulario: con gamertag fijo usa siempre el del dispositivo
+// (ignora cualquier valor del campo); si no, valida el que escribió el jugador.
+function guardarPuntuacionGlobal(evento) {
+  evento.preventDefault();
+  if (partidaGlobalGuardada) return;
+
+  const formulario = document.getElementById('formulario-gamertag');
+  const campo = document.getElementById('campo-gamertag');
+
+  const fijo = formulario.dataset.gamertagFijo;
+  if (fijo) {
+    enviarPuntuacionGlobal(fijo, true);
+    return;
+  }
+
+  const gamertag = normalizarGamertag(campo.value);
+  campo.value = gamertag;
+  if (gamertag.length < 2) {
+    mostrarMensajeGamertag('Escribe un gamertag de al menos 2 caracteres.', 'error');
+    campo.focus();
+    return;
+  }
+  enviarPuntuacionGlobal(gamertag, false);
 }
 
 /* ------------------------------------------------------------------

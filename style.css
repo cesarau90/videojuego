@@ -1300,3 +1300,21 @@ html.vista-movil .barra-escaner {
     font-size: 0.65rem;
   }
 }
+
+/* Gamertag ya guardado en este dispositivo: no se muestra el campo ni se
+   puede cambiar. Solo se ve el mensaje de estado y, si falló el envío
+   automático, el botón "Reintentar". */
+.formulario-gamertag.gamertag-fijo label,
+.formulario-gamertag.gamertag-fijo #campo-gamertag,
+.formulario-gamertag.gamertag-fijo .gamertag-controles {
+  display: none;
+}
+
+.formulario-gamertag.gamertag-fijo.reintentar .gamertag-controles {
+  display: flex;
+  margin-top: 10px;
+}
+
+.formulario-gamertag.gamertag-fijo .mensaje-gamertag {
+  margin-top: 0;
+}
