@@ -4540,6 +4540,10 @@ document.getElementById('btn-reintentar').addEventListener('click', () => inicia
 document.getElementById('btn-jugar-de-nuevo').addEventListener('click', () => iniciarJuegoDesdeCero());
 document.getElementById('btn-escaner').addEventListener('click', activarEscanerDesdeUI);
 document.getElementById('formulario-gamertag').addEventListener('submit', guardarPuntuacionGlobal);
+// Botones A/B/X/Y en pantalla (vista móvil): atacan con la mira del jugador 1.
+document.querySelectorAll('.ataque-pantalla').forEach((boton) => {
+  boton.addEventListener('click', () => window.controlJuego.atacar(boton.dataset.letra, 1));
+});
 
 // Atajo de teclado: tecla "S" activa el escáner mientras se está jugando
 window.addEventListener('keydown', (evento) => {

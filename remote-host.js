@@ -62,7 +62,9 @@
     if (subscribed) channel.send({ type: 'broadcast', event, payload });
   };
 
+  // La pregunta es una capa sobre el tablero (ambas quedan activas), así que tiene prioridad.
   function currentScreen() {
+    if (document.getElementById('pantalla-pregunta')?.classList.contains('activa')) return 'pantalla-pregunta';
     return document.querySelector('.pantalla.activa')?.id || 'pantalla-inicio';
   }
 

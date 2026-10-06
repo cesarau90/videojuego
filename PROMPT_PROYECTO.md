@@ -4,11 +4,13 @@ Desarrolla un videojuego web completo llamado **"Elimina el Malware"**,
 relacionado con la ciberseguridad y la carrera de Ingeniería en Sistemas y
 Negocios Digitales (ISND). Debe funcionar directamente en el navegador y ser
 compatible con GitHub Pages, usando HTML, CSS, JavaScript y **Phaser 3**
-(cargado por CDN). Supabase se usa únicamente para la clasificación global;
-no se requieren cuentas de jugador ni otros servicios externos.
+(cargado por CDN). Supabase se usa para la clasificación global y, con
+Supabase Realtime, para conectar el teléfono como mando (sección 12); no se
+requieren cuentas de jugador ni otros servicios externos.
 
 Entrega el código en archivos separados: `index.html`, `style.css`,
-`game.js` y `README.md`. Código sencillo, comentado en español, explicable
+`game.js`, `remote-host.js` (receptor del mando en la PC), `control.html`,
+`control.css` y `control.js` (el mando del teléfono) y `README.md`. Código sencillo, comentado en español, explicable
 para estudiantes principiantes.
 
 ## 1. Identidad visual
@@ -31,11 +33,14 @@ genérica de IA:
   etiqueta "Proyecto ISND".
 - Sección principal en dos columnas:
   - Izquierda: etiqueta "Incidente 001 · Nivel crítico", título "El
-    servidor está bajo ataque", texto breve, botón "Iniciar defensa",
-    indicadores (3 niveles / 3 vidas / 10 puntos por amenaza).
+    servidor está bajo ataque", texto breve, botón "Iniciar defensa" y
+    a su lado el botón secundario (contorno verde) "2 jugadores" (sección
+    13), indicadores (3 niveles / 3 vidas / 10 puntos por amenaza).
   - Derecha: ilustración de un servidor hecha con HTML/CSS (línea de
     escaneo animada, nodos con estado, indicador de red), sin imágenes.
 - Tres tarjetas de instrucciones: Detecta / Elimina / Sobrevive.
+- Bajo el pie, un bloque con el **QR del mando** (sección 12), su estado
+  de conexión y el enlace al mando.
 - Pie discreto con los nombres del equipo: **Cesar del Angel** y **Jean
   Barrera** (nunca cambiar estos nombres).
 - Microanimaciones: entrada suave del contenido, aparición escalonada de
@@ -134,20 +139,28 @@ forzar el mismo tablero en cualquier pantalla:
 - **Objetivos móviles**: una fracción de los elementos se mueve lentamente
   y rebota dentro del área de juego (≈15% nivel 1, ≈50% nivel 2, ≈75%
   nivel 3).
+- **Forma de atacar (ataque por letras):** el jugador mueve una **mira** y
+  pulsa la letra **A, B, X o Y** que aparece encima del enemigo (como en un
+  mando de consola). Un clic/toque solo apunta, ya no elimina. La letra de
+  cada amenaza se elige al azar; la letra incorrecta no la elimina y avisa
+  "USA LA LETRA X". El **color de cada elemento sigue siendo el de su tipo**
+  (no el de la letra), como en el juego original.
 - Cuatro tipos, cada uno con ícono, color y comportamiento propios:
-  - **Malware normal** (rojo): 1 clic, 10 puntos.
-  - **Malware crítico** (naranja, ícono de rayo): 1 clic, 20 puntos,
+  - **Malware normal** (rojo): 1 ataque, 10 puntos.
+  - **Malware crítico** (naranja, ícono de rayo): 1 ataque, 20 puntos,
     desaparece más rápido (75% del tiempo de vida normal).
   - **Malware resistente** (morado, ícono de "bug" con escudo exterior):
-    2 clics — el primero rompe el escudo (sin puntos ni penalización), el
+    2 ataques — el primero rompe el escudo (sin puntos ni penalización), el
     segundo lo elimina (15 puntos).
-  - **Archivo seguro / falso positivo** (azul, escudo con marca): no debe
-    tocarse. Si se le da clic, se pierde un servidor y aparece "Falso
-    positivo". Si expira solo, no pasa nada.
+  - **Archivo seguro / falso positivo** (azul, escudo con marca, sin
+    letra): no debe atacarse. Si se pulsa cualquier letra apuntándolo, se
+    pierde un servidor y aparece "Falso positivo". Si expira solo, no pasa
+    nada.
 - Cada amenaza real traza una línea tenue hacia el servidor al que
   "ataca".
-- Tiempo de vida de una amenaza normal: **4.0 s (nivel 1) / 3.1 s (nivel
-  2) / 2.7 s (nivel 3)**; la crítica dura el 75% de ese valor. Aparición de
+- Tiempo de vida de una amenaza normal: **7 s (nivel 1) / 6 s (nivel
+  2) / 5.2 s (nivel 3)** (más largos que antes para dar tiempo a mover la
+  mira con el joystick); la crítica dura el 75% de ese valor. Aparición de
   elementos nuevos cada 1.8 s (nivel 1) / 1.1 s (nivel 2) / 0.8 s (nivel 3).
 - Probabilidades configuradas: nivel 1 (seguros 15%, críticos 8%, resistentes
   0%, duplicadores 0%); nivel 2 (seguros 25%, críticos 15%, resistentes 13%,
@@ -182,7 +195,7 @@ los servidores ni los jefes.
 - **Reparación de servidor** (nivel 1, 2 y 3): elemento verde con ícono de
   cruz y etiqueta permanente "REPARACIÓN". Solo puede aparecer si al
   menos un servidor está fuera de línea, **como máximo una vez por
-  nivel**, y permanece ≈4 s. Un clic recupera un servidor caído; no
+  nivel**, y se activa con la letra **A**. Recupera un servidor caído; no
   entrega puntos ni cuenta como amenaza eliminada. Si desaparece sin
   clic, no hay penalización.
 - **Malware duplicador** (nivel 2 y 3, magenta, ícono de división; el
@@ -218,16 +231,22 @@ inmediato: se detiene la generación normal, se muestra una alerta animada
 aparece el jefe (entrada con escala 0.7→1 y una onda alrededor). El nivel
 solo se completa al derrotarlo.
 
+Cada golpe al jefe se da con una **combinación de letras en orden**,
+pulsadas por separado con la mira sobre el jefe: Troyano **A → B**, Botnet
+**X → Y → A**, Ransomware **B → X → A → Y**. Una letra incorrecta reinicia la
+combinación; el progreso se ve en la PC y en el mando.
+
 - **Nivel 1 — Troyano** (naranja, hexágono con flecha de infiltración): 3
   golpes, casi fijo en el centro (se desplaza un poco tras cada golpe),
-  ciclo de ataque de 7 s, 50 puntos.
+  ciclo de ataque de 10 s, 50 puntos.
 - **Nivel 2 — Botnet** (azul/morado, núcleo con nodos orbitando): 5
   golpes, cambia de posición tras cada golpe, genera hasta 1 falso
-  positivo a la vez, ciclo de ataque de 6 s, 100 puntos.
+  positivo a la vez, ciclo de ataque de 10 s, 100 puntos.
 - **Nivel 3 — Ransomware** (rojo/magenta, candado): 8 golpes, se desplaza
-  lentamente, solo recibe daño en su punto débil (rojo, que aparece y
-  desaparece), genera hasta 2 falsos positivos, entra en una fase más
-  rápida y agresiva al perder 4 puntos de vida, ciclo de ataque de 5 s,
+  lentamente, solo recibe daño si la última letra de la combinación se
+  pulsa con el punto débil visible (si está cerrado se conserva el
+  progreso), genera hasta 2 falsos positivos, entra en una fase más
+  rápida y agresiva al perder 4 puntos de vida, ciclo de ataque de 12 s,
   200 puntos; al derrotarlo se muestra la victoria final.
 
 Cada jefe tiene nombre y barra de vida visibles, anillo de tiempo
@@ -333,8 +352,9 @@ derrota.
 
 - Todo debe respetar `prefers-reduced-motion` (animaciones reducidas a
   simples cambios de opacidad o casi instantáneas).
-- Funciona con mouse y con pantalla táctil (incluido el botón del
-  escáner).
+- Funciona con mouse/teclado, con pantalla táctil (en la vista móvil hay
+  botones A/B/X/Y bajo el tablero: se toca el enemigo y luego su letra) y
+  con el teléfono como mando.
 - Responsive en computadora y celular, sin scroll horizontal.
 - Sin temporizadores, listeners ni objetos duplicados al reiniciar,
   cambiar de nivel o perder: todo se limpia explícitamente (`limpiarJefe`,
@@ -451,7 +471,8 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=15` y `game.js?v=21`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=19`, `game.js?v=24` y
+`remote-host.js?v=4`; en `control.html`: `control.css?v=3` y `control.js?v=3`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la
@@ -527,6 +548,61 @@ siempre se usa el mismo nombre y `guardar_puntuacion` solo reemplaza si el
 puntaje es mayor. Si el nombre escrito la primera vez ya tiene un récord igual
 o mayor, no se guarda ni se recuerda y se puede probar con otro. No se guarda
 ninguna contraseña ni clave secreta.
+
+## 12. Teléfono como mando (control remoto)
+
+- La portada muestra un **QR** (librería `qrcodejs` por CDN) con la
+  dirección de `control.html?s=<id aleatorio>`; también hay un botón
+  "Conectar teléfono" bajo el tablero que abre el mismo QR en un diálogo.
+  La dirección se calcula a partir de la página actual, así que funciona en
+  cualquier publicación de GitHub Pages.
+- La PC (`remote-host.js`) y el teléfono (`control.js`) se comunican por un
+  canal temporal de **Supabase Realtime** (`control-<id>`, mensajes
+  `broadcast`), creado de nuevo al recargar la PC. En Supabase debe estar
+  activado **Realtime → Allow public access to channels**. La PC debe
+  abrirse por HTTPS (GitHub Pages o servidor), no como archivo local.
+- El mando tiene joystick (mueve la mira), botones **A, B, X, Y**,
+  escáner, iniciar, "2 jugadores", continuar, reintentar y respuestas 1–4
+  (solo visibles durante la pregunta de seguridad). Muestra la combinación
+  del jefe y los avisos del juego.
+- Seguridad/robustez: la PC valida cada mensaje (letras permitidas, ejes
+  entre -1 y 1, botones solo en su pantalla correspondiente), limita los
+  ataques a uno cada 110 ms, y si el teléfono deja de enviar señal 7 s se
+  considera desconectado y la mira se detiene. Al soltar el joystick,
+  ocultar la página o perder la conexión, el movimiento se detiene.
+- La pregunta de seguridad es una capa encima del tablero (ambas pantallas
+  quedan con `.activa`); `currentScreen()` en `remote-host.js` le da
+  prioridad a `pantalla-pregunta` para que el mando pueda responder y
+  continuar.
+- Puente con el juego: `window.controlJuego` en `game.js`
+  (`mover(x, y, jugador)`, `atacar(letra, jugador)`, `estado()`), sin
+  simular clics sobre el canvas.
+
+## 13. Modo 2 jugadores (cooperativo en la misma pantalla)
+
+- Botón "2 jugadores" en la portada (y en el mando). `estado.multijugador`
+  indica el modo; "Volver a intentar" conserva el modo elegido.
+- Dos miras en el tablero: **J1 azul** y **J2 amarilla**, con su etiqueta;
+  empiezan en cada mitad del tablero. Defienden los mismos servidores y
+  comparten escáner, combo y vidas.
+- Controles: J1 con mouse/flechas + teclas A/B/X/Y o un teléfono; J2 con
+  **I/J/K/L** + **7/8/9/0** (= A/B/X/Y) o un segundo teléfono. Las teclas
+  I/J/K/L se registran sin captura para no bloquear la escritura del
+  gamertag.
+- Los dos teléfonos escanean el **mismo QR**: el primero es J1 y el segundo
+  J2 (cada teléfono tiene un id propio en `sessionStorage`); el mando
+  muestra "JUGADOR 1/2" y un botón "Cambiar a J2/J1" que intercambia los
+  lugares. En modo de 1 jugador todos los teléfonos manejan a J1.
+- La combinación del jefe es compartida (J1 puede pulsar A y J2 B); la
+  recompensa del jefe se anota a quien da el golpe final.
+- Puntos: `estado.puntosJugadores` lleva el marcador de cada jugador
+  (además del total del equipo). Se muestra bajo el tablero ("J1 · J2") y
+  en las pantallas de nivel superado, derrota y victoria. La clasificación
+  global guarda el total del equipo con el gamertag del dispositivo.
+- Interpretación tomada: "multijugador" = cooperativo local en la misma
+  pantalla. Si se pidiera multijugador en línea (cada jugador viendo su
+  propia pantalla), habría que sincronizar el estado completo del juego
+  entre dispositivos; queda pendiente de confirmar.
 
 ## Reglas de trabajo durante todo el proyecto
 

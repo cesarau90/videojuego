@@ -1230,6 +1230,37 @@ html.vista-movil .barra-escaner {
     flex: 0 0 auto;
 }
 
+/* Botones A/B/X/Y en pantalla: en el celular se toca el enemigo para
+   apuntar y luego su letra. En PC no se muestran (se usa el teclado o el mando). */
+.botones-ataque-pantalla { display: none; }
+
+html.vista-movil .botones-ataque-pantalla {
+    display: flex;
+    gap: 8px;
+}
+
+html.vista-movil #btn-ver-qr { display: none; }
+
+.ataque-pantalla {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 2px solid var(--color-boton);
+    background: #07110f;
+    color: var(--color-boton);
+    font-family: var(--fuente-mono);
+    font-size: 1.2rem;
+    font-weight: 700;
+    touch-action: manipulation;
+    cursor: pointer;
+}
+
+.ataque-pantalla:active { transform: scale(0.92); filter: brightness(1.4); }
+.ataque-a { --color-boton: #00d99b; }
+.ataque-b { --color-boton: #ff5c70; }
+.ataque-x { --color-boton: #38bdf8; }
+.ataque-y { --color-boton: #ffd34e; }
+
 /* ============ ANIMACIONES ============ */
 @keyframes aparecer {
   from { opacity: 0; transform: translateY(10px); }

@@ -183,6 +183,8 @@ forma progresiva pero el juego sigue siendo completable en los tres niveles.
 
 - **Computadora:** mouse o flechas para mover la mira; **A, B, X, Y** para
   atacar con la letra del enemigo; tecla **S** para el escáner.
+- **Jugar directo en el celular (sin PC):** toca el enemigo para apuntarle y
+  luego pulsa su letra en los botones **A, B, X, Y** que aparecen bajo el tablero.
 - **Celular como mando:** escanea el QR de la PC y usa el joystick y los
   botones **A, B, X, Y**. Mira el juego en la PC.
 - **Jugador 2 (modo 2 jugadores):** **I, J, K, L** para mover y **7, 8, 9, 0**

@@ -12,7 +12,7 @@
     rel="stylesheet"
   />
 
-  <link rel="stylesheet" href="style.css?v=18" />
+  <link rel="stylesheet" href="style.css?v=19" />
 </head>
 <body>
 
@@ -169,6 +169,13 @@
       </button>
       <button id="btn-ver-qr" class="boton-escaner" type="button">Conectar teléfono</button>
       <span id="marcador-jugadores" class="marcador-jugadores" hidden></span>
+      <!-- Botones de ataque en pantalla: solo en vista móvil (jugar sin mando) -->
+      <div class="botones-ataque-pantalla" aria-label="Atacar con la letra del enemigo">
+        <button type="button" class="ataque-pantalla ataque-a" data-letra="A">A</button>
+        <button type="button" class="ataque-pantalla ataque-b" data-letra="B">B</button>
+        <button type="button" class="ataque-pantalla ataque-x" data-letra="X">X</button>
+        <button type="button" class="ataque-pantalla ataque-y" data-letra="Y">Y</button>
+      </div>
     </div>
   </div>
   <dialog id="dialogo-control" class="dialogo-control">
@@ -315,7 +322,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <!-- Lógica del juego -->
-  <script src="game.js?v=23"></script>
-  <script src="remote-host.js?v=3"></script>
+  <script src="game.js?v=24"></script>
+  <script src="remote-host.js?v=4"></script>
 </body>
 </html>
