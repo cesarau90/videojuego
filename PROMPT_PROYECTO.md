@@ -489,7 +489,7 @@ era el `resizeInterval` de Phaser.)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
 con un parámetro de versión (actualmente `style.css?v=21`, `game.js?v=29` y
-`remote-host.js?v=7`; en `control.html`: `control.css?v=6` y `control.js?v=7`). Cada vez
+`remote-host.js?v=8`; en `control.html`: `control.css?v=6` y `control.js?v=7`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la
@@ -620,7 +620,11 @@ ninguna contraseña ni clave secreta.
   del proyecto: el canal tarda ~65 ms de ida (p99 ≈ 80–130 ms) y no pierde
   mensajes hasta 40 por segundo, por lo que 25/s es seguro; no subir de ahí
   (el servidor limita los mensajes por segundo del proyecto, y con dos
-  teléfonos se suman).
+  teléfonos se suman: cada mensaje llega a todos los demás suscriptores,
+  también al otro teléfono). Medido con la PC y dos teléfonos al máximo de
+  25/s cada uno (≈ 55 enviados y ≈ 110 entregas por segundo) llegaron 1100
+  de 1100 mensajes, sin desorden y con ~65 ms de latencia; incluso a 40/s
+  cada uno (≈ 170 entregas por segundo) no se perdió ninguno.
 - **Movimiento de la mira en la PC (`actualizarControlMira()`):** la
   inclinación se convierte en velocidad (`MIRA_CURVA`, hasta
   `MIRA_VELOCIDAD` px/s: poca inclinación = movimiento lento para afinar) y
@@ -661,7 +665,15 @@ ninguna contraseña ni clave secreta.
 - Los dos teléfonos escanean el **mismo QR**: el primero es J1 y el segundo
   J2 (cada teléfono tiene un id propio en `sessionStorage`); el mando
   muestra "JUGADOR 1/2" y un botón "Cambiar a J2/J1" que intercambia los
-  lugares. En modo de 1 jugador todos los teléfonos manejan a J1.
+  lugares. En modo de 1 jugador todos los teléfonos manejan a J1. Cada
+  teléfono tiene su propio joystick flotante, su contador de mensajes `n`
+  (`phone.lastMove` en `remote-host.js`) y su propio desvanecimiento si la
+  red se detiene, así que uno no afecta al otro. Al cambiar de jugador se
+  detienen las **dos** miras (`mover(0, 0, 1)` y `mover(0, 0, 2)`): si solo
+  se detenía la del que pedía el cambio, el jugador que se quedaba sin
+  teléfono seguía corriendo con la última orden hasta que se desvanecía
+  (~140 px). Los dedos que siguen puestos reanudan en el siguiente mensaje
+  (≤ 100 ms) ya con su nuevo jugador.
 - La combinación del jefe es compartida (J1 puede pulsar A y J2 B); la
   recompensa del jefe se anota a quien da el golpe final.
 - Dificultad en 2 jugadores: los jefes tienen **50% más de vida**

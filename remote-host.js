@@ -165,7 +165,11 @@
       const phone = phoneFrom(payload);
       if (!phone || ![1, 2].includes(payload.slot) || phone.slot === payload.slot) return;
       const other = [...phones.values()].find((p) => p !== phone && p.slot === payload.slot);
-      window.controlJuego?.mover(0, 0, phone.slot);
+      // Las dos miras se detienen: quien deja de tener teléfono no debe seguir
+      // corriendo con la última orden de joystick (los dedos puestos reanudan
+      // en el siguiente mensaje, ya con su nuevo jugador).
+      window.controlJuego?.mover(0, 0, 1);
+      window.controlJuego?.mover(0, 0, 2);
       if (other) other.slot = phone.slot;
       phone.slot = payload.slot;
       sendState();
