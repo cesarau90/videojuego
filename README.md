@@ -39,9 +39,12 @@ botón cuesta un servidor. La reparación se activa con A. Los resistentes requi
 se dividen al recibir su letra correcta y cada hijo tiene su propia letra.
 
 Los jefes requieren una combinación **en orden**, con pulsaciones separadas:
-Troyano **A → B**, Botnet **X → Y → A**, Ransomware **B → X → A → Y**.
+el Troyano pide 2 letras, la Botnet 3 y el Ransomware 4. **Las letras se
+sortean** cuando aparece el jefe y cambian después de cada golpe, así que no
+se pueden memorizar (nunca hay dos letras iguales seguidas).
 Cada combinación completa quita una vida al jefe; una letra incorrecta reinicia
-la combinación. El progreso se muestra en la PC y el móvil. En Ransomware,
+el progreso de la misma combinación. Se muestra en la PC y el móvil, y cuando
+cambia, las letras dan un pequeño latido. En Ransomware,
 pulsa la última letra con el punto débil visible: si está cerrado, se conserva
 el prefijo para que puedas esperar y completar el golpe apuntando al jefe.
 

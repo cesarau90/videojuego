@@ -351,7 +351,31 @@ const FACTOR_VIDA_JEFE_2J = 1.5;
 const ELEMENTOS_EXTRA_2J = 1;
 // Teclas del jugador 2 para atacar (en el teclado de la PC).
 const TECLAS_ATAQUE_J2 = { 7: 'A', 8: 'B', 9: 'X', 0: 'Y' };
-const COMBINACIONES_JEFE = [['A', 'B'], ['X', 'Y', 'A'], ['B', 'X', 'A', 'Y']];
+// Combinaciones de los jefes (solo en el modo con mando): cada jefe pide una
+// combinación de letras en orden, y su largo sube con el nivel (Troyano 2,
+// Botnet 3, Ransomware 4). Las letras se sortean cuando aparece el jefe y,
+// si COMBINACION_NUEVA_POR_GOLPE es true, vuelven a sortearse después de cada
+// golpe para que no se puedan memorizar. Con false se sortea una sola vez por jefe.
+const LARGO_COMBINACION_JEFE = [2, 3, 4];
+const COMBINACION_NUEVA_POR_GOLPE = true;
+
+// Sortea una combinación de "largo" letras (A, B, X o Y). Para que sea legible
+// y no se confunda con un doble toque accidental: nunca hay dos letras iguales
+// seguidas, no repite la combinación anterior y, si se indica "ultimaLetra"
+// (la que se acaba de pulsar), no empieza con ella.
+function generarCombinacionJefe(largo, anterior = [], ultimaLetra = null) {
+  const letras = Object.keys(BOTONES_ATAQUE);
+  let combinacion;
+  do {
+    combinacion = [];
+    for (let i = 0; i < largo; i++) {
+      const prohibida = i === 0 ? ultimaLetra : combinacion[i - 1];
+      const opciones = letras.filter((letra) => letra !== prohibida);
+      combinacion.push(opciones[Math.floor(Math.random() * opciones.length)]);
+    }
+  } while (combinacion.join('') === anterior.join(''));
+  return combinacion;
+}
 // Tiempo de vida de un elemento según el modo de juego.
 function vidaVirusNivel(configuracionNivel) {
   return estado.modoMando ? configuracionNivel.tiempoVidaVirusMando : configuracionNivel.tiempoVidaVirus;
@@ -1590,13 +1614,19 @@ class EscenaJuego extends Phaser.Scene {
     else this.eliminarVirus(e, true);
   }
 
-  actualizarCombinacionJefe() {
+  // "nueva" es true justo después de sortear otra combinación: el texto da un
+  // pequeño latido para que se note el cambio (con el jefe sacudiéndose tras el
+  // golpe, si no, se podría seguir pulsando la combinación anterior sin darse cuenta).
+  actualizarCombinacionJefe(nueva = false) {
     if (!this.jefe?.textoCombinacion) return;
     this.jefe.textoCombinacion.setText(this.jefe.secuencia.map((letra, i) =>
       i < this.jefe.progresoCombinacion ? '✓' : letra).join(' → '));
     // El texto toma el color de la siguiente letra que hay que pulsar.
     const siguiente = this.jefe.secuencia[this.jefe.progresoCombinacion];
     this.jefe.textoCombinacion.setColor(colorHexTexto(BOTONES_ATAQUE[siguiente].color));
+    if (nueva && !this.movimientoReducido) {
+      this.tweens.add({ targets: this.jefe.textoCombinacion, scale: { from: 1.3, to: 1 }, duration: 260, ease: 'Back.Out' });
+    }
   }
 
   pulsarCombinacionJefe(letra) {
@@ -1612,12 +1642,19 @@ class EscenaJuego extends Phaser.Scene {
       this.avisarControl('ESPERA EL PUNTO DÉBIL'); return;
     }
     jefe.progresoCombinacion += 1;
+    let nueva = false;
     if (jefe.progresoCombinacion === jefe.secuencia.length) {
       // En cooperativo la combinación es compartida: J1 puede pulsar A y J2 B.
       // El último golpe decide a quién se le anota la recompensa del jefe.
       jefe.progresoCombinacion = 0; this.ultimoGolpeadorJefe = this.jugadorAtacante; this.golpearJefe();
+      // Cada golpe pide una combinación distinta (si el jefe sigue en pie). Un
+      // error no la cambia: solo reinicia el progreso de la misma combinación.
+      if (COMBINACION_NUEVA_POR_GOLPE && !jefe.destruido) {
+        jefe.secuencia = generarCombinacionJefe(jefe.secuencia.length, jefe.secuencia, letra);
+        nueva = true;
+      }
     }
-    this.actualizarCombinacionJefe();
+    this.actualizarCombinacionJefe(nueva);
   }
 
   // Factor de lentitud aplicado por el escáner (2s) a elementos y, si
@@ -3869,7 +3906,7 @@ class EscenaJuego extends Phaser.Scene {
     const vidaJefe = Math.round(configuracionJefe.vidaMaxima * factorVida);
     this.jefe = {
       config: configuracionJefe,
-      secuencia: COMBINACIONES_JEFE[estado.indiceNivel].slice(),
+      secuencia: generarCombinacionJefe(LARGO_COMBINACION_JEFE[estado.indiceNivel]),
       progresoCombinacion: 0,
       vida: vidaJefe,
       vidaMaxima: vidaJefe,

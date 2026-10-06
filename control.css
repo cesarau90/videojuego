@@ -53,6 +53,10 @@ button:active, button.pressed { filter: brightness(1.4); transform: scale(.94); 
 .sequence-letter { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid currentColor; border-radius: 9px; margin-top: 10px; font-weight: 800; }
 .sequence-letter.done { background: #246353; opacity: .45; }
 .sequence-letter.next { box-shadow: 0 0 0 2px currentColor; }
+/* Avisa de que el jefe pidió una combinación distinta (ver renderState en control.js). */
+.sequence-letter.fresh { animation: sequence-fresh .32s cubic-bezier(.2, .8, .2, 1); }
+@keyframes sequence-fresh { from { transform: scale(1.4); opacity: .35; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sequence-letter.fresh { animation: none; } }
 .buttons, .answer-buttons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .buttons { grid-template-columns: repeat(auto-fit, minmax(68px, 1fr)); }
 .buttons button, .answer-buttons button { min-width: 0; padding: 8px 4px; }

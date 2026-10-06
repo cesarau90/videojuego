@@ -238,9 +238,20 @@ aparece el jefe (entrada con escala 0.7→1 y una onda alrededor). El nivel
 solo se completa al derrotarlo.
 
 Cada golpe al jefe se da con una **combinación de letras en orden**,
-pulsadas por separado con la mira sobre el jefe: Troyano **A → B**, Botnet
-**X → Y → A**, Ransomware **B → X → A → Y**. Una letra incorrecta reinicia la
-combinación; el progreso se ve en la PC y en el mando.
+pulsadas por separado con la mira sobre el jefe (solo en el modo con mando;
+en el modo normal se hace clic). El largo depende del jefe —Troyano 2
+letras, Botnet 3, Ransomware 4 (`LARGO_COMBINACION_JEFE`)— pero **las letras
+se sortean**: al aparecer el jefe y de nuevo después de cada golpe
+(`generarCombinacionJefe()`; con `COMBINACION_NUEVA_POR_GOLPE = false` se
+sortearía solo una vez por jefe), así que no se puede memorizar. Antes eran
+fijas (A → B, X → Y → A, B → X → A → Y). Nunca hay dos letras iguales
+seguidas, la nueva combinación no repite la anterior ni empieza con la última
+letra pulsada. Una letra incorrecta reinicia el progreso de la **misma**
+combinación (no la cambia). El progreso se ve en la PC y en el mando, y al
+cambiar de combinación el texto de la PC y las letras del mando dan un
+pequeño latido para que se note (sin él, con el jefe sacudiéndose, se
+seguiría pulsando la anterior); ambos latidos respetan `prefers-reduced-motion`.
+En 2 jugadores la combinación sigue siendo compartida.
 
 - **Nivel 1 — Troyano** (naranja, hexágono con flecha de infiltración): 3
   golpes, casi fijo en el centro (se desplaza un poco tras cada golpe),
@@ -477,8 +488,8 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=21`, `game.js?v=28` y
-`remote-host.js?v=7`; en `control.html`: `control.css?v=5` y `control.js?v=6`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=21`, `game.js?v=29` y
+`remote-host.js?v=7`; en `control.html`: `control.css?v=6` y `control.js?v=7`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la

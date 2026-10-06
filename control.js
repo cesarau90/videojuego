@@ -25,6 +25,7 @@
   const STICK_GAP_FAST = 16;     // ...y para un cambio grande (arrancar, invertir el sentido)
   const STICK_KEEPALIVE = 100;   // ms: con el dedo quieto se repite la posición
   const STICK_DEAD_IN = .08, STICK_DEAD_OUT = .14; // zona muerta (con histéresis)
+  let lastSequence = '';         // combinación del jefe que se mostró la última vez
   let origin = { x: 0, y: 0 };
   let stickOn = false;
   let seq = Date.now();          // contador de mensajes: la PC descarta los más viejos
@@ -90,14 +91,19 @@
       : question
       ? 'Mueve el joystick arriba o abajo para elegir y pulsa A para responder. Después, A para continuar.'
       : feedback || (boss
-      ? 'Apunta al jefe y pulsa en orden. Cada combinación completa le quita una vida.'
+      ? 'Apunta al jefe y pulsa en orden. Cada combinación completa le quita una vida y la siguiente es distinta.'
       : 'Pulsa la letra que muestra el enemigo. No ataques los archivos seguros (azules).');
     const sequence = document.getElementById('boss-sequence');
     sequence.replaceChildren();
+    // Las letras "laten" cuando el jefe pide una combinación distinta (cada golpe).
+    const signature = boss && Array.isArray(boss.sequence) ? boss.sequence.join('') : '';
+    const fresh = signature !== '' && signature !== lastSequence;
+    lastSequence = signature;
     if (boss && Array.isArray(boss.sequence)) boss.sequence.forEach((letter, index) => {
       if (!colors[letter]) return;
       const badge = document.createElement('span');
-      badge.className = 'sequence-letter' + (index < boss.progress ? ' done' : index === boss.progress ? ' next' : '');
+      badge.className = 'sequence-letter' + (index < boss.progress ? ' done' : index === boss.progress ? ' next' : '')
+        + (fresh ? ' fresh' : '');
       badge.style.color = colors[letter];
       badge.textContent = letter;
       sequence.append(badge);
