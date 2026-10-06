@@ -151,7 +151,7 @@
     .on('broadcast', { event: 'hello' }, ({ payload }) => {
       const id = payload?.id;
       if (typeof id !== 'string' || !/^[a-f0-9-]{36}$/i.test(id)) return;
-      const phone = phones.get(id) || { slot: freeSlot(id), lastAttack: 0 };
+      const phone = phones.get(id) || { slot: freeSlot(id), lastAttack: 0, lastMove: 0 };
       phone.last = Date.now();
       phones.set(id, phone);
       updateStatus();
@@ -174,6 +174,14 @@
       const phone = phoneFrom(payload);
       if (!phone) return;
       if (!Number.isFinite(payload.x) || !Number.isFinite(payload.y) || Math.abs(payload.x) > 1 || Math.abs(payload.y) > 1) return;
+      // Cada mensaje del joystick lleva un número creciente. El canal a veces
+      // entrega uno viejo después de uno nuevo; aplicarlo movería la mira hacia
+      // donde ya no está el pulgar. (Un salto enorme hacia atrás es un teléfono
+      // que se reinició, no un mensaje tardío.)
+      if (Number.isFinite(payload.n)) {
+        if (payload.n <= phone.lastMove && phone.lastMove - payload.n < 60000) return;
+        phone.lastMove = payload.n;
+      }
       if (currentScreen() === 'pantalla-pregunta') questionMove(phone, payload.y);
       else if (currentScreen() === 'pantalla-juego') window.controlJuego?.mover(payload.x, payload.y, playerOf(phone));
     })

@@ -477,8 +477,8 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=21`, `game.js?v=27` y
-`remote-host.js?v=6`; en `control.html`: `control.css?v=4` y `control.js?v=5`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=21`, `game.js?v=28` y
+`remote-host.js?v=7`; en `control.html`: `control.css?v=5` y `control.js?v=6`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la
@@ -580,12 +580,50 @@ ninguna contraseña ni clave secreta.
   quedan con `.activa`); `currentScreen()` en `remote-host.js` le da
   prioridad a `pantalla-pregunta` para que el mando pueda responder y
   continuar.
-- **Joystick:** el teléfono envía los ejes a ritmo fijo (cada 80 ms) en vez
-  de un mensaje por cada movimiento del dedo (eso saturaba el canal, se
-  perdían mensajes y la mira se pasaba de largo); al soltar, el alto se
-  envía de inmediato y se repite. En la PC la respuesta es progresiva
-  (poca inclinación = movimiento lento para afinar) y la mira frena a la
-  mitad sobre un objetivo.
+- **Joystick flotante (teléfono, `control.js`):** el centro no es fijo, es
+  el punto donde el dedo toca por primera vez, y la zona táctil es todo el
+  lado izquierdo del mando (`.movement`), no solo el círculo; el círculo se
+  desliza hasta el dedo (sin salirse del mando), la etiqueta "MOVER LA MIRA"
+  se atenúa mientras tanto, y al soltar el pomo y el círculo vuelven con una
+  animación corta (respeta `prefers-reduced-motion`). Motivo: antes el
+  centro era el del círculo y, como se juega mirando la PC y no el teléfono,
+  si el pulgar caía un poco a un lado la mira se iba **primero hacia ese
+  lado** y luego hacia donde se quería ("se va al lado contrario"); además
+  tocar el joystick se descartaba si la PC aún no había avisado su pantalla
+  y había que soltar y volver a tocar ("se siente estático"). Ahora tocar
+  siempre empieza en reposo y solo se deja de *enviar* donde la PC no lo
+  usa (`canSteer()`). Si el dedo se aleja más que el radio
+  (`stickRadius()`, ≈25% del ancho del círculo) el centro lo sigue, así que
+  al regresar el dedo la mira cambia de sentido enseguida. Zona muerta con
+  histéresis (8% / 14%) y reescalada: la inclinación sale de 0 sin saltos.
+- **Envío del joystick:** se manda en cuanto cambian los ejes (como mucho
+  25 mensajes por segundo; un cambio grande, como arrancar o invertir el
+  sentido, espera solo 16 ms), con un latido cada 100 ms mientras siga
+  inclinado (el temporizador solo corre con inclinación) y, al soltar, el
+  alto va de inmediato y se repite dos veces. Antes se enviaba cada 80 ms
+  fijos, lo que sumaba ~40 ms de retraso medio y escalonaba el movimiento.
+  Cada mensaje lleva un número `n` (empieza en `Date.now()` para que siga
+  creciendo si el teléfono se recarga) y `remote-host.js` descarta los que
+  llegan desordenados, algo que el canal hace de vez en cuando; un salto
+  grande hacia atrás se toma como teléfono reiniciado. Medido desde la PC
+  del proyecto: el canal tarda ~65 ms de ida (p99 ≈ 80–130 ms) y no pierde
+  mensajes hasta 40 por segundo, por lo que 25/s es seguro; no subir de ahí
+  (el servidor limita los mensajes por segundo del proyecto, y con dos
+  teléfonos se suman).
+- **Movimiento de la mira en la PC (`actualizarControlMira()`):** la
+  inclinación se convierte en velocidad (`MIRA_CURVA`, hasta
+  `MIRA_VELOCIDAD` px/s: poca inclinación = movimiento lento para afinar) y
+  se suaviza por eje: acelerar en el mismo sentido tarda ~25 ms
+  (`MIRA_ACELERA_MS`, para que los escalones de la red no se vean a
+  tirones), frenar o invertir el sentido ~15 ms (`MIRA_FRENA_MS`) y soltar
+  es inmediato, para que la mira nunca siga hacia el lado que ya se soltó.
+  Si dejan de llegar mensajes, la inclinación se desvanece linealmente entre
+  250 y 650 ms (`MIRA_FRESCO_MS`, `MIRA_CADUCA_MS`) en vez de cortarse de
+  golpe a los 300 ms, que se sentía como un congelamiento. El teclado se
+  suma sin suavizar y sobre un objetivo la mira frena a la mitad (ese freno
+  también se suaviza). Nota: en Phaser 3.70 el movimiento del mouse no trae
+  `pointerType`, así que el `pointermove` de `crearControlMira()` en la
+  práctica no mueve la mira; solo el clic (`pointerdown`) apunta.
 - **Pregunta de seguridad con el mando:** joystick arriba/abajo resalta una
   opción (un paso por movimiento, hay que volver al centro), **A** responde
   y, ya respondida, **A** continúa. Los botones 1–4 siguen funcionando.
@@ -667,5 +705,13 @@ ninguna contraseña ni clave secreta.
   revisar el código): nitidez del canvas, coordenadas de clic, combate
   completo de cada jefe, derrota a mitad de combate, reinicio limpio,
   combo, servidores, escáner y responsive en escritorio/móvil.
+- Al medir algo sensible al tiempo (el joystick, la respuesta de la mira),
+  usar el Chrome real (`channel: 'chrome'` en Playwright) y no el
+  "Chromium headless shell": este dibuja la PC por software a ~13 fps y,
+  como el juego limita `delta` a 50 ms, la mira se mueve en cámara lenta y
+  todas las mediciones salen deformadas. El mando se probó con la PC y el
+  teléfono en dos páginas, un relevo local que imita el retraso real
+  (~65 ms de ida) en lugar de Supabase y gestos de dedo reproducidos dentro
+  de la página del teléfono.
 - Publicar los cambios en GitHub Pages (repositorio
   `cesarau90/videojuego`) después de cada entrega.

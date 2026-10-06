@@ -338,6 +338,13 @@ const JUGADORES = [
   { etiqueta: 'J1', color: PALETA.azul, colorTexto: PALETA.azulTexto },
   { etiqueta: 'J2', color: 0xffd34e, colorTexto: '#ffd34e' },
 ];
+// Movimiento de la mira con el joystick del teléfono (ver actualizarControlMira).
+const MIRA_VELOCIDAD = 600;   // px por segundo con el joystick inclinado al máximo
+const MIRA_CURVA = 1.6;       // mayor = más fino con poca inclinación
+const MIRA_ACELERA_MS = 25;   // al acelerar en el mismo sentido: arranque suave
+const MIRA_FRENA_MS = 15;     // al frenar o cambiar de sentido: casi inmediato
+const MIRA_FRESCO_MS = 250;   // sin mensajes del mando durante este tiempo se empieza a frenar...
+const MIRA_CADUCA_MS = 650;   // ...y a los 650 ms la mira se detiene por completo
 // En el modo 2 jugadores hay el doble de manos atacando, así que los jefes
 // tienen 50% más de vida y cabe un elemento más en pantalla a la vez.
 const FACTOR_VIDA_JEFE_2J = 1.5;
@@ -1423,6 +1430,7 @@ class EscenaJuego extends Phaser.Scene {
         ...config, grafico, texto,
         mira: { x: 0, y: 0 },
         ejes: { x: 0, y: 0, recibido: 0 },
+        velocidad: { x: 0, y: 0 }, // px/s actuales de la mira con el joystick
         ultimoAtaque: -Infinity,
         feedback: '', feedbackHasta: 0,
       };
@@ -1443,6 +1451,7 @@ class EscenaJuego extends Phaser.Scene {
     const y = (this.areaJuego.yMin + this.areaJuego.yMax) / 2;
     this.jugadores.forEach((jugador, i) => {
       jugador.ejes = { x: 0, y: 0, recibido: 0 };
+      jugador.velocidad = { x: 0, y: 0 };
       jugador.mira.x = estado.multijugador ? this.anchoLogico * (i === 0 ? 0.35 : 0.65) : this.anchoLogico / 2;
       jugador.mira.y = y;
     });
@@ -1467,6 +1476,17 @@ class EscenaJuego extends Phaser.Scene {
     this.jugadores[indice].ejes = { x: x / longitud, y: y / longitud, recibido: Date.now() };
   }
 
+  // Acerca la velocidad de un eje a su meta. Acelerar en el mismo sentido es
+  // gradual (los mensajes del teléfono llegan por escalones y así no se ve a
+  // tirones); frenar o cambiar de sentido es casi inmediato, para que la mira
+  // no siga hacia el lado que ya soltaste; y soltar (meta 0) detiene al instante.
+  suavizarVelocidad(actual, meta, dt) {
+    if (meta === 0) return 0;
+    const acelera = Math.abs(meta) > Math.abs(actual) && actual * meta >= 0;
+    const tau = acelera ? MIRA_ACELERA_MS : MIRA_FRENA_MS;
+    return meta + (actual - meta) * Math.exp(-dt / tau);
+  }
+
   actualizarControlMira(delta = 16) {
     const jugando = estado.juegoActivo && !this.introNivelActiva && document.getElementById('pantalla-juego').classList.contains('activa');
     const teclado = [
@@ -1477,25 +1497,40 @@ class EscenaJuego extends Phaser.Scene {
       const visible = jugando && this.jugadorActivo(i);
       jugador.grafico.setVisible(visible);
       jugador.texto.setVisible(visible && estado.multijugador);
-      if (!visible) return;
-      // Caduca el movimiento si se pierde la conexión o el paquete de soltar.
-      const remoto = Date.now() - jugador.ejes.recibido < 300;
+      if (!visible) { jugador.velocidad.x = 0; jugador.velocidad.y = 0; return; }
       const [der, izq, abajo, arriba] = teclado[i];
-      // Respuesta progresiva del joystick: inclinarlo poco mueve la mira
-      // despacio (para afinar) y a fondo la mueve rápido.
-      const ejeX = remoto ? jugador.ejes.x : 0;
-      const ejeY = remoto ? jugador.ejes.y : 0;
-      const fuerza = Math.hypot(ejeX, ejeY);
-      const curva = fuerza > 0 ? Math.pow(fuerza, 1.6) / fuerza : 0;
-      const x = ejeX * curva + Number(der.isDown) - Number(izq.isDown);
-      const y = ejeY * curva + Number(abajo.isDown) - Number(arriba.isDown);
-      const longitud = Math.max(1, Math.hypot(x, y));
+      const dt = Math.min(delta, 50);
+      const sobreObjetivo = this.objetivoControl(i);
       // Sobre un objetivo la mira frena a la mitad, para no pasarse de largo.
-      const freno = this.objetivoControl(i) ? 0.5 : 1;
-      const paso = 600 * freno * Math.min(delta, 50) / 1000;
+      const freno = sobreObjetivo ? 0.5 : 1;
+
+      // Joystick del teléfono. Si dejan de llegar mensajes (red lenta, teléfono
+      // apagado) la mira no se corta de golpe ni sigue para siempre: la
+      // inclinación se desvanece entre MIRA_FRESCO_MS y MIRA_CADUCA_MS.
+      const edad = Date.now() - jugador.ejes.recibido;
+      const confianza = edad <= MIRA_FRESCO_MS ? 1
+        : Math.max(0, 1 - (edad - MIRA_FRESCO_MS) / (MIRA_CADUCA_MS - MIRA_FRESCO_MS));
+      // Respuesta progresiva: inclinarlo poco mueve la mira despacio (para
+      // afinar) y a fondo la mueve rápido.
+      const ejeX = jugador.ejes.x * confianza;
+      const ejeY = jugador.ejes.y * confianza;
+      const fuerza = Math.hypot(ejeX, ejeY);
+      const curva = fuerza > 0 ? Math.pow(fuerza, MIRA_CURVA) / fuerza : 0;
+      const velocidad = jugador.velocidad;
+      velocidad.x = this.suavizarVelocidad(velocidad.x, ejeX * curva * MIRA_VELOCIDAD * freno, dt);
+      velocidad.y = this.suavizarVelocidad(velocidad.y, ejeY * curva * MIRA_VELOCIDAD * freno, dt);
+
+      // El teclado (flechas / I-J-K-L) se suma sin suavizar: cada tecla es una inclinación completa.
+      const teclaX = Number(der.isDown) - Number(izq.isDown);
+      const teclaY = Number(abajo.isDown) - Number(arriba.isDown);
+      const largoTecla = Math.hypot(teclaX, teclaY) || 1;
+      let x = velocidad.x + teclaX / largoTecla * MIRA_VELOCIDAD * freno;
+      let y = velocidad.y + teclaY / largoTecla * MIRA_VELOCIDAD * freno;
+      const rapidez = Math.hypot(x, y);
+      if (rapidez > MIRA_VELOCIDAD) { x *= MIRA_VELOCIDAD / rapidez; y *= MIRA_VELOCIDAD / rapidez; }
       const mira = jugador.mira;
-      this.apuntarA(mira.x + x / longitud * paso, mira.y + y / longitud * paso, i);
-      const color = this.objetivoControl(i) ? PALETA.verde : jugador.color;
+      this.apuntarA(mira.x + x * dt / 1000, mira.y + y * dt / 1000, i);
+      const color = sobreObjetivo ? PALETA.verde : jugador.color;
       const g = jugador.grafico;
       g.clear(); g.lineStyle(2, color, 1); g.strokeCircle(mira.x, mira.y, 18);
       g.lineBetween(mira.x - 27, mira.y, mira.x - 10, mira.y);

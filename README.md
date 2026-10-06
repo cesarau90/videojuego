@@ -24,6 +24,9 @@ la portada y espera a que ambos dispositivos indiquen que están conectados.
 Mira el tablero en la PC y mueve la mira con el joystick del teléfono.
 Apunta al enemigo y pulsa la letra (**A, B, X o Y**) que aparece encima de él.
 La letra incorrecta no lo elimina. Puedes mantener el joystick con un dedo y atacar con otro.
+El joystick es **flotante**: el centro es donde apoyas el pulgar (todo el lado
+izquierdo del mando es zona táctil), así que no hace falta mirar el teléfono ni
+buscar el círculo, y la mira empieza a moverse solo cuando desplazas el dedo.
 Al soltar, cancelar el toque, ocultar la página o perder la conexión,
 el movimiento se detiene. El mando también incluye escáner, inicio,
 continuación, reintento y respuestas 1–4 (visibles durante las preguntas).

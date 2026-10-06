@@ -14,10 +14,21 @@
   const status = document.getElementById('connection');
   const pad = document.getElementById('joystick');
   const knob = document.getElementById('joystick-knob');
+  // Zona táctil del joystick: todo el lado izquierdo del mando, no solo el círculo.
+  const zone = document.querySelector('.movement');
   const colors = { A: '#00d99b', B: '#ff5c70', X: '#38bdf8', Y: '#ffd34e' };
   let subscribed = false, lastHost = 0, lastHello = 0, pointer = null;
   let axes = { x: 0, y: 0 };
   let lastSentAxes = { x: 0, y: 0 };
+  // Joystick flotante (ver más abajo): el centro es donde el dedo tocó primero.
+  const STICK_GAP = 40;          // ms mínimos entre mensajes al mover (máx. 25 por segundo)
+  const STICK_GAP_FAST = 16;     // ...y para un cambio grande (arrancar, invertir el sentido)
+  const STICK_KEEPALIVE = 100;   // ms: con el dedo quieto se repite la posición
+  const STICK_DEAD_IN = .08, STICK_DEAD_OUT = .14; // zona muerta (con histéresis)
+  let origin = { x: 0, y: 0 };
+  let stickOn = false;
+  let seq = Date.now();          // contador de mensajes: la PC descarta los más viejos
+  let lastSendAt = 0, sendTimer = null;
   // Pantallas donde el joystick funciona: el juego (mover la mira) y la
   // pregunta de seguridad (elegir respuesta arriba/abajo).
   const joystickScreens = ['pantalla-juego', 'pantalla-pregunta'];
@@ -128,55 +139,126 @@
     send('ping');
   }, 2000);
 
-  // move() solo actualiza el joystick; el envío va a ritmo fijo (sendAxes)
-  // para no saturar el canal: si se mandaba un mensaje por cada movimiento
-  // del dedo, algunos se perdían o llegaban tarde y la mira se pasaba.
-  function move(x, y) {
-    const length = Math.hypot(x, y);
-    axes = length < .12 ? { x: 0, y: 0 } : { x: x / Math.max(1, length), y: y / Math.max(1, length) };
-    const radius = pad.getBoundingClientRect().width * .28;
-    knob.style.transform = 'translate(' + axes.x * radius + 'px, ' + axes.y * radius + 'px)';
-    pad.classList.toggle('pressed', !!(axes.x || axes.y));
-    // Al soltar, el alto se manda de inmediato (y se repite por si se pierde).
-    if (!axes.x && !axes.y && (lastSentAxes.x || lastSentAxes.y)) {
-      sendAxes();
-      setTimeout(() => { if (!axes.x && !axes.y) send('move', axes); }, 120);
-    }
+  // ---- Joystick flotante ----
+  // El centro no es fijo: es el punto donde el dedo toca primero. Así,
+  // aterrizar un poco a un lado del círculo no mueve la mira hacia ese lado
+  // (antes se iba al lado contrario del que querías), y se puede jugar
+  // mirando la PC sin buscar el centro con el pulgar. Si el dedo se aleja más
+  // que el radio, el centro lo sigue: al regresar el dedo la mira cambia de
+  // sentido enseguida en vez de seguir de largo.
+  // Los ejes se envían en cuanto cambian (máximo 25 mensajes por segundo, para
+  // no saturar el canal) y se repiten cada 100 ms mientras sigan inclinados.
+  // Cada mensaje lleva un número: la PC descarta los que lleguen desordenados.
+  const stickRadius = () => Math.min(64, Math.max(32, pad.offsetWidth * .25)); // px hasta la inclinación completa
+  // El joystick solo se envía donde la PC lo usa: el juego con mando y la pregunta.
+  const canSteer = () => joystickScreens.includes(hostState.screen)
+    && !(hostState.screen === 'pantalla-juego' && hostState.mando === false);
+
+  function setAxes(x, y) {
+    axes = { x, y };
+    const reach = Math.min(stickRadius(), pad.offsetWidth * .29); // el pomo acompaña al dedo sin salirse del círculo
+    knob.style.transform = 'translate(' + x * reach + 'px, ' + y * reach + 'px)';
+    pad.classList.toggle('pressed', !!(x || y));
+    if (x || y) {
+      scheduleSend();
+      if (keepAliveTimer === null) keepAliveTimer = setInterval(keepAlive, 20);
+    } else sendStop();
   }
   function sendAxes() {
-    if (!connected()) return;
-    send('move', axes);
-    lastSentAxes = axes;
+    if (!connected() || !canSteer()) return;
+    const x = Math.round(axes.x * 100) / 100, y = Math.round(axes.y * 100) / 100;
+    send('move', { x, y, n: ++seq });
+    lastSentAxes = { x, y };
+    lastSendAt = performance.now();
   }
-  setInterval(() => {
-    if (axes.x || axes.y || axes.x !== lastSentAxes.x || axes.y !== lastSentAxes.y) sendAxes();
-  }, 80);
+  // Cuánto cambiaron los ejes desde el último mensaje enviado.
+  const axesChange = () => Math.max(Math.abs(axes.x - lastSentAxes.x), Math.abs(axes.y - lastSentAxes.y));
+  // Envía ya si pasó el intervalo mínimo; si no, deja uno pendiente que
+  // llevará los ejes más recientes (sin acumular mensajes viejos). Un cambio
+  // grande (arrancar, invertir el sentido) no espera el intervalo completo:
+  // es justo lo que se nota si llega tarde.
+  function scheduleSend() {
+    const change = axesChange();
+    if (change < .02) return;
+    const wait = (change >= .25 ? STICK_GAP_FAST : STICK_GAP) - (performance.now() - lastSendAt);
+    clearTimeout(sendTimer);
+    sendTimer = null;
+    if (wait <= 0) { sendAxes(); return; }
+    sendTimer = setTimeout(() => { sendTimer = null; if (axesChange() >= .02) sendAxes(); }, wait);
+  }
+  // Al soltar, el alto se manda de inmediato, sin esperar el intervalo, y se
+  // repite dos veces por si se pierde.
+  function sendStop() {
+    clearTimeout(sendTimer);
+    sendTimer = null;
+    if (!lastSentAxes.x && !lastSentAxes.y) return;
+    sendAxes();
+    [90, 240].forEach((ms) => setTimeout(() => { if (!axes.x && !axes.y) sendAxes(); }, ms));
+  }
+  // Latido: con el joystick inclinado y el dedo quieto se repite la posición.
+  // Solo corre mientras hay inclinación (no despierta al teléfono con el dedo suelto).
+  // (-10 ms de margen: el temporizador a veces despierta unas décimas antes y
+  // el latido se iría al siguiente ciclo, 20 ms más tarde.)
+  let keepAliveTimer = null;
+  function keepAlive() {
+    if (!axes.x && !axes.y) { clearInterval(keepAliveTimer); keepAliveTimer = null; return; }
+    if (performance.now() - lastSendAt >= STICK_KEEPALIVE - 10) sendAxes();
+  }
+  // El círculo se desliza hasta el dedo (sin salirse de la zona táctil) para
+  // que el pomo quede bajo el pulgar; al soltar vuelve a su lugar.
+  function placeBase() {
+    const area = zone.getBoundingClientRect();
+    const half = pad.offsetWidth / 2;
+    const homeX = area.left + pad.offsetLeft + half, homeY = area.top + pad.offsetTop + half;
+    const x = Math.min(area.right - half, Math.max(area.left + half, origin.x));
+    const y = Math.min(area.bottom - half, Math.max(area.top + half, origin.y));
+    pad.style.transform = 'translate(' + (x - homeX) + 'px, ' + (y - homeY) + 'px)';
+  }
+  function steer(event) {
+    const radius = stickRadius();
+    let dx = event.clientX - origin.x, dy = event.clientY - origin.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance > radius) { // el centro sigue al dedo
+      const pull = (distance - radius) / distance;
+      origin.x += dx * pull; origin.y += dy * pull;
+      dx = event.clientX - origin.x; dy = event.clientY - origin.y;
+      placeBase();
+    }
+    const tilt = Math.min(1, Math.hypot(dx, dy) / radius);
+    stickOn = tilt > (stickOn ? STICK_DEAD_IN : STICK_DEAD_OUT);
+    const power = stickOn ? (tilt - STICK_DEAD_IN) / (1 - STICK_DEAD_IN) : 0;
+    const length = Math.hypot(dx, dy) || 1;
+    setAxes(dx / length * power, dy / length * power);
+  }
   function reset() {
     const captured = pointer;
     pointer = null;
     keys.clear();
-    move(0, 0);
-    if (captured !== null && pad.hasPointerCapture(captured)) pad.releasePointerCapture(captured);
+    stickOn = false;
+    pad.classList.remove('held');
+    zone.classList.remove('held');
+    pad.style.transform = '';
+    setAxes(0, 0);
+    if (captured !== null && zone.hasPointerCapture(captured)) zone.releasePointerCapture(captured);
   }
-  function movePointer(event) {
-    const rect = pad.getBoundingClientRect();
-    const radius = rect.width * .28;
-    move((event.clientX - rect.left - rect.width / 2) / radius,
-      (event.clientY - rect.top - rect.height / 2) / radius);
-  }
-  pad.addEventListener('pointerdown', (event) => {
+  zone.addEventListener('pointerdown', (event) => {
     event.preventDefault();
-    if (pointer !== null || !connected() || !joystickScreens.includes(hostState.screen)
-      || (hostState.screen === 'pantalla-juego' && hostState.mando === false)) return;
+    if (pointer !== null || !connected()) return;
     pointer = event.pointerId;
-    pad.setPointerCapture(pointer);
-    movePointer(event);
+    // Si el navegador no puede capturar el puntero, el joystick sigue funcionando.
+    try { zone.setPointerCapture(pointer); } catch (e) { /* el puntero ya terminó o no se admite */ }
+    origin = { x: event.clientX, y: event.clientY };
+    stickOn = false;
+    pad.classList.add('held');
+    zone.classList.add('held');
+    placeBase();
+    setAxes(0, 0); // tocar no mueve la mira: parte del reposo
   });
-  pad.addEventListener('pointermove', (event) => {
-    if (event.pointerId === pointer) { event.preventDefault(); movePointer(event); }
+  zone.addEventListener('pointermove', (event) => {
+    if (event.pointerId === pointer) { event.preventDefault(); steer(event); }
   });
   ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((type) =>
-    pad.addEventListener(type, (event) => { if (event.pointerId === pointer) reset(); }));
+    zone.addEventListener(type, (event) => { if (event.pointerId === pointer) reset(); }));
   document.querySelectorAll('[data-letter]').forEach((button) => {
     function attack() {
       if (button.disabled || !connected()) return;
@@ -193,17 +275,24 @@
   document.querySelectorAll('[data-action]').forEach((button) => {
     button.addEventListener('click', () => { if (connected()) send('button', { action: button.dataset.action }); });
   });
+  // Flechas del teclado (para probar el mando desde una computadora).
+  function keyboardAxes() {
+    const x = Number(keys.has('ArrowRight')) - Number(keys.has('ArrowLeft'));
+    const y = Number(keys.has('ArrowDown')) - Number(keys.has('ArrowUp'));
+    const length = Math.hypot(x, y) || 1;
+    setAxes(x / length, y / length);
+  }
   window.addEventListener('keydown', (event) => {
     if (!connected() || !joystickScreens.includes(hostState.screen)) return;
     if (event.key.startsWith('Arrow')) {
       event.preventDefault(); keys.add(event.key);
-      move(Number(keys.has('ArrowRight')) - Number(keys.has('ArrowLeft')), Number(keys.has('ArrowDown')) - Number(keys.has('ArrowUp')));
+      keyboardAxes();
     } else if (colors[event.key.toUpperCase()] && !event.repeat) send('attack', { letter: event.key.toUpperCase() });
   });
   window.addEventListener('keyup', (event) => {
     if (event.key.startsWith('Arrow')) {
       event.preventDefault(); keys.delete(event.key);
-      move(Number(keys.has('ArrowRight')) - Number(keys.has('ArrowLeft')), Number(keys.has('ArrowDown')) - Number(keys.has('ArrowUp')));
+      keyboardAxes();
     }
   });
   // Safari: evita el menú de "copiar/seleccionar" y la lupa al mantener el dedo.
