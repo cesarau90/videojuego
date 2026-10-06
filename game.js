@@ -616,6 +616,8 @@ const estado = {
   modoMando: false,
   multijugador: false, // true en el modo cooperativo de 2 jugadores (siempre con mando)
   modoDuo: false, // true en el modo teclado + mouse (2 jugadores en la misma PC, sin mando)
+  esperando2j: false, // true en la sala de espera de "2 jugadores" (aún no empieza la partida)
+  cuentaEspera: null, // segundos que faltan para empezar cuando ya están los dos teléfonos
   puntosJugadores: [0, 0], // puntos conseguidos por cada jugador
 };
 
@@ -4717,14 +4719,22 @@ let juegoPhaser = null;
 // Puente pequeño para el receptor del mando, sin simular clics sobre el canvas.
 // "jugador" es 1 o 2.
 window.controlJuego = {
+  remoto: false, // remote-host.js lo pone en true cuando la conexión con teléfonos está lista
   mover(x, y, jugador = 1) { juegoPhaser?.scene.keys.EscenaJuego?.moverControl(x, y, jugador - 1); },
   atacar(letra, jugador = 1) { juegoPhaser?.scene.keys.EscenaJuego?.atacarControl(letra, jugador - 1); },
+  // remote-host.js avisa qué jugadores (1 y/o 2) tienen teléfono conectado (sala de espera).
+  telefonos(jugadores) {
+    sala2j.jugadores = Array.isArray(jugadores) ? jugadores : [];
+    actualizarSalaEspera();
+  },
   estado() {
     const escena = juegoPhaser?.scene.keys.EscenaJuego;
     const jefe = escena?.jefe;
     return {
       charges: escena?.escanerCargas ?? 0,
-      multi: estado.multijugador,
+      // En la sala de espera los teléfonos ya se presentan como J1 y J2.
+      multi: estado.multijugador || estado.esperando2j,
+      espera: estado.esperando2j ? { cuenta: estado.cuentaEspera } : null,
       mando: estado.modoMando,
       duo: estado.modoDuo, // teclado + mouse en la PC: el mando no se usa
       audio: audioDesbloqueado(), // false: falta un clic en la PC para que suene (el mando espera)
@@ -4760,12 +4770,87 @@ function textoPuntosJugadores() {
   return ` (J1: ${estado.puntosJugadores[0]} · J2: ${estado.puntosJugadores[1]})`;
 }
 
+/* ------------------------------------------------------------------
+   SALA DE ESPERA DEL MODO 2 JUGADORES
+   Al elegir "2 jugadores" la partida no empieza al instante: primero se
+   conectan los dos teléfonos (cada uno escanea el QR). Cuando están los
+   dos hay una cuenta atrás corta y la partida empieza sola; si uno se
+   desconecta, la cuenta se cancela. "Empezar ya" salta la espera (quien no
+   tenga teléfono juega con el teclado) y "Volver" regresa a la portada.
+   remote-host.js avisa qué teléfonos hay con controlJuego.telefonos().
+   Reintentar y "Volver a intentar" no pasan por aquí: ya están conectados.
+   ------------------------------------------------------------------ */
+const CUENTA_ATRAS_2J = 3; // segundos entre "ya están los dos" y el inicio
+const sala2j = {
+  jugadores: [], // jugadores (1 y/o 2) que ya tienen teléfono conectado
+  inicio: 0,     // instante (ms) en que termina la cuenta atrás; 0 = no está contando
+  reloj: null,   // temporizador que revisa la cuenta atrás
+};
+
+function abrirSalaEspera2j() {
+  // Sin conexión con teléfonos (la página abierta sin servidor) o jugando desde
+  // un teléfono no hay nada que esperar: se empieza como antes.
+  if (!window.controlJuego.remoto || esVistaMovil()) { iniciarJuegoDesdeCero('2j'); return; }
+  activarAudio();
+  estado.esperando2j = true;
+  sala2j.inicio = 0;
+  mostrarPantalla('pantalla-espera');
+  clearInterval(sala2j.reloj);
+  sala2j.reloj = setInterval(actualizarSalaEspera, 250);
+  actualizarSalaEspera();
+}
+
+// Sale de la sala de espera (para empezar la partida o volver a la portada).
+function cerrarSalaEspera2j() {
+  clearInterval(sala2j.reloj);
+  sala2j.reloj = null;
+  sala2j.inicio = 0;
+  estado.esperando2j = false;
+  estado.cuentaEspera = null;
+}
+
+function cancelarSalaEspera2j() {
+  cerrarSalaEspera2j();
+  mostrarPantalla('pantalla-inicio');
+}
+
+// Pinta el estado de cada jugador y lleva la cuenta atrás cuando ya están los dos.
+function actualizarSalaEspera() {
+  if (!estado.esperando2j) return;
+  const conectado = [sala2j.jugadores.includes(1), sala2j.jugadores.includes(2)];
+  conectado.forEach((listo, i) => {
+    const tarjeta = document.getElementById(`espera-j${i + 1}`);
+    tarjeta.classList.toggle('listo', listo);
+    const celda = tarjeta.querySelector('.espera-estado');
+    const texto = listo ? 'Teléfono conectado' : 'Esperando teléfono…';
+    if (celda.textContent !== texto) celda.textContent = texto;
+  });
+  let mensaje;
+  if (conectado[0] && conectado[1]) {
+    if (!sala2j.inicio) sala2j.inicio = Date.now() + CUENTA_ATRAS_2J * 1000;
+    const faltan = Math.ceil((sala2j.inicio - Date.now()) / 1000);
+    if (faltan <= 0) { iniciarJuegoDesdeCero('2j'); return; }
+    estado.cuentaEspera = faltan;
+    mensaje = `¡Los dos conectados! Empieza en ${faltan}…`;
+  } else {
+    sala2j.inicio = 0; // si uno se desconecta, la cuenta atrás se cancela
+    estado.cuentaEspera = null;
+    mensaje = conectado[0] || conectado[1]
+      ? `Falta el teléfono del jugador ${conectado[0] ? 2 : 1}.`
+      : 'Esperando a los dos teléfonos…';
+  }
+  const elementoMensaje = document.getElementById('espera-mensaje');
+  if (elementoMensaje.textContent !== mensaje) elementoMensaje.textContent = mensaje;
+  elementoMensaje.classList.toggle('listo', estado.cuentaEspera !== null);
+}
+
 // Inicia una partida nueva. "modo" puede ser 'normal' (el juego original con
 // clic/toque), 'mando' (mira + letras, 1 jugador), '2j' (cooperativo con
 // mando) o 'duo' (2 jugadores en la misma PC: uno con el lado izquierdo del
 // teclado y otro con el mouse). Si no se indica (por ejemplo, al reintentar)
 // se conserva el modo anterior.
 function iniciarJuegoDesdeCero(modo) {
+  cerrarSalaEspera2j(); // por si se empieza desde la sala de espera
   if (modo) {
     estado.modoMando = modo === 'mando' || modo === '2j';
     estado.multijugador = modo === '2j';
@@ -5026,7 +5111,9 @@ function activarEscanerDesdeUI() {
    ------------------------------------------------------------------ */
 document.getElementById('btn-jugar').addEventListener('click', () => iniciarJuegoDesdeCero('normal'));
 document.getElementById('btn-jugar-mando').addEventListener('click', () => iniciarJuegoDesdeCero('mando'));
-document.getElementById('btn-jugar-2').addEventListener('click', () => iniciarJuegoDesdeCero('2j'));
+document.getElementById('btn-jugar-2').addEventListener('click', abrirSalaEspera2j);
+document.getElementById('btn-empezar-ya').addEventListener('click', () => iniciarJuegoDesdeCero('2j'));
+document.getElementById('btn-cancelar-espera').addEventListener('click', cancelarSalaEspera2j);
 document.getElementById('btn-jugar-duo').addEventListener('click', () => iniciarJuegoDesdeCero('duo'));
 document.getElementById('btn-siguiente-nivel').addEventListener('click', continuarAlSiguienteNivel);
 document.getElementById('btn-reintentar').addEventListener('click', () => iniciarJuegoDesdeCero());

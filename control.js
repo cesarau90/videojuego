@@ -89,14 +89,21 @@
     // En la portada, si el navegador de la PC aún no deja sonar el audio (falta un clic ahí), se pide antes de iniciar.
     const lobby = payload.screen === 'pantalla-inicio';
     const silent = lobby && payload.audio === false;
+    // Sala de espera de 2 jugadores: la partida empieza cuando están los dos teléfonos.
+    const waiting = payload.screen === 'pantalla-espera';
+    const countdown = payload.espera?.cuenta;
     document.getElementById('combat-title').textContent = question ? 'PREGUNTA DE SEGURIDAD'
+      : waiting ? (countdown ? '¡LISTOS!' : 'ESPERANDO A LOS 2 TELÉFONOS')
       : silent ? 'ANTES DE INICIAR' : lobby ? 'LISTO PARA DEFENDER'
       : boss ? boss.name + ' · COMBINACIÓN' : 'APUNTA Y ATACA';
     const feedback = Array.isArray(payload.feedback) ? payload.feedback[player - 1] : '';
     const normalMode = payload.mando === false && payload.screen === 'pantalla-juego';
     const hint = document.getElementById('combat-hint');
     hint.classList.toggle('warn', silent);
-    hint.textContent = normalMode
+    hint.textContent = waiting
+      ? (countdown ? `Los dos teléfonos están conectados. Empieza en ${countdown}…`
+        : 'Falta el otro teléfono: que escanee el mismo QR que se ve en la PC. Cuando estén los dos, la partida empieza sola.')
+      : normalMode
       ? (payload.duo
         ? 'Esta partida es de teclado + mouse en la PC: el mando no se usa. Para usar el mando, reinicia y pulsa INICIAR aquí.'
         : 'Esta partida está en modo normal (clic en la PC). Para usar el mando, reinicia y pulsa INICIAR aquí.')

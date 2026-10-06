@@ -9,7 +9,10 @@ En la portada hay cuatro botones:
   con los tiempos originales.
 - **Jugar con mando:** se mueve una mira y se ataca con la letra A, B, X o Y que
   lleva cada enemigo, usando el teléfono como mando o el teclado.
-- **2 jugadores:** cooperativo con dos miras (ver más abajo).
+- **2 jugadores:** cooperativo con dos miras (ver más abajo). Al elegirlo aparece
+  una **sala de espera** con el QR: la partida empieza sola (con una cuenta atrás
+  de 3 s) cuando los dos teléfonos están conectados. Con **Empezar ya** se salta la
+  espera y se juega con el teclado.
 - **Teclado + mouse:** dos jugadores en la misma PC, sin teléfono: uno con el lado
   izquierdo del teclado y otro con el mouse (ver más abajo).
 
@@ -86,9 +89,13 @@ derrotar al jefe de cada nivel para proteger el sistema.
 
 ## Modo 2 jugadores (cooperativo)
 
-En la portada, el botón **2 jugadores** inicia una partida cooperativa en la
+En la portada, el botón **2 jugadores** prepara una partida cooperativa en la
 misma pantalla: aparecen dos miras (J1 azul y J2 amarilla) que defienden los
-mismos servidores. Cada jugador puede usar un teléfono o el teclado:
+mismos servidores. Primero se abre una **sala de espera** con el QR, donde cada
+jugador ve si su teléfono ya está conectado; cuando están los dos, una cuenta atrás
+de 3 segundos y la partida empieza sola (si uno se va antes, la cuenta se cancela).
+**Empezar ya** salta la espera y **Volver** regresa a la portada; "Volver a
+intentar" no vuelve a esperar. Cada jugador puede usar un teléfono o el teclado:
 
 - **J1:** mouse o flechas para mover y teclas **A, B, X, Y** para atacar, o un teléfono.
 - **J2:** teclas **I, J, K, L** para mover y **7, 8, 9, 0** (= A, B, X, Y) para

@@ -6,6 +6,7 @@
   const key = 'sb_publishable_g6XPAfwi05KqohaBm0uL3g_umR1yBIc';
   const status = document.getElementById('estado-control');
   const dialogStatus = document.getElementById('estado-control-dialogo');
+  const waitStatus = document.getElementById('estado-control-espera');
   const link = document.getElementById('enlace-control');
   const dialog = document.getElementById('dialogo-control');
   const token = crypto.randomUUID();
@@ -17,6 +18,7 @@
   function showStatus(message) {
     status.textContent = message;
     dialogStatus.textContent = message;
+    waitStatus.textContent = message;
   }
 
   if (location.protocol === 'file:') {
@@ -36,6 +38,13 @@
     text: controlUrl.href, width: 192, height: 192,
     correctLevel: QRCode.CorrectLevel.M,
   });
+  // La sala de espera de "2 jugadores" (game.js) muestra el mismo QR.
+  new QRCode(document.getElementById('qr-control-espera'), {
+    text: controlUrl.href, width: 192, height: 192,
+    correctLevel: QRCode.CorrectLevel.M,
+  });
+  // Con la conexión lista, "2 jugadores" espera a los dos teléfonos antes de empezar.
+  if (window.controlJuego) window.controlJuego.remoto = true;
 
   document.getElementById('btn-ver-qr').addEventListener('click', () => dialog.showModal());
   document.getElementById('btn-cerrar-qr').addEventListener('click', () => dialog.close());
@@ -57,6 +66,9 @@
     players: Object.fromEntries([...phones].map(([id, phone]) => [id, phone.slot])),
   });
   const sendState = () => send('state', gameState());
+  // La sala de espera de 2 jugadores necesita saber qué jugadores (1 y/o 2) ya tienen teléfono.
+  const connectedPlayers = () => [...new Set([...phones.values()].map((phone) => phone.slot))];
+  const tellGame = () => window.controlJuego?.telefonos(connectedPlayers());
 
   const send = (event, payload = {}) => {
     if (subscribed) channel.send({ type: 'broadcast', event, payload });
@@ -155,6 +167,7 @@
       phone.last = Date.now();
       phones.set(id, phone);
       updateStatus();
+      tellGame();
       sendState();
     })
     .on('broadcast', { event: 'ping' }, ({ payload }) => {
@@ -172,6 +185,7 @@
       window.controlJuego?.mover(0, 0, 2);
       if (other) other.slot = phone.slot;
       phone.slot = payload.slot;
+      tellGame();
       sendState();
     })
     .on('broadcast', { event: 'move' }, ({ payload }) => {
@@ -225,6 +239,7 @@
       updateStatus();
       if (phones.size === 0) showStatus('Teléfono desconectado. Vuelve a escanear el QR.');
     }
+    tellGame();
     const nextState = gameState();
     const serialized = JSON.stringify(nextState);
     if (serialized !== lastState || Date.now() - lastStateSent > 2000) {

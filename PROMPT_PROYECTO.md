@@ -494,9 +494,9 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=25`, `game.js?v=32`,
-`sin-zoom.js?v=1` y `remote-host.js?v=8`; en `control.html`: `control.css?v=7`,
-`control.js?v=10` y `sin-zoom.js?v=1`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=26`, `game.js?v=33`,
+`sin-zoom.js?v=1` y `remote-host.js?v=9`; en `control.html`: `control.css?v=7`,
+`control.js?v=11` y `sin-zoom.js?v=1`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la
@@ -694,13 +694,33 @@ ninguna contraseña ni clave secreta.
 - La combinación del jefe en la PC toma el color de la siguiente letra que
   hay que pulsar.
 - Puente con el juego: `window.controlJuego` en `game.js`
-  (`mover(x, y, jugador)`, `atacar(letra, jugador)`, `estado()`), sin
+  (`mover(x, y, jugador)`, `atacar(letra, jugador)`, `telefonos(jugadores)` para
+  la sala de espera de 2 jugadores, `remoto` y `estado()`), sin
   simular clics sobre el canvas.
 
 ## 13. Modo 2 jugadores (cooperativo en la misma pantalla)
 
 - Botón "2 jugadores" en la portada (y en el mando). `estado.multijugador`
   indica el modo; "Volver a intentar" conserva el modo elegido.
+- **Sala de espera:** la partida NO empieza al pulsar "2 jugadores" (antes
+  arrancaba al instante aunque el QR no se hubiera escaneado). El botón abre
+  `#pantalla-espera` (`abrirSalaEspera2j()` en `game.js`): el QR, una tarjeta por
+  jugador (J1 azul / J2 amarillo; "Esperando teléfono…" o "Teléfono conectado") y
+  un mensaje de estado. Cuando están los **dos** hay una cuenta atrás de 3 s
+  (`CUENTA_ATRAS_2J`) y la partida empieza sola con `iniciarJuegoDesdeCero('2j')`;
+  si uno se va antes, la cuenta se cancela y vuelve a esperar. "Empezar ya" salta
+  la espera (quien no tenga teléfono juega con el teclado) y "Volver" regresa a la
+  portada. Funciona igual si se pulsa "2 JUGADORES" en un teléfono. `remote-host.js`
+  avisa qué jugadores tienen teléfono con `controlJuego.telefonos([1, 2])`
+  (al presentarse un teléfono, al cambiar de jugador y cada 200 ms); la PC tarda
+  unos 7 s (`PHONE_TIMEOUT`) en notar que un teléfono se fue, así que una
+  desconexión en pleno conteo no alcanza a cancelarlo. Durante la espera
+  `estado()` manda `multi: true` y `espera: { cuenta }`, y el mando muestra
+  "JUGADOR 1/2", "ESPERANDO A LOS 2 TELÉFONOS" o "¡LISTOS!" con la cuenta. No pasa
+  por la sala de espera: "Volver a intentar"/reintentar (ya están conectados), las
+  llamadas directas a `iniciarJuegoDesdeCero('2j')`, la vista móvil (jugar desde
+  un teléfono) ni cuando `controlJuego.remoto` es falso (página sin servidor o sin
+  las librerías de conexión): ahí empieza al instante, como antes.
 - Dos miras en el tablero: **J1 azul** y **J2 amarilla**, con su etiqueta;
   empiezan en cada mitad del tablero. Defienden los mismos servidores y
   comparten escáner, combo y vidas.

@@ -1478,3 +1478,144 @@ html:not(.modo-mando) #btn-ver-qr { display: none; }
   color: inherit;
   overflow-wrap: anywhere;
 }
+
+/* ============ SALA DE ESPERA DE 2 JUGADORES ============ */
+/* Se muestra al elegir "2 jugadores": la partida empieza cuando los dos
+   teléfonos están conectados (ver abrirSalaEspera2j en game.js). */
+#pantalla-espera.activa {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.panel-espera {
+  max-width: 640px;
+}
+
+.espera-etiqueta {
+  margin-bottom: 8px;
+  font-family: var(--fuente-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--verde);
+}
+
+.espera-contenido {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  margin-bottom: 18px;
+}
+
+.espera-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 192px;
+}
+
+.espera-conexion {
+  font-family: var(--fuente-mono);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.espera-jugadores {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.espera-jugador {
+  --color-jugador: var(--azul);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--borde);
+  border-left: 4px solid var(--color-jugador);
+  border-radius: 10px;
+  background: var(--fondo);
+  transition: border-color 250ms ease, box-shadow 250ms ease;
+}
+
+.espera-jugador.j2 { --color-jugador: #ffd34e; }
+
+.espera-nombre {
+  font-family: var(--fuente-display);
+  font-weight: 700;
+  color: var(--color-jugador);
+}
+
+.espera-estado {
+  font-family: var(--fuente-mono);
+  font-size: 0.8rem;
+  color: var(--texto-sec);
+}
+
+/* Punto que "respira" mientras falta el teléfono y se queda fijo en verde al conectar */
+.espera-estado::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--texto-sec);
+  animation: respirar 1.4s ease-in-out infinite;
+}
+
+.espera-jugador.listo {
+  border-top-color: var(--verde);
+  border-right-color: var(--verde);
+  border-bottom-color: var(--verde);
+  box-shadow: 0 0 14px rgba(0, 217, 155, 0.18);
+}
+
+.espera-jugador.listo .espera-estado { color: var(--verde); }
+
+.espera-jugador.listo .espera-estado::before {
+  background: var(--verde);
+  animation: none;
+}
+
+.espera-mensaje {
+  min-height: 1.5em;
+  margin-bottom: 18px;
+  font-family: var(--fuente-mono);
+  font-size: 0.9rem;
+  color: var(--texto-sec);
+}
+
+.espera-mensaje.listo {
+  color: var(--verde);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.espera-botones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.panel-espera .espera-botones .boton-primario {
+  flex: 1 1 160px;
+  width: auto;
+}
+
+.espera-nota {
+  margin-top: 16px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--texto-sec);
+}

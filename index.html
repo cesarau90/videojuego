@@ -12,7 +12,7 @@
     rel="stylesheet"
   />
 
-  <link rel="stylesheet" href="style.css?v=25" />
+  <link rel="stylesheet" href="style.css?v=26" />
 </head>
 <body>
 
@@ -168,6 +168,41 @@
           <a id="enlace-control" class="qr-enlace" href="#">Abrir control</a>
         </div>
       </section>
+    </div>
+  </div>
+
+  <!-- ============================================= -->
+  <!-- PANTALLA 1B: SALA DE ESPERA DE 2 JUGADORES     -->
+  <!-- La partida empieza sola cuando los dos         -->
+  <!-- teléfonos ya están conectados                  -->
+  <!-- ============================================= -->
+  <div id="pantalla-espera" class="pantalla">
+    <div class="panel panel-espera">
+      <p class="espera-etiqueta">Modo 2 jugadores</p>
+      <h1 class="panel-titulo">Conecta los dos teléfonos</h1>
+      <p class="panel-texto">Cada jugador escanea este QR con su teléfono. La partida empieza sola cuando estén los dos conectados.</p>
+      <div class="espera-contenido">
+        <div class="espera-qr">
+          <div id="qr-control-espera" class="qr-img"></div>
+          <span id="estado-control-espera" class="estado-control espera-conexion" role="status"></span>
+        </div>
+        <ul class="espera-jugadores">
+          <li id="espera-j1" class="espera-jugador j1">
+            <span class="espera-nombre">Jugador 1</span>
+            <span class="espera-estado">Esperando teléfono…</span>
+          </li>
+          <li id="espera-j2" class="espera-jugador j2">
+            <span class="espera-nombre">Jugador 2</span>
+            <span class="espera-estado">Esperando teléfono…</span>
+          </li>
+        </ul>
+      </div>
+      <p id="espera-mensaje" class="espera-mensaje" role="status" aria-live="polite">Esperando a los dos teléfonos…</p>
+      <div class="espera-botones">
+        <button id="btn-empezar-ya" class="boton-primario" type="button">Empezar ya</button>
+        <button id="btn-cancelar-espera" class="boton-primario boton-secundario" type="button">Volver</button>
+      </div>
+      <p class="espera-nota">¿Sin teléfono? Con «Empezar ya», J1 juega con mouse o flechas + A B X Y y J2 con I J K L + 7 8 9 0.</p>
     </div>
   </div>
 
@@ -362,7 +397,7 @@
   <!-- Lógica del juego -->
   <!-- Sin zoom accidental en el teléfono (jugar directo en el celular); en la PC no hace nada -->
   <script src="sin-zoom.js?v=1"></script>
-  <script src="game.js?v=32"></script>
-  <script src="remote-host.js?v=8"></script>
+  <script src="game.js?v=33"></script>
+  <script src="remote-host.js?v=9"></script>
 </body>
 </html>
