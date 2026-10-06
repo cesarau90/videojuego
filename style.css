@@ -688,6 +688,13 @@ body {
   cursor: default;
 }
 
+/* Opción resaltada con el joystick del mando (se confirma con A) */
+.opcion-pregunta.seleccion-mando {
+  border-color: var(--azul);
+  background: rgba(56, 189, 248, 0.14);
+  box-shadow: inset 3px 0 0 var(--azul);
+}
+
 .opcion-pregunta.opcion-correcta {
   border-color: var(--verde);
   background: rgba(0, 217, 155, 0.16);

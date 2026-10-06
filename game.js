@@ -343,6 +343,10 @@ const ELEMENTOS_EXTRA_2J = 1;
 // Teclas del jugador 2 para atacar (en el teclado de la PC).
 const TECLAS_ATAQUE_J2 = { 7: 'A', 8: 'B', 9: 'X', 0: 'Y' };
 const COMBINACIONES_JEFE = [['A', 'B'], ['X', 'Y', 'A'], ['B', 'X', 'A', 'Y']];
+// Convierte un color numérico de Phaser (0xRRGGBB) a texto CSS (#rrggbb).
+function colorHexTexto(color) {
+  return '#' + color.toString(16).padStart(6, '0');
+}
 function colorElemento(elemento) {
   return colorPorTipo(elemento.tipo);
 }
@@ -1438,12 +1442,20 @@ class EscenaJuego extends Phaser.Scene {
       jugador.texto.setVisible(visible && estado.multijugador);
       if (!visible) return;
       // Caduca el movimiento si se pierde la conexión o el paquete de soltar.
-      const remoto = Date.now() - jugador.ejes.recibido < 400;
+      const remoto = Date.now() - jugador.ejes.recibido < 300;
       const [der, izq, abajo, arriba] = teclado[i];
-      const x = (remoto ? jugador.ejes.x : 0) + Number(der.isDown) - Number(izq.isDown);
-      const y = (remoto ? jugador.ejes.y : 0) + Number(abajo.isDown) - Number(arriba.isDown);
+      // Respuesta progresiva del joystick: inclinarlo poco mueve la mira
+      // despacio (para afinar) y a fondo la mueve rápido.
+      const ejeX = remoto ? jugador.ejes.x : 0;
+      const ejeY = remoto ? jugador.ejes.y : 0;
+      const fuerza = Math.hypot(ejeX, ejeY);
+      const curva = fuerza > 0 ? Math.pow(fuerza, 1.6) / fuerza : 0;
+      const x = ejeX * curva + Number(der.isDown) - Number(izq.isDown);
+      const y = ejeY * curva + Number(abajo.isDown) - Number(arriba.isDown);
       const longitud = Math.max(1, Math.hypot(x, y));
-      const paso = 650 * Math.min(delta, 50) / 1000;
+      // Sobre un objetivo la mira frena a la mitad, para no pasarse de largo.
+      const freno = this.objetivoControl(i) ? 0.5 : 1;
+      const paso = 600 * freno * Math.min(delta, 50) / 1000;
       const mira = jugador.mira;
       this.apuntarA(mira.x + x / longitud * paso, mira.y + y / longitud * paso, i);
       const color = this.objetivoControl(i) ? PALETA.verde : jugador.color;
@@ -1510,6 +1522,9 @@ class EscenaJuego extends Phaser.Scene {
     if (!this.jefe?.textoCombinacion) return;
     this.jefe.textoCombinacion.setText(this.jefe.secuencia.map((letra, i) =>
       i < this.jefe.progresoCombinacion ? '✓' : letra).join(' → '));
+    // El texto toma el color de la siguiente letra que hay que pulsar.
+    const siguiente = this.jefe.secuencia[this.jefe.progresoCombinacion];
+    this.jefe.textoCombinacion.setColor(colorHexTexto(BOTONES_ATAQUE[siguiente].color));
   }
 
   pulsarCombinacionJefe(letra) {
@@ -2713,8 +2728,18 @@ class EscenaJuego extends Phaser.Scene {
     dibujarIconoPorTipo(icono, tipo, color);
 
     contenedor.add([circuloFondo, anilloTiempo, icono]);
+    // La letra lleva el color de su botón (A verde, B rojo, X azul, Y amarillo,
+    // igual que en el mando) dentro de una pastilla; el elemento conserva el
+    // color de su tipo.
+    const colorLetra = BOTONES_ATAQUE[letra]?.color;
+    if (colorLetra) {
+      const pastilla = this.add.circle(0, -34, 16, PALETA.fondo, 0.95);
+      pastilla.setStrokeStyle(2.5, colorLetra, 1);
+      contenedor.add(pastilla);
+    }
     const letraTexto = this.crearTexto(0, -34, letra || 'SEGURO', {
-      tamano: letra ? 24 : 10, mono: true, negrita: true, origenX: .5, origenY: .5, contenedor,
+      tamano: letra ? 22 : 10, mono: true, negrita: true, origenX: .5, origenY: .5, contenedor,
+      color: colorLetra ? colorHexTexto(colorLetra) : undefined,
     });
 
     // Etiqueta permanente "REPARACIÓN" (a diferencia del resto de tipos,

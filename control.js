@@ -17,6 +17,10 @@
   const colors = { A: '#00d99b', B: '#ff5c70', X: '#38bdf8', Y: '#ffd34e' };
   let subscribed = false, lastHost = 0, lastHello = 0, pointer = null;
   let axes = { x: 0, y: 0 };
+  let lastSentAxes = { x: 0, y: 0 };
+  // Pantallas donde el joystick funciona: el juego (mover la mira) y la
+  // pregunta de seguridad (elegir respuesta arriba/abajo).
+  const joystickScreens = ['pantalla-juego', 'pantalla-pregunta'];
   const keys = new Set();
   let hostState = {};
   const controls = document.querySelectorAll('button');
@@ -24,7 +28,9 @@
   function updateButtons() {
     controls.forEach((button) => {
       const action = button.dataset.action;
-      button.disabled = !connected() || (button.dataset.letter && hostState.screen !== 'pantalla-juego')
+      // En la pregunta solo se usa A (confirmar respuesta / continuar).
+      button.disabled = !connected() || (button.dataset.letter && hostState.screen !== 'pantalla-juego'
+          && !(hostState.screen === 'pantalla-pregunta' && button.dataset.letter === 'A'))
         || (action === 'scan' && (hostState.screen !== 'pantalla-juego' || hostState.charges <= 0))
         || (['start', 'start2'].includes(action) && hostState.screen !== 'pantalla-inicio')
         || (action === 'next' && !['pantalla-pregunta', 'pantalla-nivel-completado'].includes(hostState.screen))
@@ -43,6 +49,7 @@
   const client = supabase.createClient(
     'https://msxptdklbdxeaheqcbmc.supabase.co',
     'sb_publishable_g6XPAfwi05KqohaBm0uL3g_umR1yBIc',
+    { realtime: { params: { eventsPerSecond: 30 } } },
   );
   const channel = client.channel('control-' + token);
   const send = (event, payload = {}) => {
@@ -61,9 +68,13 @@
     switchButton.textContent = 'Cambiar a J' + (mySlot === 1 ? 2 : 1);
     document.getElementById('answers').hidden = payload.screen !== 'pantalla-pregunta';
     const boss = payload.boss;
-    document.getElementById('combat-title').textContent = boss ? boss.name + ' · COMBINACIÓN' : 'APUNTA Y ATACA';
+    const question = payload.screen === 'pantalla-pregunta';
+    document.getElementById('combat-title').textContent = question ? 'PREGUNTA DE SEGURIDAD'
+      : boss ? boss.name + ' · COMBINACIÓN' : 'APUNTA Y ATACA';
     const feedback = Array.isArray(payload.feedback) ? payload.feedback[player - 1] : '';
-    document.getElementById('combat-hint').textContent = feedback || (boss
+    document.getElementById('combat-hint').textContent = question
+      ? 'Mueve el joystick arriba o abajo para elegir y pulsa A para responder. Después, A para continuar.'
+      : feedback || (boss
       ? 'Apunta al jefe y pulsa en orden. Cada combinación completa le quita una vida.'
       : 'Pulsa la letra que muestra el enemigo. No ataques los archivos seguros (azules).');
     const sequence = document.getElementById('boss-sequence');
@@ -113,14 +124,29 @@
     send('ping');
   }, 2000);
 
+  // move() solo actualiza el joystick; el envío va a ritmo fijo (sendAxes)
+  // para no saturar el canal: si se mandaba un mensaje por cada movimiento
+  // del dedo, algunos se perdían o llegaban tarde y la mira se pasaba.
   function move(x, y) {
     const length = Math.hypot(x, y);
     axes = length < .12 ? { x: 0, y: 0 } : { x: x / Math.max(1, length), y: y / Math.max(1, length) };
     const radius = pad.getBoundingClientRect().width * .28;
     knob.style.transform = 'translate(' + axes.x * radius + 'px, ' + axes.y * radius + 'px)';
     pad.classList.toggle('pressed', !!(axes.x || axes.y));
-    if (connected()) send('move', axes);
+    // Al soltar, el alto se manda de inmediato (y se repite por si se pierde).
+    if (!axes.x && !axes.y && (lastSentAxes.x || lastSentAxes.y)) {
+      sendAxes();
+      setTimeout(() => { if (!axes.x && !axes.y) send('move', axes); }, 120);
+    }
   }
+  function sendAxes() {
+    if (!connected()) return;
+    send('move', axes);
+    lastSentAxes = axes;
+  }
+  setInterval(() => {
+    if (axes.x || axes.y || axes.x !== lastSentAxes.x || axes.y !== lastSentAxes.y) sendAxes();
+  }, 80);
   function reset() {
     const captured = pointer;
     pointer = null;
@@ -136,7 +162,7 @@
   }
   pad.addEventListener('pointerdown', (event) => {
     event.preventDefault();
-    if (pointer !== null || !connected() || hostState.screen !== 'pantalla-juego') return;
+    if (pointer !== null || !connected() || !joystickScreens.includes(hostState.screen)) return;
     pointer = event.pointerId;
     pad.setPointerCapture(pointer);
     movePointer(event);
@@ -146,7 +172,6 @@
   });
   ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((type) =>
     pad.addEventListener(type, (event) => { if (event.pointerId === pointer) reset(); }));
-  setInterval(() => { if (connected() && (axes.x || axes.y)) send('move', axes); }, 100);
   document.querySelectorAll('[data-letter]').forEach((button) => {
     function attack() {
       if (button.disabled || !connected()) return;
@@ -164,7 +189,7 @@
     button.addEventListener('click', () => { if (connected()) send('button', { action: button.dataset.action }); });
   });
   window.addEventListener('keydown', (event) => {
-    if (!connected() || hostState.screen !== 'pantalla-juego') return;
+    if (!connected() || !joystickScreens.includes(hostState.screen)) return;
     if (event.key.startsWith('Arrow')) {
       event.preventDefault(); keys.add(event.key);
       move(Number(keys.has('ArrowRight')) - Number(keys.has('ArrowLeft')), Number(keys.has('ArrowDown')) - Number(keys.has('ArrowUp')));
@@ -176,6 +201,9 @@
       move(Number(keys.has('ArrowRight')) - Number(keys.has('ArrowLeft')), Number(keys.has('ArrowDown')) - Number(keys.has('ArrowUp')));
     }
   });
+  // Safari: evita el menú de "copiar/seleccionar" y la lupa al mantener el dedo.
+  document.addEventListener('contextmenu', (event) => event.preventDefault());
+  document.addEventListener('selectstart', (event) => event.preventDefault());
   window.addEventListener('blur', reset);
   document.addEventListener('visibilitychange', () => { if (document.hidden) reset(); });
   window.addEventListener('pagehide', reset);

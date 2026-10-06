@@ -40,7 +40,7 @@
   document.getElementById('btn-ver-qr').addEventListener('click', () => dialog.showModal());
   document.getElementById('btn-cerrar-qr').addEventListener('click', () => dialog.close());
 
-  const client = supabase.createClient(url, key);
+  const client = supabase.createClient(url, key, { realtime: { params: { eventsPerSecond: 30 } } });
   const channel = client.channel(`control-${token}`);
   let subscribed = false;
   let lastState = '';
@@ -85,6 +85,42 @@
     const phone = typeof payload?.id === 'string' ? phones.get(payload.id) : null;
     if (phone) phone.last = Date.now();
     return phone;
+  }
+
+  // ---- Pregunta de seguridad con el joystick ----
+  // Arriba/abajo mueve el resaltado entre las 4 opciones (un paso por cada
+  // movimiento, hay que regresar el joystick al centro para el siguiente) y
+  // A responde la opción resaltada; después de responder, A continúa.
+  let questionOptions = null;
+  let selected = -1;
+
+  function questionButtons() {
+    const options = [...document.querySelectorAll('#opciones-pregunta button')];
+    if (options[0] !== questionOptions?.[0]) { questionOptions = options; selected = -1; } // pregunta nueva
+    return options;
+  }
+
+  function highlight(options) {
+    options.forEach((option, i) => option.classList.toggle('seleccion-mando', i === selected));
+  }
+
+  function questionMove(phone, y) {
+    const options = questionButtons();
+    const ready = options.length && options[0].classList.contains('lista') && !options[0].disabled;
+    const step = y > 0.6 ? 1 : y < -0.6 ? -1 : 0;
+    if (!step) { phone.questionStep = 0; return; }
+    if (!ready || phone.questionStep === step) return; // espera a que el joystick vuelva al centro
+    phone.questionStep = step;
+    selected = selected < 0 ? (step > 0 ? 0 : options.length - 1)
+      : Math.min(options.length - 1, Math.max(0, selected + step));
+    highlight(options);
+  }
+
+  function questionConfirm() {
+    const options = questionButtons();
+    const next = document.getElementById('btn-continuar-pregunta');
+    if (next && !next.hidden) { next.click(); return; }
+    if (selected >= 0 && options[selected] && !options[selected].disabled) options[selected].click();
   }
 
   const buttons = {
@@ -135,14 +171,19 @@
     })
     .on('broadcast', { event: 'move' }, ({ payload }) => {
       const phone = phoneFrom(payload);
-      if (!phone || currentScreen() !== 'pantalla-juego') return;
+      if (!phone) return;
       if (!Number.isFinite(payload.x) || !Number.isFinite(payload.y) || Math.abs(payload.x) > 1 || Math.abs(payload.y) > 1) return;
-      window.controlJuego?.mover(payload.x, payload.y, playerOf(phone));
+      if (currentScreen() === 'pantalla-pregunta') questionMove(phone, payload.y);
+      else if (currentScreen() === 'pantalla-juego') window.controlJuego?.mover(payload.x, payload.y, playerOf(phone));
     })
     .on('broadcast', { event: 'attack' }, ({ payload }) => {
       const phone = phoneFrom(payload);
-      if (!phone || currentScreen() !== 'pantalla-juego') return;
-      if (!['A', 'B', 'X', 'Y'].includes(payload.letter) || Date.now() - phone.lastAttack < 110) return;
+      if (!phone || !['A', 'B', 'X', 'Y'].includes(payload.letter) || Date.now() - phone.lastAttack < 110) return;
+      if (currentScreen() === 'pantalla-pregunta') {
+        if (payload.letter === 'A') { phone.lastAttack = Date.now(); questionConfirm(); }
+        return;
+      }
+      if (currentScreen() !== 'pantalla-juego') return;
       phone.lastAttack = Date.now();
       window.controlJuego?.atacar(payload.letter, playerOf(phone));
       sendState();
