@@ -34,8 +34,8 @@ genérica de IA:
 - Sección principal en dos columnas:
   - Izquierda: etiqueta "Incidente 001 · Nivel crítico", título "El
     servidor está bajo ataque", texto breve, botón "Iniciar defensa" (modo normal) y
-    a su lado los botones secundarios (contorno verde) "Jugar con mando" y
-    "2 jugadores" (secciones 13 y 14), indicadores (3 niveles / 3 vidas / 10 puntos por amenaza).
+    a su lado los botones secundarios (contorno verde) "Jugar con mando",
+    "2 jugadores" y "Teclado + mouse" (secciones 13, 14 y 15), indicadores (3 niveles / 3 vidas / 10 puntos por amenaza).
   - Derecha: ilustración de un servidor hecha con HTML/CSS (línea de
     escaneo animada, nodos con estado, indicador de red), sin imágenes.
 - Tres tarjetas de instrucciones: Detecta / Elimina / Sobrevive.
@@ -140,7 +140,8 @@ forzar el mismo tablero en cualquier pantalla:
 - **Objetivos móviles**: una fracción de los elementos se mueve lentamente
   y rebota dentro del área de juego (≈15% nivel 1, ≈50% nivel 2, ≈75%
   nivel 3).
-- **Dos modos de juego** (`estado.modoMando`, ver sección 14):
+- **Cuatro modos de juego** (`estado.modoMando` y `estado.modoDuo`, ver
+  secciones 14 y 15):
   - **Modo normal (el original):** un clic/toque directo sobre el elemento
     lo ataca. Sin mira ni letras.
   - **Modo con mando:** el jugador mueve una **mira** y pulsa la letra
@@ -149,7 +150,10 @@ forzar el mismo tablero en cualquier pantalla:
     al azar y se dibuja con el color de su botón (A verde, B rojo, X azul,
     Y amarillo) dentro de una pastilla; la letra incorrecta no la elimina y
     avisa "USA LA LETRA X".
-  - En ambos modos el **color de cada elemento es el de su tipo**, como en
+  - **Modo teclado + mouse:** dos jugadores en la misma PC; unos enemigos
+    llevan una tecla (los elimina el teclado) y el resto se elimina con clic
+    (sección 15).
+  - En todos los modos el **color de cada elemento es el de su tipo**, como en
     el juego original.
 - Cuatro tipos, cada uno con ícono, color y comportamiento propios:
   - **Malware normal** (rojo): 1 ataque, 10 puntos.
@@ -489,8 +493,8 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=22`, `game.js?v=30` y
-`remote-host.js?v=8`; en `control.html`: `control.css?v=7` y `control.js?v=8`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=23`, `game.js?v=31` y
+`remote-host.js?v=8`; en `control.html`: `control.css?v=7` y `control.js?v=9`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la
@@ -705,10 +709,11 @@ ninguna contraseña ni clave secreta.
 
 ## 14. Modos de juego y sonido
 
-- Portada con tres botones: **"Iniciar defensa"** (modo normal, el juego
-  original), **"Jugar con mando"** y **"2 jugadores"** (los dos últimos con
-  contorno verde). `iniciarJuegoDesdeCero(modo)` recibe `'normal'`,
-  `'mando'` o `'2j'`; "Volver a intentar" conserva el modo. INICIAR en el
+- Portada con cuatro botones: **"Iniciar defensa"** (modo normal, el juego
+  original), **"Jugar con mando"**, **"2 jugadores"** y **"Teclado + mouse"**
+  (los tres últimos con contorno verde; el de teclado + mouse no aparece en la
+  vista móvil). `iniciarJuegoDesdeCero(modo)` recibe `'normal'`,
+  `'mando'`, `'2j'` o `'duo'`; "Volver a intentar" conserva el modo. INICIAR en el
   teléfono arranca el modo con mando.
 - **Modo normal:** idéntico al original — clic/toque directo sobre
   amenazas, jefe, punto débil del Ransomware y falsos positivos del jefe;
@@ -757,6 +762,64 @@ ninguna contraseña ni clave secreta.
     `userGesture: false`), entregar los mensajes del relevo de la misma
     forma y lanzar Chrome con `--autoplay-policy=document-user-activation-required`
     (el modo headless lo trae abierto por defecto).
+
+## 15. Modo teclado + mouse (2 jugadores en la misma PC)
+
+Cuarto modo de juego, pensado para dos personas frente a una sola PC, **sin
+teléfono**: una usa el lado izquierdo del teclado y la otra, el mouse. Botón
+"Teclado + mouse" en la portada (`iniciarJuegoDesdeCero('duo')`,
+`estado.modoDuo`; "Volver a intentar" lo conserva). No aparece en la vista
+móvil (`html.vista-movil #btn-jugar-duo`: un teléfono no tiene teclado). No usa
+mira ni mando ni `estado.modoMando`/`estado.multijugador`, así que los otros
+tres modos no cambian.
+
+- **Reparto de enemigos:** cada amenaza real (normal, crítica, resistente,
+  duplicadora y también la reparación) nace "de teclado" (50%,
+  `PROBABILIDAD_TECLA_DUO`) o "de mouse" (`elemento.rol`). Los de teclado
+  llevan una **tecla** dibujada como una tecla de teclado sobre el enemigo
+  (`dibujarTeclaEnemigo`); los de mouse, un **ícono de mouse**
+  (`dibujarIconoMouseEnemigo`); los archivos seguros (azules) no son de nadie y
+  muestran "SEGURO" (un clic en uno cuesta un servidor, como siempre). Las dos
+  amenazas pequeñas del duplicador heredan el rol de su padre.
+- **Teclas:** `TECLAS_DUO` = Q W E R A D F Z X C V (lado izquierdo; **la S se
+  queda para el escáner**). Dos enemigos en pantalla nunca comparten tecla
+  (`elegirTeclaLibre`). Se compara `event.key` en mayúscula (lo que dice la
+  tecla impresa). Con Ctrl/Alt/Cmd no se hace nada, para no pelear con los
+  atajos del navegador, ni se captura nada si se escribe en un campo de texto
+  (gamertag).
+- **Quién elimina qué:** la tecla elimina al enemigo que la muestra, sin
+  apuntar (`teclaDuo`); el clic solo vale en los enemigos sin tecla
+  (`clicDuo`; en uno con tecla avisa "USA LA TECLA X"). La resistente pide dos
+  pulsaciones o dos clics. Los puntos son del jugador que dio el golpe
+  (`puntosJugadores[0]` = teclado, `[1]` = mouse) y se ven como "TECLADO n ·
+  MOUSE n" bajo el tablero y en las pantallas de resultado. Combo, servidores y
+  escáner son compartidos.
+- **Jefes:** el jefe tiene un **escudo**. El teclado lo abre completando una
+  combinación de teclas del lado izquierdo (2, 3 y 4 teclas según el jefe,
+  sorteada de nuevo cada vez con `generarCombinacionJefe(..., TECLAS_DUO)`; una
+  tecla equivocada reinicia el progreso de la misma combinación) y, mientras
+  está abierto (3.5 / 3 / 2.5 s según el nivel, `VENTANA_ESCUDO_DUO_MS`; 20%
+  menos en la fase 2 del Ransomware), el mouse puede golpearlo con un clic. Si
+  el mouse no llega, el escudo se cierra sin daño y sale otra combinación. Con
+  el escudo cerrado un clic solo avisa "ESCUDO CERRADO". El Ransomware muestra
+  su punto débil solo mientras el escudo está abierto (no parpadea) y se golpea
+  ahí. Así hacen falta los dos en cada golpe. La vida del jefe es la de siempre
+  (3/5/8 golpes, sin el 50% extra del modo con mando) y usa los ciclos de
+  ataque de ese modo (10/10/12 s) porque cada golpe necesita dos pasos. La
+  recompensa del jefe se reparte a partes iguales; los falsos positivos que
+  genera el jefe siguen siendo del mouse. Código: `prepararJefeDuo`,
+  `pulsarTeclaJefeDuo`, `abrirEscudoJefe`, `cerrarEscudoJefe`, `clicJefeDuo`.
+- **Dificultad (valores de partida, pendientes de ajustar jugando):** cabe un
+  enemigo más a la vez (`ELEMENTOS_EXTRA_DUO`) y aparecen un 15% más seguido
+  (`FACTOR_APARICION_DUO` = 0,85, también durante la sobrecarga de red); los
+  tiempos de vida son los del modo normal.
+- **Pregunta de seguridad:** se responde con el mouse o con las teclas 1-4
+  (también del lado izquierdo del teclado).
+- **Interfaz:** guía bajo el tablero (`#guia-duo`, solo con `html.modo-duo`):
+  "Teclado (lado izquierdo) pulsa la tecla de cada enemigo · Mouse clic en los
+  enemigos sin tecla", con el teclado en azul y el mouse en amarillo como en el
+  marcador. Si hay un teléfono conectado, el mando avisa que la partida es de
+  teclado + mouse y que no se usa (`estado().duo`).
 
 ## Reglas de trabajo durante todo el proyecto
 

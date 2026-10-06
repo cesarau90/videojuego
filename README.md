@@ -2,7 +2,7 @@
 
 ## Modos de juego
 
-En la portada hay tres botones:
+En la portada hay cuatro botones:
 
 - **Iniciar defensa — modo normal (el juego original):** se hace clic (o se toca,
   en el celular) directamente sobre las amenazas y el jefe. Sin mira ni letras,
@@ -10,6 +10,8 @@ En la portada hay tres botones:
 - **Jugar con mando:** se mueve una mira y se ataca con la letra A, B, X o Y que
   lleva cada enemigo, usando el teléfono como mando o el teclado.
 - **2 jugadores:** cooperativo con dos miras (ver más abajo).
+- **Teclado + mouse:** dos jugadores en la misma PC, sin teléfono: uno con el lado
+  izquierdo del teclado y otro con el mouse (ver más abajo).
 
 **Sonido:** los navegadores solo dejan sonar el audio después de un clic o una
 tecla en la página de la PC. Si vas a iniciar desde el teléfono, haz **un clic en
@@ -100,6 +102,26 @@ Para que dos jugadores sigan teniendo reto, en este modo los **jefes tienen 50%
 más de vida** (Troyano 5, Botnet 8, Ransomware 12; el Ransomware pasa a su fase
 rápida a la mitad) y cabe **un elemento más** en pantalla a la vez. El modo de
 1 jugador no cambia.
+
+## Modo teclado + mouse (2 jugadores en la misma PC)
+
+Pensado para dos personas frente a una sola computadora, sin teléfono: una usa el
+**lado izquierdo del teclado** y la otra el **mouse**. Los enemigos se reparten:
+
+- Unos muestran una **tecla** encima (Q, W, E, R, A, D, F, Z, X, C o V). El jugador
+  del teclado solo tiene que pulsarla; no hay que apuntar.
+- Los que **no muestran tecla** (llevan un pequeño mouse dibujado) los elimina el
+  jugador del mouse con un clic.
+- Los archivos seguros (azules, marcados "SEGURO") no los toca nadie: un clic en uno
+  cuesta un servidor, como siempre.
+- En los **jefes**, el teclado abre el escudo completando una combinación de teclas y,
+  mientras está abierto, el mouse tiene unos segundos para golpearlo con un clic.
+  Hacen falta los dos en cada golpe.
+
+Cada jugador lleva su marcador (TECLADO y MOUSE) y la recompensa del jefe se reparte a
+partes iguales. La tecla **S** sigue siendo el escáner, y la pregunta de seguridad se
+responde con el mouse o con las teclas **1-4**. Cabe un enemigo más a la vez y salen un
+poco más seguido; "Volver a intentar" conserva el modo.
 
 ## Amenazas y elementos
 
@@ -223,6 +245,9 @@ forma progresiva pero el juego sigue siendo completable en los tres niveles.
   botones **A, B, X, Y**. Mira el juego en la PC.
 - **Jugador 2 (modo 2 jugadores):** **I, J, K, L** para mover y **7, 8, 9, 0**
   para atacar, o un segundo teléfono.
+- **Teclado + mouse (2 jugadores en la PC):** el teclado pulsa la tecla (lado
+  izquierdo) que muestra cada enemigo; el mouse hace clic en los enemigos sin tecla.
+  Tecla **S** para el escáner, **1-4** para la pregunta de seguridad.
 
 ## Victoria y derrota
 

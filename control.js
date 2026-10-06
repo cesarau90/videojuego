@@ -100,7 +100,9 @@
     const hint = document.getElementById('combat-hint');
     hint.classList.toggle('warn', silent);
     hint.textContent = normalMode
-      ? 'Esta partida está en modo normal (clic en la PC). Para usar el mando, reinicia y pulsa INICIAR aquí.'
+      ? (payload.duo
+        ? 'Esta partida es de teclado + mouse en la PC: el mando no se usa. Para usar el mando, reinicia y pulsa INICIAR aquí.'
+        : 'Esta partida está en modo normal (clic en la PC). Para usar el mando, reinicia y pulsa INICIAR aquí.')
       : question
       ? 'Mueve el joystick arriba o abajo para elegir y pulsa A para responder. Después, A para continuar.'
       : silent

@@ -1137,6 +1137,33 @@ body {
 .marcador-jugadores .j1 { color: var(--azul); }
 .marcador-jugadores .j2 { color: #ffd34e; }
 
+/* Modo teclado + mouse: guía de qué hace cada jugador, bajo el tablero. El
+   teclado va en azul y el mouse en amarillo, igual que en el marcador de puntos. */
+.guia-duo {
+  display: none;
+  flex: 1 1 100%;
+  margin: 2px 0 0;
+  text-align: center;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: var(--texto-secundario, #91a8a0);
+}
+html.modo-duo .guia-duo { display: block; }
+.guia-rol {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--fuente-mono);
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+.guia-rol svg { width: 17px; height: 17px; flex: none; }
+.guia-rol.rol-teclado { color: var(--azul); }
+.guia-rol.rol-mouse { color: #ffd34e; }
+.guia-sep { margin: 0 6px; }
+/* El teclado no existe en el teléfono: el modo teclado + mouse es solo de PC */
+html.vista-movil #btn-jugar-duo { display: none; }
+
 .boton-escaner {
   display: inline-flex;
   align-items: center;

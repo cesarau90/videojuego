@@ -359,12 +359,24 @@ const TECLAS_ATAQUE_J2 = { 7: 'A', 8: 'B', 9: 'X', 0: 'Y' };
 const LARGO_COMBINACION_JEFE = [2, 3, 4];
 const COMBINACION_NUEVA_POR_GOLPE = true;
 
-// Sortea una combinación de "largo" letras (A, B, X o Y). Para que sea legible
-// y no se confunda con un doble toque accidental: nunca hay dos letras iguales
-// seguidas, no repite la combinación anterior y, si se indica "ultimaLetra"
-// (la que se acaba de pulsar), no empieza con ella.
-function generarCombinacionJefe(largo, anterior = [], ultimaLetra = null) {
-  const letras = Object.keys(BOTONES_ATAQUE);
+// Modo "teclado + mouse" (2 jugadores en la misma PC, sin teléfono). Los dos
+// se reparten los enemigos: unos muestran una TECLA del lado izquierdo del
+// teclado y el jugador del teclado solo tiene que pulsarla (sin apuntar); el
+// resto no muestra tecla y el jugador del mouse los elimina con clic.
+// Los archivos seguros (azules) no se tocan, como siempre. En los jefes, el
+// teclado abre el escudo con una combinación y el mouse lo golpea.
+const TECLAS_DUO = ['Q', 'W', 'E', 'R', 'A', 'D', 'F', 'Z', 'X', 'C', 'V']; // la S es del escáner
+const PROBABILIDAD_TECLA_DUO = 0.5;  // fracción de amenazas que se eliminan con el teclado (el resto, con el mouse)
+const ELEMENTOS_EXTRA_DUO = 1;       // cabe un enemigo más a la vez (hay dos jugadores)
+const FACTOR_APARICION_DUO = 0.85;   // los enemigos aparecen un poco más seguido (menor = más seguido)
+const VENTANA_ESCUDO_DUO_MS = [3500, 3000, 2500]; // tiempo del mouse para golpear al jefe tras abrir el escudo, por nivel
+
+// Sortea una combinación de "largo" letras (por defecto A, B, X o Y; el modo
+// teclado + mouse pasa TECLAS_DUO). Para que sea legible y no se confunda con
+// un doble toque accidental: nunca hay dos letras iguales seguidas, no repite
+// la combinación anterior y, si se indica "ultimaLetra" (la que se acaba de
+// pulsar), no empieza con ella.
+function generarCombinacionJefe(largo, anterior = [], ultimaLetra = null, letras = Object.keys(BOTONES_ATAQUE)) {
   let combinacion;
   do {
     combinacion = [];
@@ -603,6 +615,7 @@ const estado = {
   // o con mando (mira + letras A/B/X/Y, para el teléfono o el teclado).
   modoMando: false,
   multijugador: false, // true en el modo cooperativo de 2 jugadores (siempre con mando)
+  modoDuo: false, // true en el modo teclado + mouse (2 jugadores en la misma PC, sin mando)
   puntosJugadores: [0, 0], // puntos conseguidos por cada jugador
 };
 
@@ -1663,9 +1676,12 @@ class EscenaJuego extends Phaser.Scene {
     if (!this.jefe?.textoCombinacion) return;
     this.jefe.textoCombinacion.setText(this.jefe.secuencia.map((letra, i) =>
       i < this.jefe.progresoCombinacion ? '✓' : letra).join(' → '));
-    // El texto toma el color de la siguiente letra que hay que pulsar.
+    // El texto toma el color de la siguiente letra que hay que pulsar. En
+    // teclado + mouse las teclas van en blanco, y en verde con el escudo abierto.
     const siguiente = this.jefe.secuencia[this.jefe.progresoCombinacion];
-    this.jefe.textoCombinacion.setColor(colorHexTexto(BOTONES_ATAQUE[siguiente].color));
+    this.jefe.textoCombinacion.setColor(estado.modoDuo
+      ? (siguiente ? PALETA.texto : PALETA.verdeTexto)
+      : colorHexTexto(BOTONES_ATAQUE[siguiente].color));
     if (nueva && !this.movimientoReducido) {
       this.tweens.add({ targets: this.jefe.textoCombinacion, scale: { from: 1.3, to: 1 }, duration: 260, ease: 'Back.Out' });
     }
@@ -2660,7 +2676,13 @@ class EscenaJuego extends Phaser.Scene {
   // en el siguiente intervalo (generación procedural continua).
   iniciarGeneracionElementos() {
     const configuracionNivel = NIVELES[estado.indiceNivel];
-    this.reiniciarTemporizadorSpawn(configuracionNivel.tiempoAparicion);
+    this.reiniciarTemporizadorSpawn(this.intervaloAparicion(configuracionNivel));
+  }
+
+  // Intervalo normal de aparición del nivel. En teclado + mouse los enemigos
+  // salen un poco más seguido porque hay dos jugadores atendiéndolos.
+  intervaloAparicion(configuracionNivel) {
+    return Math.round(configuracionNivel.tiempoAparicion * (estado.modoDuo ? FACTOR_APARICION_DUO : 1));
   }
 
   // Sustituye el temporizador de generación por uno nuevo con otro
@@ -2683,7 +2705,7 @@ class EscenaJuego extends Phaser.Scene {
   // más uno mientras la sobrecarga de red está activa y uno más en 2 jugadores.
   maxElementosActual() {
     return NIVELES[estado.indiceNivel].maxElementos + (this.limiteElementosExtra || 0) +
-      (estado.multijugador ? ELEMENTOS_EXTRA_2J : 0);
+      (estado.multijugador ? ELEMENTOS_EXTRA_2J : 0) + (estado.modoDuo ? ELEMENTOS_EXTRA_DUO : 0);
   }
 
   intentarGenerarElemento() {
@@ -2866,6 +2888,19 @@ class EscenaJuego extends Phaser.Scene {
       : opciones.letra || Phaser.Utils.Array.GetRandom(Object.keys(BOTONES_ATAQUE));
     const color = colorPorTipo(tipo);
 
+    // Modo teclado + mouse: cada enemigo real es "de teclado" (muestra una
+    // tecla del lado izquierdo) o "de mouse" (sin tecla, se elimina con clic).
+    // Las dos amenazas pequeñas del duplicador heredan el rol de su padre.
+    let rol = null;
+    let tecla = null;
+    if (estado.modoDuo && tipo !== 'seguro') {
+      rol = opciones.rol || (Math.random() < PROBABILIDAD_TECLA_DUO ? 'tecla' : 'mouse');
+      if (rol === 'tecla') {
+        tecla = this.elegirTeclaLibre();
+        if (!tecla) rol = 'mouse'; // no quedan teclas libres (no debería pasar): lo atiende el mouse
+      }
+    }
+
     // Un contenedor agrupa el círculo, el anillo de tiempo y el ícono
     const contenedor = this.add.container(x, y);
     this.mundo.add(contenedor);
@@ -2893,6 +2928,19 @@ class EscenaJuego extends Phaser.Scene {
       tamano: letra ? 22 : 10, mono: true, negrita: true, origenX: .5, origenY: .5, contenedor,
       color: colorLetra ? colorHexTexto(colorLetra) : undefined,
     });
+
+    // Teclado + mouse: la marca que dice quién atiende al enemigo. Una tecla
+    // para el teclado, un mouse para el mouse, y "SEGURO" para los archivos
+    // azules (nadie debe tocarlos).
+    if (estado.modoDuo) {
+      if (tecla) this.dibujarTeclaEnemigo(contenedor, tecla);
+      else if (rol === 'mouse') this.dibujarIconoMouseEnemigo(contenedor);
+      else {
+        this.crearTexto(0, -34, 'SEGURO', {
+          tamano: 10, mono: true, negrita: true, origenX: .5, origenY: .5, contenedor, color: PALETA.azulTexto,
+        });
+      }
+    }
 
     // Etiqueta permanente "REPARACIÓN" (a diferencia del resto de tipos,
     // que solo revelan su identidad al usar el escáner)
@@ -2940,7 +2988,7 @@ class EscenaJuego extends Phaser.Scene {
 
     const elemento = {
       contenedor, circuloFondo, anilloTiempo, icono, tipo, temporizador: null, tweenSacudida: null,
-      escudoGrafico, letra, letraTexto,
+      escudoGrafico, letra, letraTexto, rol, tecla,
       golpesRestantes: tipo === 'resistente' ? 2 : 1,
       movil,
       velX: movil ? Math.cos(anguloMovimiento) * velocidad : 0,
@@ -2967,11 +3015,12 @@ class EscenaJuego extends Phaser.Scene {
 
     // Modo normal: el clic/toque actúa directo según el tipo de elemento.
     // Modo con mando: el clic solo apunta; se ataca con la letra.
+    // Teclado + mouse: el clic es del jugador del mouse y solo vale en los
+    // enemigos sin tecla (ver clicDuo).
     circuloFondo.on('pointerdown', () => {
       if (estado.modoMando) this.apuntarA(contenedor.x, contenedor.y);
-      else if (tipo === 'reparacion') this.repararServidor(elemento);
-      else if (tipo === 'duplicador') this.dividirDuplicador(elemento);
-      else this.eliminarVirus(elemento, true);
+      else if (estado.modoDuo) this.clicDuo(elemento);
+      else this.accionSobreElemento(elemento);
     });
 
     // Temporizador: si expira sin clic, se resuelve como "no atendido"
@@ -2994,6 +3043,84 @@ class EscenaJuego extends Phaser.Scene {
     }
 
     return elemento;
+  }
+
+  /* ---------------- TECLADO + MOUSE (2 jugadores en la misma PC) ---------------- */
+
+  // Una tecla del lado izquierdo que ningún otro enemigo de teclado en pantalla
+  // esté usando, para que cada tecla señale a un solo enemigo.
+  elegirTeclaLibre() {
+    const usadas = new Set(estado.virusActivos.filter((e) => !e.procesado && e.tecla).map((e) => e.tecla));
+    const libres = TECLAS_DUO.filter((t) => !usadas.has(t));
+    return libres.length ? Phaser.Utils.Array.GetRandom(libres) : null;
+  }
+
+  // La tecla se dibuja como una tecla de teclado (tapa con borde y canto
+  // inferior) sobre el enemigo: el jugador del teclado pulsa esa letra.
+  dibujarTeclaEnemigo(contenedor, tecla) {
+    const g = this.add.graphics();
+    g.fillStyle(0x000000, 0.5);
+    g.fillRoundedRect(-15, -47, 30, 30, 7); // canto inferior
+    g.fillStyle(PALETA.superficie, 1);
+    g.fillRoundedRect(-15, -50, 30, 30, 7); // tapa
+    g.lineStyle(2, 0xe7f5ef, 1);
+    g.strokeRoundedRect(-15, -50, 30, 30, 7);
+    contenedor.add(g);
+    this.crearTexto(0, -36, tecla, { tamano: 20, mono: true, negrita: true, origenX: .5, origenY: .5, contenedor });
+  }
+
+  // Un mouse sobre el enemigo: ese lo elimina el jugador del mouse con clic.
+  dibujarIconoMouseEnemigo(contenedor) {
+    const g = this.add.graphics();
+    g.lineStyle(2, 0xe7f5ef, 1);
+    g.strokeRoundedRect(-10, -50, 20, 30, 9); // cuerpo
+    g.lineBetween(-10, -41, 10, -41);         // base de los botones
+    g.lineBetween(0, -50, 0, -41);            // división entre los dos botones
+    g.fillStyle(0xe7f5ef, 1);
+    g.fillRoundedRect(-8.5, -48.5, 8, 6.5, { tl: 7, tr: 0, bl: 0, br: 0 }); // botón izquierdo: el clic
+    contenedor.add(g);
+  }
+
+  // Lo que hace un golpe válido sobre un enemigo según su tipo (es lo mismo
+  // que hacía el clic en el modo normal).
+  accionSobreElemento(elemento) {
+    if (elemento.tipo === 'reparacion') this.repararServidor(elemento);
+    else if (elemento.tipo === 'duplicador') this.dividirDuplicador(elemento);
+    else this.eliminarVirus(elemento, true);
+  }
+
+  // Aviso corto sobre un enemigo (no se repite si el jugador insiste enseguida).
+  avisarEnemigoDuo(elemento, texto) {
+    const ahora = this.time.now;
+    if (elemento.ultimoAviso && ahora - elemento.ultimoAviso < 700) return;
+    elemento.ultimoAviso = ahora;
+    this.mostrarTextoFlotante(elemento.contenedor.x, elemento.contenedor.y - 60, texto, PALETA.texto);
+  }
+
+  // Clic del jugador del mouse. Solo vale en enemigos sin tecla (y en los
+  // archivos seguros, donde sigue siendo un error); en uno con tecla avisa,
+  // porque ese lo atiende el teclado.
+  clicDuo(elemento) {
+    if (elemento.procesado) return;
+    if (elemento.tecla) {
+      this.avisarEnemigoDuo(elemento, `USA LA TECLA ${elemento.tecla}`);
+      return;
+    }
+    this.jugadorAtacante = 1; // los puntos son del jugador del mouse
+    this.accionSobreElemento(elemento);
+  }
+
+  // Tecla del lado izquierdo pulsada por el jugador del teclado: elimina al
+  // enemigo que muestre esa tecla. Contra el jefe, avanza la combinación que
+  // abre su escudo. Devuelve true si la tecla hizo algo.
+  teclaDuo(tecla) {
+    if (!estado.modoDuo || !estado.juegoActivo || this.introNivelActiva) return false;
+    if (this.jefe && !this.jefe.destruido) return this.pulsarTeclaJefeDuo(tecla);
+    const objetivo = estado.virusActivos.find((e) => !e.procesado && e.tecla === tecla);
+    if (!objetivo) return false;
+    this.jugadorAtacante = 0; // los puntos son del jugador del teclado
+    this.accionSobreElemento(objetivo);
+    return true;
   }
 
   /* ---------------- RESOLVER UN ELEMENTO (clic o expiración) ---------------- */
@@ -3235,6 +3362,7 @@ class EscenaJuego extends Phaser.Scene {
       const reducido = this.movimientoReducido;
       const pequeno = this.crearElementoVisual('duplicado_pequeno', reducido ? nx : x, reducido ? ny : y, {
         grupo,
+        rol: elemento.rol, // teclado + mouse: las pequeñas las atiende el mismo jugador que la duplicadora
         escalaVisual: 0.68,
         movilForzado: false,
         duracionVida: duracionPequenas,
@@ -3300,14 +3428,14 @@ class EscenaJuego extends Phaser.Scene {
     this.sobrecargaActiva = true;
     this.limiteElementosExtra = 1;
     this.mostrarAvisoEvento('SOBRECARGA DE RED', PALETA.naranjaTexto, { parpadeos: 2 });
-    this.reiniciarTemporizadorSpawn(Math.round(configuracionNivel.tiempoAparicion * 0.55));
+    this.reiniciarTemporizadorSpawn(Math.round(this.intervaloAparicion(configuracionNivel) * 0.55));
 
     this.temporizadorSobrecarga = this.time.delayedCall(5000, () => {
       this.temporizadorSobrecarga = null;
       this.sobrecargaActiva = false;
       this.limiteElementosExtra = 0;
       if (estado.juegoActivo && !estado.jefeActivo) {
-        this.reiniciarTemporizadorSpawn(configuracionNivel.tiempoAparicion);
+        this.reiniciarTemporizadorSpawn(this.intervaloAparicion(configuracionNivel));
       }
     });
   }
@@ -3601,9 +3729,12 @@ class EscenaJuego extends Phaser.Scene {
   // Marcador HTML bajo el tablero con los puntos de cada jugador.
   actualizarMarcadorJugadores() {
     const marcador = document.getElementById('marcador-jugadores');
-    marcador.hidden = !estado.multijugador;
-    if (!estado.multijugador) return;
-    marcador.innerHTML = `<span class="j1">J1 ${estado.puntosJugadores[0]}</span> · <span class="j2">J2 ${estado.puntosJugadores[1]}</span>`;
+    const conMarcador = estado.multijugador || estado.modoDuo;
+    marcador.hidden = !conMarcador;
+    if (!conMarcador) return;
+    // Teclado + mouse: el jugador 1 es el del teclado y el 2, el del mouse.
+    const [nombre1, nombre2] = estado.modoDuo ? ['TECLADO', 'MOUSE'] : ['J1', 'J2'];
+    marcador.innerHTML = `<span class="j1">${nombre1} ${estado.puntosJugadores[0]}</span> · <span class="j2">${nombre2} ${estado.puntosJugadores[1]}</span>`;
   }
 
   actualizarHUD() {
@@ -3948,8 +4079,17 @@ class EscenaJuego extends Phaser.Scene {
     const vidaJefe = Math.round(configuracionJefe.vidaMaxima * factorVida);
     this.jefe = {
       config: configuracionJefe,
-      secuencia: generarCombinacionJefe(LARGO_COMBINACION_JEFE[estado.indiceNivel]),
+      // Teclado + mouse: la combinación usa teclas del lado izquierdo del teclado
+      secuencia: estado.modoDuo
+        ? generarCombinacionJefe(LARGO_COMBINACION_JEFE[estado.indiceNivel], [], null, TECLAS_DUO)
+        : generarCombinacionJefe(LARGO_COMBINACION_JEFE[estado.indiceNivel]),
       progresoCombinacion: 0,
+      // Teclado + mouse: el teclado abre el escudo y el mouse lo golpea mientras está abierto
+      escudoAbierto: false,
+      temporizadorEscudo: null,
+      textoEscudo: null,
+      anilloEscudo: null,
+      ultimoAviso: 0,
       vida: vidaJefe,
       vidaMaxima: vidaJefe,
       // Golpes que debe perder el Ransomware para entrar en su fase 2 (la mitad de su vida)
@@ -3987,9 +4127,13 @@ class EscenaJuego extends Phaser.Scene {
       circuloBase.setInteractive({ useHandCursor: true });
       circuloBase.on('pointerdown', () => {
         if (estado.modoMando) this.apuntarA(contenedor.x, contenedor.y);
+        else if (estado.modoDuo) this.clicJefeDuo();
         else this.golpearJefe();
       });
     }
+
+    // Teclado + mouse: texto de la combinación, estado del escudo y anillo (ver más abajo)
+    if (estado.modoDuo) this.prepararJefeDuo(radioJefe);
 
     this.actualizarBarraVidaJefe(true);
 
@@ -4018,10 +4162,13 @@ class EscenaJuego extends Phaser.Scene {
     this.jefe.puntoDebil = { circulo: g };
     g.on('pointerdown', () => {
       if (estado.modoMando) this.apuntarA(this.jefe.contenedor.x, this.jefe.contenedor.y);
+      else if (estado.modoDuo) this.clicJefeDuo();
       else this.golpearJefe();
     });
     this.reposicionarPuntoDebil();
-    this.iniciarParpadeoPuntoDebil();
+    // En teclado + mouse el punto débil no parpadea solo: aparece mientras el
+    // escudo está abierto (ver abrirEscudoJefe).
+    if (!estado.modoDuo) this.iniciarParpadeoPuntoDebil();
   }
 
   reposicionarPuntoDebil() {
@@ -4060,11 +4207,130 @@ class EscenaJuego extends Phaser.Scene {
     ciclo();
   }
 
+  /* ---------------- ESCUDO DEL JEFE (teclado + mouse) ---------------- */
+
+  // En el modo teclado + mouse el jefe tiene un escudo: el jugador del teclado
+  // lo abre completando una combinación de teclas del lado izquierdo y,
+  // mientras está abierto, el jugador del mouse tiene unos segundos para
+  // golpearlo con un clic. Así los dos hacen falta en cada golpe. Si el mouse
+  // no llega a tiempo, el escudo se cierra y sale otra combinación.
+  prepararJefeDuo(radioJefe) {
+    const jefe = this.jefe;
+    jefe.textoCombinacion = this.crearTexto(0, 112, '', {
+      tamano: 22, mono: true, negrita: true, origenX: .5, origenY: .5, contenedor: jefe.contenedor,
+    });
+    jefe.textoEscudo = this.crearTexto(0, 142, '', {
+      tamano: 15, mono: true, negrita: true, origenX: .5, origenY: .5, contenedor: jefe.contenedor,
+    });
+    jefe.anilloEscudo = this.add.circle(0, 0, radioJefe + 14, 0, 0);
+    jefe.anilloEscudo.setStrokeStyle(4, jefe.config.colorPrincipal, 0.5);
+    jefe.contenedor.add(jefe.anilloEscudo);
+    if (jefe.puntoDebil) this.mostrarPuntoDebil(false); // el escudo cerrado lo esconde
+    this.actualizarCombinacionJefe();
+    this.actualizarTextoEscudoJefe();
+  }
+
+  // Dice qué le toca a cada jugador en este momento.
+  actualizarTextoEscudoJefe() {
+    const jefe = this.jefe;
+    if (!jefe?.textoEscudo) return;
+    if (jefe.escudoAbierto) {
+      jefe.textoEscudo.setText('¡ESCUDO ABIERTO! MOUSE: CLIC EN EL JEFE');
+      jefe.textoEscudo.setColor(PALETA.verdeTexto);
+    } else {
+      jefe.textoEscudo.setText('TECLADO: ABRE EL ESCUDO');
+      jefe.textoEscudo.setColor(PALETA.textoSecundario);
+    }
+  }
+
+  // Aviso corto sobre el jefe (no se repite si el jugador insiste enseguida).
+  avisarJefeDuo(texto) {
+    const jefe = this.jefe;
+    if (!jefe) return;
+    const ahora = this.time.now;
+    if (ahora - jefe.ultimoAviso < 700) return;
+    jefe.ultimoAviso = ahora;
+    this.mostrarTextoFlotante(jefe.contenedor.x, jefe.contenedor.y - 100, texto, PALETA.texto);
+  }
+
+  // Tecla del jugador del teclado contra el jefe: avanza la combinación y, al
+  // completarla, se abre el escudo. Una tecla equivocada reinicia el progreso
+  // (la combinación sigue siendo la misma). Devuelve true si la tecla se usó.
+  pulsarTeclaJefeDuo(tecla) {
+    const jefe = this.jefe;
+    if (!jefe || jefe.destruido || jefe.contenedor.alpha < 1 || jefe.escudoAbierto) return false;
+    if (tecla !== jefe.secuencia[jefe.progresoCombinacion]) {
+      jefe.progresoCombinacion = 0;
+      this.actualizarCombinacionJefe();
+      this.avisarJefeDuo('TECLA INCORRECTA');
+      return true;
+    }
+    jefe.progresoCombinacion += 1;
+    if (jefe.progresoCombinacion === jefe.secuencia.length) this.abrirEscudoJefe();
+    else this.actualizarCombinacionJefe();
+    return true;
+  }
+
+  abrirEscudoJefe() {
+    const jefe = this.jefe;
+    jefe.escudoAbierto = true;
+    jefe.progresoCombinacion = jefe.secuencia.length; // la combinación se ve toda con ✓
+    reproducirSonido('combo');
+    jefe.circuloBase.setStrokeStyle(5, PALETA.verde, 1);
+    this.tweens.killTweensOf(jefe.anilloEscudo);
+    this.tweens.add({ targets: jefe.anilloEscudo, alpha: 0, duration: this.movimientoReducido ? 1 : 200 });
+    if (jefe.puntoDebil) this.mostrarPuntoDebil(true); // el Ransomware se golpea en su punto débil
+    this.actualizarCombinacionJefe();
+    this.actualizarTextoEscudoJefe();
+    // Más tiempo en los primeros jefes; en la fase 2 del Ransomware, algo menos
+    const ventana = VENTANA_ESCUDO_DUO_MS[estado.indiceNivel] * (jefe.fase === 2 ? 0.8 : 1);
+    jefe.temporizadorEscudo = this.time.delayedCall(ventana, () => this.cerrarEscudoJefe(false));
+  }
+
+  // Cierra el escudo (porque el mouse golpeó o porque se acabó el tiempo) y
+  // pide una combinación nueva, distinta de la anterior.
+  cerrarEscudoJefe(huboGolpe) {
+    const jefe = this.jefe;
+    if (!jefe || jefe.destruido) return;
+    if (jefe.temporizadorEscudo) {
+      jefe.temporizadorEscudo.remove();
+      jefe.temporizadorEscudo = null;
+    }
+    jefe.escudoAbierto = false;
+    jefe.circuloBase.setStrokeStyle(4, jefe.config.colorPrincipal, 1);
+    this.tweens.killTweensOf(jefe.anilloEscudo);
+    jefe.anilloEscudo.setAlpha(1);
+    if (jefe.puntoDebil) this.mostrarPuntoDebil(false);
+    if (!huboGolpe) this.avisarJefeDuo('ESCUDO CERRADO');
+    const anterior = jefe.secuencia;
+    jefe.secuencia = generarCombinacionJefe(anterior.length, anterior, anterior[anterior.length - 1], TECLAS_DUO);
+    jefe.progresoCombinacion = 0;
+    this.actualizarCombinacionJefe(true);
+    this.actualizarTextoEscudoJefe();
+  }
+
+  // Clic del jugador del mouse sobre el jefe (o sobre su punto débil): solo
+  // golpea si el teclado ya abrió el escudo.
+  clicJefeDuo() {
+    const jefe = this.jefe;
+    if (!jefe || jefe.destruido || jefe.contenedor.alpha < 1) return;
+    if (!jefe.escudoAbierto) {
+      this.avisarJefeDuo('ESCUDO CERRADO');
+      return;
+    }
+    if (jefe.protegido) return; // acaba de recibir un golpe: este clic no gasta el escudo
+    this.jugadorAtacante = 1;
+    this.ultimoGolpeadorJefe = 1;
+    this.golpearJefe();
+    this.cerrarEscudoJefe(true); // si el golpe lo derrotó, this.jefe ya es null y no hace nada
+  }
+
   /* ---------------- CICLO DE ATAQUE (tiempo límite del jefe) ---------------- */
 
   iniciarCicloAtaqueJefe() {
     if (!this.jefe || this.jefe.destruido) return;
-    this.jefe.temporizadorAtaque = this.time.delayedCall(estado.modoMando ? this.jefe.config.tiempoAtaqueMando : this.jefe.config.tiempoAtaque, () => {
+    // Teclado + mouse usa los mismos tiempos que el modo con mando (cada golpe necesita dos pasos)
+    this.jefe.temporizadorAtaque = this.time.delayedCall((estado.modoMando || estado.modoDuo) ? this.jefe.config.tiempoAtaqueMando : this.jefe.config.tiempoAtaque, () => {
       this.onCicloAtaqueJefeTerminado();
     });
   }
@@ -4326,6 +4592,7 @@ class EscenaJuego extends Phaser.Scene {
     if (this.jefe.temporizadorAtaque) this.jefe.temporizadorAtaque.remove();
     if (this.jefe.temporizadorTrampa) this.jefe.temporizadorTrampa.remove();
     if (this.jefe.temporizadorPuntoDebil) this.jefe.temporizadorPuntoDebil.remove();
+    if (this.jefe.temporizadorEscudo) this.jefe.temporizadorEscudo.remove();
     this.jefe.circuloBase.disableInteractive();
     if (this.jefe.puntoDebil) this.jefe.puntoDebil.circulo.disableInteractive();
     this.jefe.trampas.forEach((t) => {
@@ -4354,8 +4621,15 @@ class EscenaJuego extends Phaser.Scene {
     // 3) Onda verde desde el servidor
     this.crearOndaExpansiva(this.anchoLogico / 2, this.servidorY, PALETA.verde);
 
-    // 4) Puntos adicionales
-    this.sumarPuntos(recompensa, this.ultimoGolpeadorJefe ?? 0);
+    // 4) Puntos adicionales (en teclado + mouse se reparten entre los dos
+    // jugadores: el mouse da el golpe final, pero el teclado abrió cada escudo)
+    if (estado.modoDuo) {
+      const mitad = Math.floor(recompensa / 2);
+      this.sumarPuntos(mitad, 0);
+      this.sumarPuntos(recompensa - mitad, 1);
+    } else {
+      this.sumarPuntos(recompensa, this.ultimoGolpeadorJefe ?? 0);
+    }
     this.mostrarTextoFlotante(x, y, `+${recompensa}`, PALETA.verde);
     this.actualizarHUD();
 
@@ -4377,6 +4651,7 @@ class EscenaJuego extends Phaser.Scene {
     if (this.jefe.temporizadorAtaque) this.jefe.temporizadorAtaque.remove();
     if (this.jefe.temporizadorTrampa) this.jefe.temporizadorTrampa.remove();
     if (this.jefe.temporizadorPuntoDebil) this.jefe.temporizadorPuntoDebil.remove();
+    if (this.jefe.temporizadorEscudo) this.jefe.temporizadorEscudo.remove();
     this.jefe.trampas.forEach((t) => {
       if (t.temporizador) t.temporizador.remove();
       t.contenedor.destroy();
@@ -4451,10 +4726,11 @@ window.controlJuego = {
       charges: escena?.escanerCargas ?? 0,
       multi: estado.multijugador,
       mando: estado.modoMando,
+      duo: estado.modoDuo, // teclado + mouse en la PC: el mando no se usa
       audio: audioDesbloqueado(), // false: falta un clic en la PC para que suene (el mando espera)
       points: estado.puntosJugadores,
       feedback: (escena?.jugadores || []).map((j) => (Date.now() < j.feedbackHasta ? j.feedback : '')),
-      boss: jefe && !jefe.destruido ? {
+      boss: jefe && !jefe.destruido && !estado.modoDuo ? {
         name: jefe.config.nombre, sequence: jefe.secuencia, progress: jefe.progresoCombinacion,
       } : null,
     };
@@ -4477,21 +4753,26 @@ function reiniciarEstado() {
   estado.puntosJugadores = [0, 0];
 }
 
-// Texto con el reparto de puntos del equipo (solo en modo 2 jugadores).
+// Texto con el reparto de puntos del equipo (solo en los modos de 2 jugadores).
 function textoPuntosJugadores() {
+  if (estado.modoDuo) return ` (Teclado: ${estado.puntosJugadores[0]} · Mouse: ${estado.puntosJugadores[1]})`;
   if (!estado.multijugador) return '';
   return ` (J1: ${estado.puntosJugadores[0]} · J2: ${estado.puntosJugadores[1]})`;
 }
 
 // Inicia una partida nueva. "modo" puede ser 'normal' (el juego original con
-// clic/toque), 'mando' (mira + letras, 1 jugador) o '2j' (cooperativo con
-// mando). Si no se indica (por ejemplo, al reintentar) se conserva el modo anterior.
+// clic/toque), 'mando' (mira + letras, 1 jugador), '2j' (cooperativo con
+// mando) o 'duo' (2 jugadores en la misma PC: uno con el lado izquierdo del
+// teclado y otro con el mouse). Si no se indica (por ejemplo, al reintentar)
+// se conserva el modo anterior.
 function iniciarJuegoDesdeCero(modo) {
   if (modo) {
-    estado.modoMando = modo !== 'normal';
+    estado.modoMando = modo === 'mando' || modo === '2j';
     estado.multijugador = modo === '2j';
+    estado.modoDuo = modo === 'duo';
   }
   document.documentElement.classList.toggle('modo-mando', estado.modoMando);
+  document.documentElement.classList.toggle('modo-duo', estado.modoDuo);
   activarAudio();
   reiniciarEstado();
   sincronizarClaseVistaMovil();
@@ -4746,6 +5027,7 @@ function activarEscanerDesdeUI() {
 document.getElementById('btn-jugar').addEventListener('click', () => iniciarJuegoDesdeCero('normal'));
 document.getElementById('btn-jugar-mando').addEventListener('click', () => iniciarJuegoDesdeCero('mando'));
 document.getElementById('btn-jugar-2').addEventListener('click', () => iniciarJuegoDesdeCero('2j'));
+document.getElementById('btn-jugar-duo').addEventListener('click', () => iniciarJuegoDesdeCero('duo'));
 document.getElementById('btn-siguiente-nivel').addEventListener('click', continuarAlSiguienteNivel);
 document.getElementById('btn-reintentar').addEventListener('click', () => iniciarJuegoDesdeCero());
 document.getElementById('btn-jugar-de-nuevo').addEventListener('click', () => iniciarJuegoDesdeCero());
@@ -4754,6 +5036,31 @@ document.getElementById('formulario-gamertag').addEventListener('submit', guarda
 // Botones A/B/X/Y en pantalla (vista móvil): atacan con la mira del jugador 1.
 document.querySelectorAll('.ataque-pantalla').forEach((boton) => {
   boton.addEventListener('click', () => window.controlJuego.atacar(boton.dataset.letra, 1));
+});
+
+// Modo teclado + mouse: el jugador del teclado pulsa la tecla (lado izquierdo)
+// que muestra cada enemigo; contra el jefe, la combinación que abre su escudo.
+// Con Ctrl/Alt/Cmd no se hace nada para no pelear con los atajos del navegador,
+// y no se toca nada si se está escribiendo en un campo de texto.
+window.addEventListener('keydown', (evento) => {
+  if (!estado.modoDuo || evento.repeat || evento.ctrlKey || evento.altKey || evento.metaKey) return;
+  if (evento.target?.matches('input, textarea, [contenteditable="true"]')) return;
+  const pantallaJuego = document.getElementById('pantalla-juego');
+  if (!pantallaJuego.classList.contains('activa')) return;
+  const tecla = evento.key.length === 1 ? evento.key.toUpperCase() : '';
+  // Pregunta de seguridad: las teclas 1-4 (también del lado izquierdo) eligen la respuesta.
+  const pantallaPregunta = document.getElementById('pantalla-pregunta');
+  if (pantallaPregunta.classList.contains('activa') && '1234'.includes(tecla) && tecla) {
+    const opcion = document.querySelectorAll('#opciones-pregunta button')[Number(tecla) - 1];
+    if (opcion && opcion.classList.contains('lista') && !opcion.disabled) {
+      evento.preventDefault();
+      opcion.click();
+    }
+    return;
+  }
+  if (!TECLAS_DUO.includes(tecla)) return;
+  const escena = juegoPhaser?.scene.keys.EscenaJuego;
+  if (escena?.teclaDuo(tecla)) evento.preventDefault();
 });
 
 // Atajo de teclado: tecla "S" activa el escáner mientras se está jugando
