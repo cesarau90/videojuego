@@ -328,6 +328,9 @@
   document.addEventListener('contextmenu', (event) => event.preventDefault());
   document.addEventListener('selectstart', (event) => event.preventDefault());
   window.addEventListener('blur', reset);
+  // Al girar cambia la zona táctil: soltar evita conservar el centro anterior.
+  window.addEventListener('resize', reset);
+  window.addEventListener('orientationchange', reset);
   document.addEventListener('visibilitychange', () => { if (document.hidden) reset(); });
   window.addEventListener('pagehide', reset);
 })();

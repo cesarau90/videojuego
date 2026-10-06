@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>Mando · Elimina el Malware</title>
-  <link rel="stylesheet" href="control.css?v=7">
+  <link rel="stylesheet" href="control.css?v=8">
 </head>
 <body>
   <main class="controller">
@@ -37,10 +37,21 @@
         </div>
       </div>
     </section>
-    <div class="boss-panel" aria-live="polite">
-      <span class="control-label" id="combat-title">LISTO PARA DEFENDER</span>
-      <p id="combat-hint">Apunta al enemigo y pulsa la letra que tiene encima. Los archivos seguros (azules) no se atacan.</p>
-      <div id="boss-sequence" class="boss-sequence" aria-label="Combinación del jefe"></div>
+    <div class="controller-status">
+      <div class="boss-panel" aria-live="polite">
+        <span class="control-label" id="combat-title">LISTO PARA DEFENDER</span>
+        <p id="combat-hint">Apunta al enemigo y pulsa la letra que tiene encima. Los archivos seguros (azules) no se atacan.</p>
+        <div id="boss-sequence" class="boss-sequence" aria-label="Combinación del jefe"></div>
+      </div>
+      <div id="answers" hidden>
+        <p class="hint">Elige la respuesta según el orden que ves en la PC.</p>
+        <div class="answer-buttons" aria-label="Respuestas de la pregunta">
+          <button type="button" data-action="answer-0">1</button>
+          <button type="button" data-action="answer-1">2</button>
+          <button type="button" data-action="answer-2">3</button>
+          <button type="button" data-action="answer-3">4</button>
+        </div>
+      </div>
     </div>
     <div class="buttons">
       <button type="button" data-action="scan">ESCÁNER</button>
@@ -49,19 +60,10 @@
       <button type="button" data-action="next">CONTINUAR</button>
       <button type="button" data-action="retry">REINTENTAR</button>
     </div>
-    <div id="answers" hidden>
-      <p class="hint">Elige la respuesta según el orden que ves en la PC.</p>
-      <div class="answer-buttons" aria-label="Respuestas de la pregunta">
-        <button type="button" data-action="answer-0">1</button>
-        <button type="button" data-action="answer-1">2</button>
-        <button type="button" data-action="answer-2">3</button>
-        <button type="button" data-action="answer-3">4</button>
-      </div>
-    </div>
   </main>
   <!-- Sin zoom accidental (pellizco, doble toque); si aun así hay zoom, se corrige solo -->
   <script src="sin-zoom.js?v=1" data-siempre data-recargar></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="control.js?v=11"></script>
+  <script src="control.js?v=12"></script>
 </body>
 </html>

@@ -495,8 +495,8 @@ era el `resizeInterval` de Phaser.)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
 con un parámetro de versión (actualmente `style.css?v=26`, `game.js?v=33`,
-`sin-zoom.js?v=1` y `remote-host.js?v=9`; en `control.html`: `control.css?v=7`,
-`control.js?v=11` y `sin-zoom.js?v=1`). Cada vez
+`sin-zoom.js?v=1` y `remote-host.js?v=9`; en `control.html`: `control.css?v=8`,
+`control.js?v=12` y `sin-zoom.js?v=1`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la
@@ -589,6 +589,24 @@ ninguna contraseña ni clave secreta.
   escáner, iniciar, "2 jugadores", continuar, reintentar y respuestas 1–4
   (solo visibles durante la pregunta de seguridad). Muestra la combinación
   del jefe y los avisos del juego.
+- **Mando responsive en vertical y horizontal:** en horizontal con hasta
+  **600 px de alto**, el joystick queda a la izquierda y los botones
+  **A/B/X/Y** a la derecha; los avisos, la combinación del jefe y las
+  respuestas 1–4 quedan en el centro. Las tabletas con mayor altura
+  mantienen la distribución amplia
+  original. La cabecera y las acciones usan poco alto sin tapar los controles.
+  El diseño usa el alto disponible con `100dvh` y respaldo `100vh`, y
+  respeta `env(safe-area-inset-*)` para las muescas y la barra del sistema.
+  Cada botón de letra conserva al menos **44×44 px**; las combinaciones
+  pueden repartirse en varias filas y los textos largos no causan scroll
+  horizontal. En alturas extremas se permite scroll vertical para acceder
+  a todo. Al rotar o redimensionar se suelta el joystick y se detiene la
+  mira, evitando conservar las coordenadas del toque anterior.
+- **Comprobación del mando:** revisar 568×320, 667×375, 740×360, 844×390 y
+  932×430, además de teléfonos en vertical. Probar conexión, partida,
+  combinación del jefe, avisos largos, preguntas y 2 jugadores; confirmar
+  que las letras y las respuestas son accesibles y que girar con el dedo
+  sobre el joystick deja la mira en reposo.
 - Seguridad/robustez: la PC valida cada mensaje (letras permitidas, ejes
   entre -1 y 1, botones solo en su pantalla correspondiente), limita los
   ataques a uno cada 110 ms, y si el teléfono deja de enviar señal 7 s se

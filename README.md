@@ -40,8 +40,25 @@ El mando no hace zoom aunque se toque muchas veces o con dos dedos. Si aun así
 la pantalla queda ampliada, se puede deshacer pellizcando, se corrige sola y,
 como último recurso, aparece un botón **Quitar zoom**.
 Al soltar, cancelar el toque, ocultar la página o perder la conexión,
-el movimiento se detiene. El mando también incluye escáner, inicio,
+el movimiento se detiene. También se detiene al girar o redimensionar el
+teléfono. El mando incluye escáner, inicio,
 continuación, reintento y respuestas 1–4 (visibles durante las preguntas).
+
+El mando se adapta a vertical y horizontal. En teléfonos en horizontal
+con hasta **600 px de alto**, el joystick queda a la izquierda, A/B/X/Y
+a la derecha y los avisos, la combinación del jefe y las respuestas en
+el centro. Las tabletas con mayor altura mantienen la distribución amplia
+original. La cabecera y las acciones son compactas; las letras conservan
+al menos 44×44 px y las combinaciones
+pueden ocupar varias filas. Se respeta el espacio de las muescas y la
+barra del sistema (`safe-area-inset-*`) y el alto visible (`100dvh`, con
+respaldo `100vh`). Si la pantalla es demasiado baja, se puede desplazar
+verticalmente para acceder a todo.
+
+Para revisar el diseño, probar 568×320, 667×375, 740×360, 844×390 y
+932×430, además de vertical, con jefe, avisos largos, preguntas y 2
+jugadores. Comprobar que no haya scroll horizontal y que girar mientras
+se usa el joystick deje la mira en reposo.
 
 Los elementos conservan los **colores del juego original** según su tipo
 (amenaza roja, crítica naranja, resistente morada, duplicador magenta,

@@ -41,7 +41,7 @@ h1 { margin: .2rem 0 .5rem; font-size: clamp(1.4rem, 6vw, 2rem); }
 .joystick-knob { position: absolute; width: 42%; height: 42%; left: 29%; top: 29%; border-radius: 50%; border: 2px solid #38bdf8; background: radial-gradient(circle at 35% 25%, #35675d, #12342b); box-shadow: 0 8px 16px #0008; pointer-events: none; transition: transform .12s cubic-bezier(.2, .8, .2, 1); will-change: transform; }
 .joystick.pressed { border-color: #38bdf8; }
 @media (prefers-reduced-motion: reduce) { .joystick, .joystick-knob, .movement .control-label { transition: none; } }
-.face-buttons { display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); width: min(100%, 224px); aspect-ratio: 1; gap: 2px; }
+.face-buttons { display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); width: min(100%, 224px); min-width: 136px; aspect-ratio: 1; gap: 2px; }
 button { min-height: 48px; border: 1px solid #246353; border-radius: 12px; color: #e7f5ef; background: #12342b; font-family: inherit; font-size: .75rem; font-weight: 700; cursor: pointer; touch-action: manipulation; }
 button:disabled { opacity: .4; cursor: default; }
 button:active, button.pressed { filter: brightness(1.4); transform: scale(.94); }
@@ -54,7 +54,7 @@ button:active, button.pressed { filter: brightness(1.4); transform: scale(.94); 
 .face-y { --button-color: #ffd34e; grid-area: 1 / 2; }
 .boss-panel { margin-top: 12px; padding: 12px 14px; border: 1px solid #246353; border-radius: 14px; }
 #combat-hint { margin: 6px 0 0; }
-.boss-sequence { display: flex; gap: 8px; }
+.boss-sequence { display: flex; flex-wrap: wrap; gap: 8px; }
 .sequence-letter { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid currentColor; border-radius: 9px; margin-top: 10px; font-weight: 800; }
 .sequence-letter.done { background: #246353; opacity: .45; }
 .sequence-letter.next { box-shadow: 0 0 0 2px currentColor; }
@@ -68,16 +68,54 @@ button:active, button.pressed { filter: brightness(1.4); transform: scale(.94); 
 @media (max-width: 360px) { .buttons { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 button:focus-visible, .joystick:focus-visible { outline: 2px solid #e7f5ef; outline-offset: 3px; }
 @media (orientation: landscape) and (max-height: 600px) {
-  body { padding-top: max(8px, env(safe-area-inset-top)); }
-  .controller { width: min(100%, 920px); display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; }
-  header, .controller > .hint { grid-column: 1; }
-  h1 { font-size: 1.25rem; } .eyebrow { margin: 4px 0; }
-  .controller > .hint { margin: 0; }
-  .gamepad { grid-column: 1 / -1; grid-row: 3; padding: 8px 22px; }
-  .joystick { width: min(30vh, 160px); } .face-buttons { width: min(38vh, 200px); }
-  .boss-panel { grid-column: 2; grid-row: 1 / 3; margin: 0; padding: 8px 12px; }
-  .buttons, #answers { grid-column: 1 / -1; margin: 0; }
-  .movement, .combat { gap: 5px; } button { min-height: 40px; }
-  .face strong { font-size: clamp(1.1rem, 6vh, 1.5rem); }
+  /* La fila central comparte espacio: joystick, avisos y botones de ataque.
+     dvh sigue las barras del navegador; vh es el respaldo para versiones viejas. */
+  body {
+    --pad-top: max(8px, env(safe-area-inset-top));
+    --pad-bottom: max(8px, env(safe-area-inset-bottom));
+    padding-top: var(--pad-top);
+    padding-bottom: var(--pad-bottom);
+  }
+  .controller {
+    --status-width: clamp(168px, 28vw, 280px);
+    --pad-size: clamp(144px, calc(100vh - 170px), 224px);
+    width: min(100%, 1100px);
+    min-height: calc(100vh - var(--pad-top) - var(--pad-bottom));
+    min-height: calc(100dvh - var(--pad-top) - var(--pad-bottom));
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--status-width) minmax(0, 1fr);
+    grid-template-rows: auto minmax(186px, 1fr) auto;
+    gap: 6px 0;
+  }
+  header { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; }
+  .eyebrow { grid-column: 1; margin: 0; font-size: .6rem; }
+  h1 { grid-column: 1; grid-row: 2; margin: 0; font-size: 1.1rem; }
+  #connection { grid-column: 2; grid-row: 1; max-width: 260px; font-size: .75rem; text-align: right; }
+  .player-row { grid-column: 2; grid-row: 2; justify-content: flex-end; margin: 0; gap: 4px; }
+  .player-badge { padding: 3px 6px; font-size: .65rem; }
+  .controller > .hint { display: none; }
+  .gamepad { grid-column: 1 / -1; grid-row: 2; grid-template-columns: minmax(0, 1fr) var(--status-width) minmax(0, 1fr); gap: 0; padding: 12px; }
+  .movement { grid-column: 1; }
+  .combat { grid-column: 3; }
+  .movement, .combat { gap: 6px; align-content: center; height: 100%; }
+  .joystick, .face-buttons { width: min(100%, var(--pad-size)); }
+  .controller-status { grid-column: 2; grid-row: 2; align-self: center; min-width: 0; padding: 8px; z-index: 1; }
+  .boss-panel { margin: 0; padding: 8px; border-radius: 12px; background: #0d1b18; overflow-wrap: anywhere; }
+  .boss-panel > .control-label { display: block; line-height: 1.3; }
+  #combat-hint { margin-top: 4px; font-size: .72rem; line-height: 1.35; }
+  .boss-sequence { gap: 6px; }
+  .sequence-letter { width: 28px; height: 28px; margin-top: 6px; flex: 0 0 28px; }
+  .buttons { grid-column: 1 / -1; grid-row: 3; margin: 0; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+  .buttons button, .answer-buttons button { min-height: 44px; padding: 6px 2px; font-size: .7rem; }
+  #answers > .hint { margin: 6px 0; font-size: .7rem; line-height: 1.3; }
+  .controller-status:has(#answers:not([hidden])) #combat-hint { display: none; }
+  .answer-buttons { margin: 0; gap: 4px; }
+  .face strong { font-size: clamp(1.25rem, 6vh, 2rem); }
   .face small { margin-top: 2px; font-size: .36rem; }
+  @supports (height: 100dvh) {
+    .controller { --pad-size: clamp(144px, calc(100dvh - 170px), 224px); }
+  }
+}
+@media (orientation: landscape) and (max-height: 600px) and (max-width: 760px) {
+  .answer-buttons { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
