@@ -11,9 +11,13 @@ En la portada hay tres botones:
   lleva cada enemigo, usando el teléfono como mando o el teclado.
 - **2 jugadores:** cooperativo con dos miras (ver más abajo).
 
-Si al iniciar desde el teléfono no hay sonido, haz clic en cualquier parte de la
-PC o pulsa **Activar sonido** bajo el tablero: los navegadores solo dejan sonar el
-audio después de una interacción en la página.
+**Sonido:** los navegadores solo dejan sonar el audio después de un clic o una
+tecla en la página de la PC. Si vas a iniciar desde el teléfono, haz **un clic en
+cualquier parte de la PC** antes: la portada avisa "Sonido desactivado" (con un
+botón **Activar sonido**) y el mando mantiene INICIAR bloqueado, con la
+indicación, hasta que el sonido esté activo. Así suena desde el primer segundo.
+Si el navegador vuelve a pausarlo durante la partida, pulsa **Activar sonido**
+bajo el tablero.
 
 ## Control desde el teléfono (modo con mando)
 
@@ -27,6 +31,7 @@ La letra incorrecta no lo elimina. Puedes mantener el joystick con un dedo y ata
 El joystick es **flotante**: el centro es donde apoyas el pulgar (todo el lado
 izquierdo del mando es zona táctil), así que no hace falta mirar el teléfono ni
 buscar el círculo, y la mira empieza a moverse solo cuando desplazas el dedo.
+El mando no hace zoom aunque se toque muchas veces o con dos dedos.
 Al soltar, cancelar el toque, ocultar la página o perder la conexión,
 el movimiento se detiene. El mando también incluye escáner, inicio,
 continuación, reintento y respuestas 1–4 (visibles durante las preguntas).

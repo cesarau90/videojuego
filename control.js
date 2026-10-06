@@ -1,5 +1,11 @@
 ﻿(() => {
   'use strict';
+  // Sin zoom: el mando se usa con los dos pulgares y, si el navegador hace zoom
+  // (pellizco, doble toque o dedos de más al apretar fuerte), se descuadra toda
+  // la pantalla. Safari ignora user-scalable=no, así que además se cancelan sus
+  // eventos de gesto (pellizco). Lo demás está en control.html y control.css.
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach((type) =>
+    document.addEventListener(type, (event) => event.preventDefault(), { passive: false }));
   const token = new URLSearchParams(location.search).get('s');
   // Identificador de este teléfono, para que la PC distinga a J1 de J2.
   let phoneId = null;
@@ -45,7 +51,8 @@
       button.disabled = !connected() || (button.dataset.letter && (normalMode || (hostState.screen !== 'pantalla-juego'
           && !(hostState.screen === 'pantalla-pregunta' && button.dataset.letter === 'A'))))
         || (action === 'scan' && (hostState.screen !== 'pantalla-juego' || hostState.charges <= 0))
-        || (['start', 'start2'].includes(action) && hostState.screen !== 'pantalla-inicio')
+        // Iniciar espera a que la PC tenga el sonido activo (hace falta un clic en la PC; ver renderState).
+        || (['start', 'start2'].includes(action) && (hostState.screen !== 'pantalla-inicio' || hostState.audio === false))
         || (action === 'next' && !['pantalla-pregunta', 'pantalla-nivel-completado'].includes(hostState.screen))
         || (action === 'retry' && !['pantalla-derrota', 'pantalla-victoria'].includes(hostState.screen));
     });
@@ -82,14 +89,24 @@
     document.getElementById('answers').hidden = payload.screen !== 'pantalla-pregunta';
     const boss = payload.boss;
     const question = payload.screen === 'pantalla-pregunta';
+    // En la portada, si el navegador de la PC aún no deja sonar el audio (falta un clic ahí), se pide antes de iniciar.
+    const lobby = payload.screen === 'pantalla-inicio';
+    const silent = lobby && payload.audio === false;
     document.getElementById('combat-title').textContent = question ? 'PREGUNTA DE SEGURIDAD'
+      : silent ? 'ANTES DE INICIAR' : lobby ? 'LISTO PARA DEFENDER'
       : boss ? boss.name + ' · COMBINACIÓN' : 'APUNTA Y ATACA';
     const feedback = Array.isArray(payload.feedback) ? payload.feedback[player - 1] : '';
     const normalMode = payload.mando === false && payload.screen === 'pantalla-juego';
-    document.getElementById('combat-hint').textContent = normalMode
+    const hint = document.getElementById('combat-hint');
+    hint.classList.toggle('warn', silent);
+    hint.textContent = normalMode
       ? 'Esta partida está en modo normal (clic en la PC). Para usar el mando, reinicia y pulsa INICIAR aquí.'
       : question
       ? 'Mueve el joystick arriba o abajo para elegir y pulsa A para responder. Después, A para continuar.'
+      : silent
+      ? 'Haz clic en cualquier parte de la PC para activar el sonido. Después podrás iniciar desde aquí.'
+      : lobby
+      ? 'Pulsa INICIAR para jugar con el mando o 2 JUGADORES para jugar en cooperativo.'
       : feedback || (boss
       ? 'Apunta al jefe y pulsa en orden. Cada combinación completa le quita una vida y la siguiente es distinta.'
       : 'Pulsa la letra que muestra el enemigo. No ataques los archivos seguros (azules).');

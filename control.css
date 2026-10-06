@@ -1,10 +1,14 @@
 ﻿:root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
 * { box-sizing: border-box; }
-html, body { margin: 0; min-height: 100%; background: #07110f; color: #e7f5ef; }
+html, body { margin: 0; min-height: 100%; background: #07110f; color: #e7f5ef; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 /* Es un mando, no un documento: sin selección de texto, sin menú de "copiar"
    de Safari al mantener presionado, sin resaltado gris al tocar y sin zoom
-   por doble toque. */
-body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; overscroll-behavior: none; }
+   (ni por doble toque ni por pellizco; solo se deja desplazar arriba/abajo).
+   touch-action va también en <html> porque el espacio vacío bajo el mando es
+   de <html>, no de <body>: un doble toque ahí hacía zoom. La primera
+   declaración es el respaldo para navegadores que no entienden "pan-y". */
+html, body { touch-action: manipulation; touch-action: pan-y; overscroll-behavior: none; }
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 .gamepad { touch-action: none; }
 body { padding: max(16px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
 .controller { width: min(100%, 580px); margin: auto; }
@@ -18,6 +22,7 @@ h1 { margin: .2rem 0 .5rem; font-size: clamp(1.4rem, 6vw, 2rem); }
 .player-badge.j2 { color: #ffd34e; }
 .switch-player { min-height: 32px; padding: 4px 10px; font-size: .7rem; }
 .hint, #combat-hint { color: #91a8a0; line-height: 1.45; font-size: .8rem; }
+#combat-hint.warn { color: #ffb86c; } /* falta activar el sonido en la PC */
 .gamepad { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; padding: 18px 8px; border: 1px solid #246353; border-radius: 24px; background: linear-gradient(145deg, #102c29, #0d1b18); }
 .movement, .combat { display: grid; justify-items: center; gap: 12px; min-width: 0; }
 .control-label { margin: 0; font-size: .6rem; letter-spacing: .1em; font-weight: 700; color: #91a8a0; }

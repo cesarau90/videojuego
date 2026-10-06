@@ -12,7 +12,7 @@
     rel="stylesheet"
   />
 
-  <link rel="stylesheet" href="style.css?v=21" />
+  <link rel="stylesheet" href="style.css?v=22" />
 </head>
 <body>
 
@@ -152,6 +152,15 @@
           <strong class="qr-titulo">Usa tu teléfono como control</strong>
           <span class="qr-sub">Escanea el QR: joystick para mover la mira y A, B, X, Y para atacar.</span>
           <span id="estado-control" class="estado-control" role="status">Preparando conexión…</span>
+          <!-- El navegador solo deja sonar el audio tras un clic en esta página; si se inicia desde el teléfono, hay que hacerlo antes. -->
+          <span id="estado-sonido" class="estado-sonido" role="status"></span>
+          <button id="btn-sonido-portada" class="boton-escaner boton-sonido-portada" type="button" hidden>
+            <svg class="boton-escaner-icono" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 9.5 H8 L13 5 V19 L8 14.5 H4 Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+              <path d="M16.5 9 C17.8 10.2 17.8 13.8 16.5 15 M19 6.5 C21.3 9 21.3 15 19 17.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+            Activar sonido
+          </button>
           <a id="enlace-control" class="qr-enlace" href="#">Abrir control</a>
         </div>
       </section>
@@ -327,7 +336,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <!-- Lógica del juego -->
-  <script src="game.js?v=29"></script>
+  <script src="game.js?v=30"></script>
   <script src="remote-host.js?v=8"></script>
 </body>
 </html>

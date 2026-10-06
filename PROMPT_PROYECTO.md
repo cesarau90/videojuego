@@ -40,7 +40,8 @@ genérica de IA:
     escaneo animada, nodos con estado, indicador de red), sin imágenes.
 - Tres tarjetas de instrucciones: Detecta / Elimina / Sobrevive.
 - Bajo el pie, un bloque con el **QR del mando** (sección 12), su estado
-  de conexión y el enlace al mando.
+  de conexión, el aviso/botón de **sonido** (sección 14) y el enlace al
+  mando.
 - Pie discreto con los nombres del equipo: **Cesar del Angel** y **Jean
   Barrera** (nunca cambiar estos nombres).
 - Microanimaciones: entrada suave del contenido, aparición escalonada de
@@ -488,8 +489,8 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=21`, `game.js?v=29` y
-`remote-host.js?v=8`; en `control.html`: `control.css?v=6` y `control.js?v=7`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=22`, `game.js?v=30` y
+`remote-host.js?v=8`; en `control.html`: `control.css?v=7` y `control.js?v=8`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la
@@ -643,8 +644,19 @@ ninguna contraseña ni clave secreta.
   opción (un paso por movimiento, hay que volver al centro), **A** responde
   y, ya respondida, **A** continúa. Los botones 1–4 siguen funcionando.
 - **Safari/iPhone:** el mando desactiva la selección de texto, el menú de
-  "copiar" al mantener presionado, el resaltado al tocar y el zoom por
-  doble toque (`user-select`, `-webkit-touch-callout`, `touch-action`).
+  "copiar" al mantener presionado, el resaltado al tocar y el zoom
+  (`user-select`, `-webkit-touch-callout`, `touch-action`).
+- **Sin zoom en el mando** (se hacía zoom al apretar mucho): `control.html`
+  usa `maximum-scale=1, user-scalable=no` (la PC ya lo tenía; Safari lo
+  ignora desde iOS 10, así que no basta); `control.css` pone `touch-action`
+  también en `<html>` —el espacio vacío bajo el mando es de `<html>`, no de
+  `<body>`, y un doble toque ahí hacía zoom— con `pan-y` (se puede desplazar
+  hacia abajo en teléfonos bajitos, pero no hacer zoom) y `none` solo en
+  `.gamepad`; y `control.js` cancela `gesturestart`/`gesturechange`/
+  `gestureend` (el pellizco de Safari). No se bloquean los toques con dos
+  dedos en general porque el mando se juega con dos pulgares (palanca +
+  botón). Probado en Chrome móvil emulado (zonas, eventos de gesto,
+  desplazamiento y dos pulgares); no se pudo probar en un iPhone real.
 - La combinación del jefe en la PC toma el color de la siguiente letra que
   hay que pulsar.
 - Puente con el juego: `window.controlJuego` en `game.js`
@@ -708,14 +720,43 @@ ninguna contraseña ni clave secreta.
 - **Modo con mando:** mira, letras y combinaciones (secciones 4, 5, 12 y
   13); ciclos de jefe 10/10/12 s (`tiempoAtaqueMando`). La clase
   `html.modo-mando` muestra los botones A/B/X/Y en la vista móvil.
-- **Sonido:** los navegadores solo permiten audio tras un clic, toque o
-  tecla en la página. Antes el contexto de audio se creaba con el primer
-  sonido, a veces sin interacción (sobre todo al iniciar desde el
-  teléfono), y quedaba en pausa todo el nivel 1. Ahora `activarAudio()` lo
-  crea/reanuda con cualquier `pointerdown`/`keydown`/`touchend` y al
-  iniciar la partida, `obtenerContextoAudio()` reanuda si está en pausa, y
-  si aún está en pausa durante la partida se muestra el botón **"Activar
-  sonido"** bajo el tablero.
+- **Sonido:** los navegadores solo dejan sonar el audio tras un clic, toque
+  o tecla **real** en la página (`isTrusted`). El `button.click()` que hace
+  `remote-host.js` cuando el teléfono pulsa INICIAR es por código y **no
+  cuenta**: por eso, al iniciar desde el teléfono sin haber tocado la PC, el
+  audio se quedaba en pausa (reloj del `AudioContext` detenido) hasta que
+  alguien hacía clic en la PC —en la práctica, en la pregunta de seguridad—.
+  No hay manera de saltarse esa regla (solo si el usuario da permiso de
+  sonido al sitio en Chrome o si Chrome ya lo considera "frecuente"), así que
+  el clic se pide **antes** de empezar:
+  - `obtenerContextoAudio()` crea el contexto al cargar la página (queda en
+    `running` solo si el navegador ya permite el audio) y
+    `activarAudio()` lo reanuda con cualquier gesto real (`pointerdown`,
+    `pointerup`, `mousedown`, `click`, `keydown`, `touchend`); las teclas
+    Shift/Ctrl/Alt/Meta/CapsLock/Escape solas no cuentan porque Chrome no las
+    acepta como gesto.
+  - `audioDesbloqueado()` dice si ya puede sonar (contexto `running`; como
+    respaldo, un gesto real hace más de 2 s por si el navegador no lo
+    arranca, para no dejar el mando bloqueado para siempre). Se manda al
+    mando en `window.controlJuego.estado().audio`.
+  - **Portada:** en el bloque del QR, `#estado-sonido` muestra "Sonido
+    desactivado: haz clic en cualquier parte de esta pantalla" (naranja) y
+    un botón "Activar sonido" con ícono de bocina; durante el arranque dice
+    "Activando sonido…" y al final "Sonido activado" (verde) sin botón. Si el
+    navegador ya permite el audio, solo aparece "Sonido activado".
+  - **Mando:** mientras la PC esté en la portada con `audio: false`, INICIAR y
+    2 JUGADORES quedan deshabilitados y el panel dice "ANTES DE INICIAR: Haz
+    clic en cualquier parte de la PC para activar el sonido. Después podrás
+    iniciar desde aquí." (texto naranja, clase `.warn`); al activarse se
+    habilitan solos. Una PC sin el campo `audio` (versión vieja) no bloquea.
+  - Sigue existiendo el botón **"Activar sonido"** bajo el tablero para el
+    caso de que el navegador vuelva a pausar el audio durante la partida.
+  - Al probar con Playwright: `page.evaluate` y las funciones expuestas
+    (`exposeFunction`) cuentan como gesto de usuario y desbloquean el audio
+    de la PC sin querer; leer con CDP crudo (`Runtime.evaluate` con
+    `userGesture: false`), entregar los mensajes del relevo de la misma
+    forma y lanzar Chrome con `--autoplay-policy=document-user-activation-required`
+    (el modo headless lo trae abierto por defecto).
 
 ## Reglas de trabajo durante todo el proyecto
 

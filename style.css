@@ -1405,6 +1405,11 @@ html:not(.modo-mando) #btn-ver-qr { display: none; }
 .qr-img { padding: 5px; }
 .qr-img img, .qr-img canvas { display: block; width: 100%; height: 100%; }
 .estado-control { color: var(--verde, #00d99b); }
+/* Aviso de sonido de la portada: naranja mientras falta el clic, verde cuando ya suena. */
+.estado-sonido { color: #ffb86c; }
+.estado-sonido.activo { color: var(--verde, #00d99b); }
+.boton-sonido-portada { align-self: flex-start; margin: 4px 0; }
+.boton-sonido-portada[hidden] { display: none; }
 .dialogo-control { width: min(90vw, 360px); padding: 28px; border: 1px solid #246353; border-radius: 18px; background: #0d1b18; color: #e7f5ef; text-align: center; }
 .dialogo-control::backdrop { background: #000b; }
 .dialogo-control .qr-img { margin: 16px auto; }

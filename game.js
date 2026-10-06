@@ -612,11 +612,17 @@ const estado = {
    directamente en el navegador con osciladores.
    ------------------------------------------------------------------ */
 let contextoAudio = null;
+let gestoAudioVisto = false; // true cuando hubo un clic, toque o tecla REAL en esta página
+let instanteGestoAudio = 0;  // cuándo fue ese primer gesto (ms)
+const TECLAS_SIN_ACTIVACION = ['Shift', 'Control', 'Alt', 'AltGraph', 'Meta', 'OS', 'CapsLock', 'Escape'];
 
 function obtenerContextoAudio() {
   if (!contextoAudio) {
     const AudioContextClase = window.AudioContext || window.webkitAudioContext;
     contextoAudio = new AudioContextClase();
+    // En cuanto cambia de estado (por ejemplo, pasa a "running" tras el primer
+    // clic) se actualizan los avisos, sin esperar al reloj de abajo.
+    contextoAudio.onstatechange = actualizarAvisoSonido;
   }
   // Si el navegador lo dejó en pausa, se intenta reanudar.
   if (contextoAudio.state === 'suspended') contextoAudio.resume().catch(() => {});
@@ -624,25 +630,61 @@ function obtenerContextoAudio() {
 }
 
 // Los navegadores solo dejan sonar el audio después de un clic, toque o
-// tecla en la página. Antes el contexto se creaba con el primer sonido (a
-// veces sin que hubiera habido un clic, sobre todo al iniciar desde el
-// teléfono) y se quedaba en pausa todo el nivel 1. Ahora se activa con
-// cualquier interacción en la PC, y si aún falta, se muestra el botón
-// "Activar sonido" bajo el tablero.
-function activarAudio() {
+// tecla REAL en la página: el botón "Jugar con mando" que pulsa el teléfono lo
+// hace por código (button.click()) y eso no cuenta. Por eso, al iniciar desde
+// el teléfono el audio se quedaba en pausa hasta que alguien hacía clic en la
+// PC (por ejemplo, en la pregunta de seguridad). Ahora:
+//  - El contexto se crea al cargar la página (queda en "running" solo si el
+//    navegador ya permite el audio) y se reanuda con cualquier gesto real.
+//  - La portada avisa si falta ese clic y el mando no deja iniciar hasta que
+//    esté activo (ver "audio" en window.controlJuego.estado()).
+//  - Si el navegador vuelve a pausarlo durante la partida, aparece el botón
+//    "Activar sonido" bajo el tablero.
+function activarAudio(evento) {
+  // Solo cuentan los gestos reales (no los clics hechos por código) y, con el
+  // teclado, las teclas que el navegador acepta como gesto: Shift, Ctrl, Alt o
+  // Escape solas no lo son.
+  const gestoReal = evento && evento.isTrusted
+    && !(evento.type === 'keydown' && TECLAS_SIN_ACTIVACION.includes(evento.key));
+  if (gestoReal && !gestoAudioVisto) { gestoAudioVisto = true; instanteGestoAudio = Date.now(); }
   try { obtenerContextoAudio(); } catch (e) { /* navegador sin Web Audio */ }
   actualizarAvisoSonido();
 }
 
-function actualizarAvisoSonido() {
-  const boton = document.getElementById('btn-activar-sonido');
-  if (!boton) return;
-  boton.hidden = !estado.juegoActivo || !contextoAudio || contextoAudio.state === 'running';
+// ¿Ya puede sonar el audio? Sí si el navegador lo dejó arrancar. Sin Web Audio
+// no hay nada que activar.
+function audioDesbloqueado() {
+  if (!(window.AudioContext || window.webkitAudioContext)) return true;
+  if (contextoAudio && contextoAudio.state === 'running') return true;
+  // Respaldo: tras un gesto real el navegador lo arranca en menos de un
+  // segundo; si pasan 2 s y sigue en pausa (caso raro), no se bloquea el mando
+  // para siempre (queda el botón "Activar sonido" bajo el tablero).
+  return gestoAudioVisto && Date.now() - instanteGestoAudio > 2000;
 }
 
-['pointerdown', 'keydown', 'touchend'].forEach((tipo) =>
+function actualizarAvisoSonido() {
+  const desbloqueado = audioDesbloqueado();
+  // Botón bajo el tablero (el navegador pausó el audio durante la partida)
+  const boton = document.getElementById('btn-activar-sonido');
+  if (boton) boton.hidden = !estado.juegoActivo || !contextoAudio || contextoAudio.state === 'running';
+  // Portada: aviso y botón para activarlo antes de empezar
+  const botonPortada = document.getElementById('btn-sonido-portada');
+  if (botonPortada) botonPortada.hidden = desbloqueado || gestoAudioVisto;
+  const textoPortada = document.getElementById('estado-sonido');
+  if (textoPortada) {
+    // Entre el clic y el arranque del audio pasa una fracción de segundo: "Activando…"
+    textoPortada.textContent = desbloqueado ? 'Sonido activado'
+      : gestoAudioVisto ? 'Activando sonido…'
+      : 'Sonido desactivado: haz clic en cualquier parte de esta pantalla';
+    textoPortada.classList.toggle('activo', desbloqueado);
+  }
+}
+
+['pointerdown', 'pointerup', 'mousedown', 'click', 'keydown', 'touchend'].forEach((tipo) =>
   window.addEventListener(tipo, activarAudio, { capture: true, passive: true }));
 setInterval(actualizarAvisoSonido, 1000);
+try { obtenerContextoAudio(); } catch (e) { /* navegador sin Web Audio */ }
+actualizarAvisoSonido();
 
 function reproducirSonido(tipo) {
   try {
@@ -4409,6 +4451,7 @@ window.controlJuego = {
       charges: escena?.escanerCargas ?? 0,
       multi: estado.multijugador,
       mando: estado.modoMando,
+      audio: audioDesbloqueado(), // false: falta un clic en la PC para que suene (el mando espera)
       points: estado.puntosJugadores,
       feedback: (escena?.jugadores || []).map((j) => (Date.now() < j.feedbackHasta ? j.feedback : '')),
       boss: jefe && !jefe.destruido ? {
