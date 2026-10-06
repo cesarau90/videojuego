@@ -471,7 +471,7 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=19`, `game.js?v=24` y
+con un parámetro de versión (actualmente `style.css?v=19`, `game.js?v=25` y
 `remote-host.js?v=4`; en `control.html`: `control.css?v=3` y `control.js?v=3`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
@@ -595,6 +595,12 @@ ninguna contraseña ni clave secreta.
   lugares. En modo de 1 jugador todos los teléfonos manejan a J1.
 - La combinación del jefe es compartida (J1 puede pulsar A y J2 B); la
   recompensa del jefe se anota a quien da el golpe final.
+- Dificultad en 2 jugadores: los jefes tienen **50% más de vida**
+  (`FACTOR_VIDA_JEFE_2J`: Troyano 5, Botnet 8, Ransomware 12; la fase 2 del
+  Ransomware se escala igual, a la mitad de su vida) y se permite **un
+  elemento simultáneo más** (`ELEMENTOS_EXTRA_2J`, sumado en
+  `maxElementosActual()`). Mismos 3 jefes y mismas amenazas por nivel. El
+  modo de 1 jugador no cambia.
 - Puntos: `estado.puntosJugadores` lleva el marcador de cada jugador
   (además del total del equipo). Se muestra bajo el tablero ("J1 · J2") y
   en las pantallas de nivel superado, derrota y victoria. La clasificación

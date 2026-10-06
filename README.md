@@ -69,6 +69,11 @@ la siguiente. Los puntos se suman al equipo y además se lleva el marcador de
 cada jugador (se muestra bajo el tablero y al final de cada nivel). El escáner
 y los servidores son compartidos. "Volver a intentar" conserva el modo elegido.
 
+Para que dos jugadores sigan teniendo reto, en este modo los **jefes tienen 50%
+más de vida** (Troyano 5, Botnet 8, Ransomware 12; el Ransomware pasa a su fase
+rápida a la mitad) y cabe **un elemento más** en pantalla a la vez. El modo de
+1 jugador no cambia.
+
 ## Amenazas y elementos
 
 En el tablero pueden aparecer varios elementos a la vez (hasta 2, 3 o 4 según

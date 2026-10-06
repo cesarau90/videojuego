@@ -336,6 +336,10 @@ const JUGADORES = [
   { etiqueta: 'J1', color: PALETA.azul, colorTexto: PALETA.azulTexto },
   { etiqueta: 'J2', color: 0xffd34e, colorTexto: '#ffd34e' },
 ];
+// En el modo 2 jugadores hay el doble de manos atacando, así que los jefes
+// tienen 50% más de vida y cabe un elemento más en pantalla a la vez.
+const FACTOR_VIDA_JEFE_2J = 1.5;
+const ELEMENTOS_EXTRA_2J = 1;
 // Teclas del jugador 2 para atacar (en el teclado de la PC).
 const TECLAS_ATAQUE_J2 = { 7: 'A', 8: 'B', 9: 'X', 0: 'Y' };
 const COMBINACIONES_JEFE = [['A', 'B'], ['X', 'Y', 'A'], ['B', 'X', 'A', 'Y']];
@@ -2510,9 +2514,10 @@ class EscenaJuego extends Phaser.Scene {
   }
 
   // Máximo de elementos simultáneos permitido ahora mismo: el del nivel,
-  // más uno mientras la sobrecarga de red está activa.
+  // más uno mientras la sobrecarga de red está activa y uno más en 2 jugadores.
   maxElementosActual() {
-    return NIVELES[estado.indiceNivel].maxElementos + (this.limiteElementosExtra || 0);
+    return NIVELES[estado.indiceNivel].maxElementos + (this.limiteElementosExtra || 0) +
+      (estado.multijugador ? ELEMENTOS_EXTRA_2J : 0);
   }
 
   intentarGenerarElemento() {
@@ -3758,12 +3763,16 @@ class EscenaJuego extends Phaser.Scene {
     contenedor.setScale(0.7);
     contenedor.setAlpha(0);
 
+    const factorVida = estado.multijugador ? FACTOR_VIDA_JEFE_2J : 1;
+    const vidaJefe = Math.round(configuracionJefe.vidaMaxima * factorVida);
     this.jefe = {
       config: configuracionJefe,
       secuencia: COMBINACIONES_JEFE[estado.indiceNivel].slice(),
       progresoCombinacion: 0,
-      vida: configuracionJefe.vidaMaxima,
-      vidaMaxima: configuracionJefe.vidaMaxima,
+      vida: vidaJefe,
+      vidaMaxima: vidaJefe,
+      // Golpes que debe perder el Ransomware para entrar en su fase 2 (la mitad de su vida)
+      faseCambioVida: Math.round((configuracionJefe.faseCambioVida || 0) * factorVida),
       contenedor,
       circuloBase,
       graficosVida,
@@ -3926,7 +3935,7 @@ class EscenaJuego extends Phaser.Scene {
     if (
       this.jefe.config.id === 'ransomware' &&
       this.jefe.fase === 1 &&
-      this.jefe.vida <= this.jefe.vidaMaxima - this.jefe.config.faseCambioVida
+      this.jefe.vida <= this.jefe.vidaMaxima - this.jefe.faseCambioVida
     ) {
       this.activarFaseDosRansomware();
     }
