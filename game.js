@@ -5034,8 +5034,17 @@ document.getElementById('btn-jugar-de-nuevo').addEventListener('click', () => in
 document.getElementById('btn-escaner').addEventListener('click', activarEscanerDesdeUI);
 document.getElementById('formulario-gamertag').addEventListener('submit', guardarPuntuacionGlobal);
 // Botones A/B/X/Y en pantalla (vista móvil): atacan con la mira del jugador 1.
+// Atacan al tocar (pointerdown), no al soltar (click): es más rápido y, al
+// apretarlos muy seguido, Safari no los confunde con un doble toque (que haría
+// zoom, ver sin-zoom.js). El click queda solo para el teclado (Enter/Espacio).
 document.querySelectorAll('.ataque-pantalla').forEach((boton) => {
-  boton.addEventListener('click', () => window.controlJuego.atacar(boton.dataset.letra, 1));
+  boton.addEventListener('pointerdown', (evento) => {
+    evento.preventDefault();
+    window.controlJuego.atacar(boton.dataset.letra, 1);
+  });
+  boton.addEventListener('click', (evento) => {
+    if (evento.detail === 0) window.controlJuego.atacar(boton.dataset.letra, 1);
+  });
 });
 
 // Modo teclado + mouse: el jugador del teclado pulsa la tecla (lado izquierdo)

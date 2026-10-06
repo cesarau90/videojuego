@@ -1,11 +1,8 @@
 ﻿(() => {
   'use strict';
-  // Sin zoom: el mando se usa con los dos pulgares y, si el navegador hace zoom
-  // (pellizco, doble toque o dedos de más al apretar fuerte), se descuadra toda
-  // la pantalla. Safari ignora user-scalable=no, así que además se cancelan sus
-  // eventos de gesto (pellizco). Lo demás está en control.html y control.css.
-  ['gesturestart', 'gesturechange', 'gestureend'].forEach((type) =>
-    document.addEventListener(type, (event) => event.preventDefault(), { passive: false }));
+  // El zoom accidental (pellizco, doble toque al apretar rápido) se evita en
+  // sin-zoom.js, que también lo corrige si aun así ocurre; el resto está en
+  // control.html y control.css.
   const token = new URLSearchParams(location.search).get('s');
   // Identificador de este teléfono, para que la PC distinga a J1 de J2.
   let phoneId = null;

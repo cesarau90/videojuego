@@ -886,6 +886,12 @@ body {
 
 #campo-gamertag:disabled { opacity: 0.65; }
 
+/* En el iPhone, enfocar un campo con letra menor de 16 px hace zoom a la pantalla
+   y a veces no se quita. En pantallas táctiles el campo usa 16 px. */
+@media (pointer: coarse) {
+  #campo-gamertag { font-size: 16px; }
+}
+
 .boton-guardar {
   min-height: 44px;
   padding: 9px 16px;
@@ -1262,6 +1268,13 @@ html.vista-movil #contenedor-phaser canvas {
 html.vista-movil .barra-escaner {
     max-width: 100%;
     flex: 0 0 auto;
+}
+
+/* Sin zoom por doble toque al jugar directo en el teléfono (el pellizco y el
+   resto, en sin-zoom.js). El tablero ya trae su propio touch-action de Phaser. */
+html.vista-movil,
+html.vista-movil body {
+    touch-action: manipulation;
 }
 
 /* Botones A/B/X/Y en pantalla: en el celular se toca el enemigo para

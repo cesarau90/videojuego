@@ -10,7 +10,8 @@ requieren cuentas de jugador ni otros servicios externos.
 
 Entrega el código en archivos separados: `index.html`, `style.css`,
 `game.js`, `remote-host.js` (receptor del mando en la PC), `control.html`,
-`control.css` y `control.js` (el mando del teléfono) y `README.md`. Código sencillo, comentado en español, explicable
+`control.css` y `control.js` (el mando del teléfono), `sin-zoom.js` (evita y corrige el zoom
+accidental en el teléfono, lo usan el mando y el juego) y `README.md`. Código sencillo, comentado en español, explicable
 para estudiantes principiantes.
 
 ## 1. Identidad visual
@@ -493,8 +494,9 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=23`, `game.js?v=31` y
-`remote-host.js?v=8`; en `control.html`: `control.css?v=7` y `control.js?v=9`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=25`, `game.js?v=32`,
+`sin-zoom.js?v=1` y `remote-host.js?v=8`; en `control.html`: `control.css?v=7`,
+`control.js?v=10` y `sin-zoom.js?v=1`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la
@@ -650,17 +652,45 @@ ninguna contraseña ni clave secreta.
 - **Safari/iPhone:** el mando desactiva la selección de texto, el menú de
   "copiar" al mantener presionado, el resaltado al tocar y el zoom
   (`user-select`, `-webkit-touch-callout`, `touch-action`).
-- **Sin zoom en el mando** (se hacía zoom al apretar mucho): `control.html`
-  usa `maximum-scale=1, user-scalable=no` (la PC ya lo tenía; Safari lo
-  ignora desde iOS 10, así que no basta); `control.css` pone `touch-action`
-  también en `<html>` —el espacio vacío bajo el mando es de `<html>`, no de
-  `<body>`, y un doble toque ahí hacía zoom— con `pan-y` (se puede desplazar
-  hacia abajo en teléfonos bajitos, pero no hacer zoom) y `none` solo en
-  `.gamepad`; y `control.js` cancela `gesturestart`/`gesturechange`/
-  `gestureend` (el pellizco de Safari). No se bloquean los toques con dos
-  dedos en general porque el mando se juega con dos pulgares (palanca +
-  botón). Probado en Chrome móvil emulado (zonas, eventos de gesto,
-  desplazamiento y dos pulgares); no se pudo probar en un iPhone real.
+- **Sin zoom accidental en el teléfono, y que SIEMPRE se pueda quitar** (el
+  mando y el juego en vista móvil; se hacía zoom al apretar mucho y después
+  no se podía deshacer): lo hace `sin-zoom.js`, cargado por `control.html` (con
+  `data-siempre data-recargar`) y por `index.html` (solo actúa en pantallas
+  táctiles de teléfono o tableta; en la PC no toca el zoom del navegador).
+  Safari/iPhone ignora `user-scalable=no` y `maximum-scale` para el zoom del
+  usuario y, en horizontal (iOS 15+), tampoco respeta siempre `touch-action`, así
+  que se cierran varios caminos a la vez: (1) pellizco: se cancelan
+  `gesturestart/gesturechange/gestureend` y los `touchmove` con dos dedos o
+  `scale ≠ 1`; (2) doble toque —machacar botones cuenta como doble toque—: se
+  cancela el segundo `touchend` rápido (<350 ms), salvo en lo que se activa con
+  `click` (los A/B/X/Y del mando y los de la pantalla usan `pointerdown`, no
+  necesitan el click); (3) CSS y viewport: `minimum-scale=1, maximum-scale=1,
+  user-scalable=no` en las dos páginas; `control.css` pone `touch-action` en
+  `<html>` y `<body>` (`pan-y`, se puede desplazar en teléfonos bajitos), `none`
+  en `.gamepad` y `manipulation` en los botones, y el juego en vista móvil
+  `manipulation`; el campo del gamertag usa 16 px en pantallas táctiles (con
+  menos, Safari hace zoom al enfocarlo). **Lección:** bloquear TODO dejó el zoom
+  imposible de quitar —con `touch-action: pan-y/none` Safari tampoco deja
+  pellizcar para alejar—, y eso es peor que el zoom. Por eso (4) mientras
+  `visualViewport.scale ≠ 1` el módulo no cancela nada y pone la clase `con-zoom`
+  en `<html>`, que fuerza `touch-action: auto` en todo; (5) cuando el zoom deja de
+  cambiar (350 ms) intenta volver a escala 1 cambiando un instante el
+  `<meta viewport>` (escala mínima y máxima 1, otra escala inicial) y volviendo
+  a dejar el de la página; (6) si sigue: el mando se abre de nuevo con `?r=<hora>`
+  (como mucho una vez cada 10 s, guardado en `sessionStorage`; el juego no se
+  recarga solo porque perdería la partida); (7) y si todavía sigue aparece el
+  botón **Quitar zoom**, pegado a la esquina de lo que se ve y del mismo
+  tamaño en pantalla aunque haya zoom (al tocarlo vuelve a abrir la página,
+  también en el juego y sin el límite de 10 s). Pruebas: Chrome emulado no reproduce el zoom de iOS (ni con el viewport
+  del mando ni con pellizcos sintéticos), así que el zoom se **falseó**
+  (`visualViewport.scale/pageLeft/pageTop`) para probar todo el flujo, más toques
+  reales por CDP (machacar A/B/X/Y, palanca y A a la vez, dos dedos moviéndose) y
+  una auditoría de desbordes (12 tamaños × 7 estados del mando y 7 pantallas del
+  juego, sin desbordes). **No se pudo probar en un iPhone real**: que el cambio
+  del `<meta viewport>` devuelva la escala 1 y que cargar de nuevo la quite se
+  basan en cómo funciona WebKit, no en una prueba; el botón y la salida con los
+  dedos sí dependen solo de código propio. Si el zoom vuelve a ocurrir, preguntar:
+  iPhone o Android, pellizco o doble toque, vertical u horizontal, mando o juego.
 - La combinación del jefe en la PC toma el color de la siguiente letra que
   hay que pulsar.
 - Puente con el juego: `window.controlJuego` en `game.js`

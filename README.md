@@ -33,7 +33,9 @@ La letra incorrecta no lo elimina. Puedes mantener el joystick con un dedo y ata
 El joystick es **flotante**: el centro es donde apoyas el pulgar (todo el lado
 izquierdo del mando es zona táctil), así que no hace falta mirar el teléfono ni
 buscar el círculo, y la mira empieza a moverse solo cuando desplazas el dedo.
-El mando no hace zoom aunque se toque muchas veces o con dos dedos.
+El mando no hace zoom aunque se toque muchas veces o con dos dedos. Si aun así
+la pantalla queda ampliada, se puede deshacer pellizcando, se corrige sola y,
+como último recurso, aparece un botón **Quitar zoom**.
 Al soltar, cancelar el toque, ocultar la página o perder la conexión,
 el movimiento se detiene. El mando también incluye escáner, inicio,
 continuación, reintento y respuestas 1–4 (visibles durante las preguntas).
@@ -67,7 +69,8 @@ recargar la página de la PC. En el proyecto de Supabase debe estar habilitado
 otra copia del juego en el móvil, se reemplazó por el QR de control.
 
 Archivos nuevos: `remote-host.js` recibe las pulsaciones en la PC;
-`control.html`, `control.css` y `control.js` muestran el mando del teléfono.
+`control.html`, `control.css` y `control.js` muestran el mando del teléfono;
+`sin-zoom.js` evita y corrige el zoom accidental en el teléfono (mando y juego).
 Si se publica en otro repositorio de GitHub Pages, el QR usa automáticamente
 la dirección de esa nueva publicación.
 

@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <title>Mando · Elimina el Malware</title>
   <link rel="stylesheet" href="control.css?v=7">
 </head>
@@ -59,7 +59,9 @@
       </div>
     </div>
   </main>
+  <!-- Sin zoom accidental (pellizco, doble toque); si aun así hay zoom, se corrige solo -->
+  <script src="sin-zoom.js?v=1" data-siempre data-recargar></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="control.js?v=9"></script>
+  <script src="control.js?v=10"></script>
 </body>
 </html>
