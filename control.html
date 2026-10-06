@@ -1,0 +1,60 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mando · Elimina el Malware</title>
+  <link rel="stylesheet" href="control.css?v=2">
+</head>
+<body>
+  <main class="controller">
+    <header>
+      <p class="eyebrow">Elimina el Malware · Mando remoto</p>
+      <h1>Tu móvil es el control</h1>
+      <p id="connection" role="status">Conectando con la PC…</p>
+    </header>
+    <p class="hint">Mira la PC: mueve la mira con el joystick y pulsa la letra del enemigo.</p>
+    <section class="gamepad" aria-label="Controles del juego">
+      <div class="movement">
+        <p class="control-label">MOVER LA MIRA</p>
+        <div id="joystick" class="joystick" tabindex="0" role="group" aria-label="Joystick: arrastra para mover la mira. Con teclado, usa las flechas.">
+          <span class="axis axis-x" aria-hidden="true"></span>
+          <span class="axis axis-y" aria-hidden="true"></span>
+          <span id="joystick-knob" class="joystick-knob" aria-hidden="true"></span>
+        </div>
+      </div>
+      <div class="combat">
+        <p class="control-label">ATACAR POR COLOR</p>
+        <div class="face-buttons">
+          <button class="face face-y" data-letter="Y" aria-label="Y: enemigo amarillo"><strong>Y</strong><small>AMARILLO</small></button>
+          <button class="face face-x" data-letter="X" aria-label="X: enemigo azul"><strong>X</strong><small>AZUL</small></button>
+          <button class="face face-b" data-letter="B" aria-label="B: enemigo rojo"><strong>B</strong><small>ROJO</small></button>
+          <button class="face face-a" data-letter="A" aria-label="A: enemigo verde"><strong>A</strong><small>VERDE</small></button>
+        </div>
+      </div>
+    </section>
+    <div class="boss-panel" aria-live="polite">
+      <span class="control-label" id="combat-title">LISTO PARA DEFENDER</span>
+      <p id="combat-hint">Apunta al enemigo y pulsa su letra. Los escudos grises son archivos seguros: evítalos.</p>
+      <div id="boss-sequence" class="boss-sequence" aria-label="Combinación del jefe"></div>
+    </div>
+    <div class="buttons">
+      <button type="button" data-action="scan">ESCÁNER</button>
+      <button type="button" data-action="start">INICIAR</button>
+      <button type="button" data-action="next">CONTINUAR</button>
+      <button type="button" data-action="retry">REINTENTAR</button>
+    </div>
+    <div id="answers" hidden>
+      <p class="hint">Elige la respuesta según el orden que ves en la PC.</p>
+      <div class="answer-buttons" aria-label="Respuestas de la pregunta">
+        <button type="button" data-action="answer-0">1</button>
+        <button type="button" data-action="answer-1">2</button>
+        <button type="button" data-action="answer-2">3</button>
+        <button type="button" data-action="answer-3">4</button>
+      </div>
+    </div>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="control.js?v=2"></script>
+</body>
+</html>

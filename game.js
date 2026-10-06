@@ -20,19 +20,19 @@
    ------------------------------------------------------------------ */
 const NIVELES = [
   {
-    numero: 1, virusRequeridos: 10, tiempoAparicion: 1800, tiempoVidaVirus: 4000, probabilidadSeguro: 0.15,
+    numero: 1, virusRequeridos: 10, tiempoAparicion: 1800, tiempoVidaVirus: 7000, probabilidadSeguro: 0.15,
     maxElementos: 2, probabilidadMovimiento: 0.15, probabilidadCritica: 0.08, probabilidadResistente: 0,
     velocidadMin: 0.4, velocidadMax: 0.7,
     probabilidadDuplicador: 0,
   },
   {
-    numero: 2, virusRequeridos: 15, tiempoAparicion: 1100, tiempoVidaVirus: 3100, probabilidadSeguro: 0.25,
+    numero: 2, virusRequeridos: 15, tiempoAparicion: 1100, tiempoVidaVirus: 6000, probabilidadSeguro: 0.25,
     maxElementos: 3, probabilidadMovimiento: 0.5, probabilidadCritica: 0.15, probabilidadResistente: 0.13,
     velocidadMin: 0.6, velocidadMax: 1.0,
     probabilidadDuplicador: 0.14,
   },
   {
-    numero: 3, virusRequeridos: 25, tiempoAparicion: 800, tiempoVidaVirus: 2700, probabilidadSeguro: 0.3,
+    numero: 3, virusRequeridos: 25, tiempoAparicion: 800, tiempoVidaVirus: 5200, probabilidadSeguro: 0.3,
     maxElementos: 5, probabilidadMovimiento: 0.75, probabilidadCritica: 0.18, probabilidadResistente: 0.17,
     velocidadMin: 0.9, velocidadMax: 1.4,
     probabilidadDuplicador: 0.2,
@@ -319,7 +319,19 @@ function colorPorTipo(tipo) {
   if (tipo === 'reparacion') return PALETA.verde;
   if (tipo === 'critica') return PALETA.naranja;
   if (tipo === 'resistente') return PALETA.morado;
-  return PALETA.azul; // 'seguro'
+  return 0x91a8a0; // Los archivos seguros son grises, distintos de los enemigos X.
+}
+
+// La letra/color de ataque es independiente del tipo de malware.
+const BOTONES_ATAQUE = {
+  A: { color: PALETA.verde, nombre: 'VERDE' },
+  B: { color: PALETA.peligro, nombre: 'ROJO' },
+  X: { color: PALETA.azul, nombre: 'AZUL' },
+  Y: { color: 0xffd34e, nombre: 'AMARILLO' },
+};
+const COMBINACIONES_JEFE = [['A', 'B'], ['X', 'Y', 'A'], ['B', 'X', 'A', 'Y']];
+function colorElemento(elemento) {
+  return BOTONES_ATAQUE[elemento.letra]?.color ?? colorPorTipo(elemento.tipo);
 }
 
 // Tamaño lógico fijo del tablero de escritorio (mínimo 1280x720, como pide
@@ -427,7 +439,7 @@ const JEFES = [
     nombre: 'TROYANO',
     subtitulo: 'ACCESO NO AUTORIZADO',
     vidaMaxima: 3,
-    tiempoAtaque: 7000,
+    tiempoAtaque: 10000,
     colorPrincipal: PALETA.naranja,
     colorSecundario: PALETA.naranja,
     puntosRecompensa: 50,
@@ -441,7 +453,7 @@ const JEFES = [
     nombre: 'BOTNET',
     subtitulo: 'CONTROLADOR CENTRAL',
     vidaMaxima: 5,
-    tiempoAtaque: 6000,
+    tiempoAtaque: 10000,
     colorPrincipal: PALETA.azul,
     colorSecundario: PALETA.morado,
     puntosRecompensa: 100,
@@ -455,7 +467,7 @@ const JEFES = [
     nombre: 'RANSOMWARE',
     subtitulo: 'NÚCLEO PRINCIPAL',
     vidaMaxima: 8,
-    tiempoAtaque: 5000,
+    tiempoAtaque: 12000,
     colorPrincipal: PALETA.peligro,
     colorSecundario: PALETA.magenta,
     puntosRecompensa: 200,
@@ -1297,6 +1309,7 @@ class EscenaJuego extends Phaser.Scene {
 
     // Área donde pueden aparecer los elementos (entre el HUD y el servidor)
     this.areaJuego = this.calcularAreaJuego(this.anchoLogico, this.altoLogico);
+    this.crearControlMira();
 
     // En vista móvil, reacciona a cambios de tamaño/orientación (rotar el
     // teléfono, etc.) reajustando el tablero en vivo en vez de recargarlo.
@@ -1340,6 +1353,120 @@ class EscenaJuego extends Phaser.Scene {
     }
   }
 
+  // PC y móvil comparten una mira y las mismas reglas de ataque.
+  crearControlMira() {
+    this.mira = { x: this.anchoLogico / 2, y: (this.areaJuego.yMin + this.areaJuego.yMax) / 2 };
+    this.ejesControl = { x: 0, y: 0, recibido: 0 };
+    this.ultimoAtaqueControl = -Infinity;
+    this.feedbackControl = '';
+    this.feedbackControlHasta = 0;
+    this.graficoMira = this.add.graphics();
+    this.mundo.add(this.graficoMira);
+    this.flechasControl = this.input.keyboard.createCursorKeys();
+    this.input.on('pointermove', (pointer) => {
+      if (pointer.event?.pointerType === 'mouse') this.apuntarA(pointer.x / this.factorResolucion, pointer.y / this.factorResolucion);
+    });
+    this.input.on('pointerdown', (pointer) => this.apuntarA(pointer.x / this.factorResolucion, pointer.y / this.factorResolucion));
+  }
+
+  apuntarA(x, y) {
+    if (!estado.juegoActivo || this.introNivelActiva) return;
+    const area = this.areaJuego;
+    this.mira.x = Phaser.Math.Clamp(x, area.xMin, area.xMax);
+    this.mira.y = Phaser.Math.Clamp(y, area.yMin, area.yMax);
+  }
+
+  moverControl(x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const longitud = Math.max(1, Math.hypot(x, y));
+    this.ejesControl = { x: x / longitud, y: y / longitud, recibido: Date.now() };
+  }
+
+  actualizarControlMira(delta = 16) {
+    const jugando = estado.juegoActivo && !this.introNivelActiva && document.getElementById('pantalla-juego').classList.contains('activa');
+    this.graficoMira.setVisible(jugando);
+    if (!jugando) return;
+    // Caduca el movimiento si se pierde la conexión o el paquete de soltar.
+    const remoto = Date.now() - this.ejesControl.recibido < 400;
+    let x = remoto ? this.ejesControl.x : 0;
+    let y = remoto ? this.ejesControl.y : 0;
+    x += Number(this.flechasControl.right.isDown) - Number(this.flechasControl.left.isDown);
+    y += Number(this.flechasControl.down.isDown) - Number(this.flechasControl.up.isDown);
+    const longitud = Math.max(1, Math.hypot(x, y));
+    const paso = 650 * Math.min(delta, 50) / 1000;
+    this.apuntarA(this.mira.x + x / longitud * paso, this.mira.y + y / longitud * paso);
+    const color = this.objetivoControl() ? PALETA.verde : PALETA.azul;
+    const g = this.graficoMira;
+    g.clear(); g.lineStyle(2, color, 1); g.strokeCircle(this.mira.x, this.mira.y, 18);
+    g.lineBetween(this.mira.x - 27, this.mira.y, this.mira.x - 10, this.mira.y);
+    g.lineBetween(this.mira.x + 10, this.mira.y, this.mira.x + 27, this.mira.y);
+    g.lineBetween(this.mira.x, this.mira.y - 27, this.mira.x, this.mira.y - 10);
+    g.lineBetween(this.mira.x, this.mira.y + 10, this.mira.x, this.mira.y + 27);
+    this.mundo.bringToTop(g);
+  }
+
+  objetivoControl() {
+    const candidatos = estado.virusActivos.filter((e) => !e.procesado).map((e) => ({
+      elemento: e, contenedor: e.contenedor, radio: 56 * Math.abs(e.contenedor.scaleX),
+    }));
+    if (this.jefe && !this.jefe.destruido) {
+      candidatos.push({ jefe: this.jefe, contenedor: this.jefe.contenedor, radio: 90 });
+      this.jefe.trampas.filter((t) => !t.procesado).forEach((t) =>
+        candidatos.push({ trampa: t, contenedor: t.contenedor, radio: 48 * Math.abs(t.contenedor.scaleX) }));
+    }
+    return candidatos.map((c) => ({ ...c, distancia: Math.hypot(c.contenedor.x - this.mira.x, c.contenedor.y - this.mira.y) }))
+      .filter((c) => c.distancia <= c.radio).sort((a, b) => a.distancia - b.distancia)[0];
+  }
+
+  avisarControl(texto) {
+    this.feedbackControl = texto;
+    this.feedbackControlHasta = Date.now() + 2200;
+    this.mostrarTextoFlotante(this.mira.x, this.mira.y - 36, texto, PALETA.texto);
+  }
+
+  atacarControl(letra) {
+    if (!BOTONES_ATAQUE[letra] || !estado.juegoActivo || this.introNivelActiva ||
+      !document.getElementById('pantalla-juego').classList.contains('activa')) return;
+    if (Date.now() - this.ultimoAtaqueControl < 110) return;
+    this.ultimoAtaqueControl = Date.now();
+    const objetivo = this.objetivoControl();
+    if (!objetivo) { this.avisarControl('APUNTA AL OBJETIVO'); return; }
+    if (objetivo.trampa) { this.resolverTrampaJefe(objetivo.trampa, true); return; }
+    if (objetivo.jefe) { this.pulsarCombinacionJefe(letra); return; }
+    const e = objetivo.elemento;
+    if (e.tipo !== 'seguro' && e.letra !== letra) {
+      this.avisarControl('USA ' + e.letra + ' · ' + BOTONES_ATAQUE[e.letra].nombre); return;
+    }
+    if (e.tipo === 'reparacion') this.repararServidor(e);
+    else if (e.tipo === 'duplicador') this.dividirDuplicador(e);
+    else this.eliminarVirus(e, true);
+  }
+
+  actualizarCombinacionJefe() {
+    if (!this.jefe?.textoCombinacion) return;
+    this.jefe.textoCombinacion.setText(this.jefe.secuencia.map((letra, i) =>
+      i < this.jefe.progresoCombinacion ? '✓' : letra).join(' → '));
+  }
+
+  pulsarCombinacionJefe(letra) {
+    const jefe = this.jefe;
+    if (!jefe || jefe.destruido || jefe.protegido || jefe.contenedor.alpha < 1) return;
+    if (letra !== jefe.secuencia[jefe.progresoCombinacion]) {
+      jefe.progresoCombinacion = 0; this.actualizarCombinacionJefe();
+      this.avisarControl('COMBINACIÓN INCORRECTA: REINICIA'); return;
+    }
+    // Conserva el prefijo hasta que se abra el punto débil; la última
+    // letra se pulsa con el punto visible para completar el golpe.
+    if (jefe.progresoCombinacion === jefe.secuencia.length - 1 && jefe.puntoDebil && !jefe.puntoDebil.circulo.visible) {
+      this.avisarControl('ESPERA EL PUNTO DÉBIL'); return;
+    }
+    jefe.progresoCombinacion += 1;
+    if (jefe.progresoCombinacion === jefe.secuencia.length) {
+      jefe.progresoCombinacion = 0; this.golpearJefe();
+    }
+    this.actualizarCombinacionJefe();
+  }
+
   // Factor de lentitud aplicado por el escáner (2s) a elementos y, si
   // corresponde, al jefe. 1 = velocidad normal.
   get factorEscaner() {
@@ -1349,7 +1476,8 @@ class EscenaJuego extends Phaser.Scene {
   // Cada elemento activo dibuja un anillo que se reduce con el tiempo
   // restante, se mueve si es móvil (rebotando en los bordes del área de
   // juego) y mantiene su línea de objetivo apuntando al servidor elegido.
-  update() {
+  update(tiempo, delta) {
+    this.actualizarControlMira(delta);
     estado.virusActivos.forEach((elemento) => {
       if (elemento.movil) {
         const factor = this.factorEscaner;
@@ -1376,7 +1504,7 @@ class EscenaJuego extends Phaser.Scene {
 
       if (!elemento.temporizador || !elemento.anilloTiempo) return;
       const restante = 1 - elemento.temporizador.getProgress();
-      const color = colorPorTipo(elemento.tipo);
+      const color = colorElemento(elemento);
 
       elemento.anilloTiempo.clear();
       elemento.anilloTiempo.lineStyle(4, color, 0.55);
@@ -1722,10 +1850,11 @@ class EscenaJuego extends Phaser.Scene {
   // y el duplicador se agrega a partir del nivel 2.
   obtenerEntradasLeyenda(todas) {
     const entradas = [
-      { colores: [PALETA.peligro, PALETA.naranja, PALETA.morado], etiqueta: 'Eliminar', desdeNivel: 0 },
-      { colores: [PALETA.azul], etiqueta: 'Ignorar', desdeNivel: 0 },
-      { colores: [PALETA.verde], etiqueta: 'Reparación', desdeNivel: 0 },
-      { colores: [PALETA.magenta], etiqueta: 'Duplicador', desdeNivel: 1 },
+      { colores: [PALETA.verde], etiqueta: 'A', desdeNivel: 0 },
+      { colores: [PALETA.peligro], etiqueta: 'B', desdeNivel: 0 },
+      { colores: [PALETA.azul], etiqueta: 'X', desdeNivel: 0 },
+      { colores: [0xffd34e], etiqueta: 'Y', desdeNivel: 0 },
+      { colores: [0x91a8a0], etiqueta: 'Seguro: evitar', desdeNivel: 0 },
     ];
     return todas ? entradas : entradas.filter((e) => estado.indiceNivel >= e.desdeNivel);
   }
@@ -2263,6 +2392,8 @@ class EscenaJuego extends Phaser.Scene {
   /* ---------------- CONTROL DE NIVELES ---------------- */
 
   iniciarNivelActual() {
+    this.moverControl(0, 0);
+    this.mira = { x: this.anchoLogico / 2, y: (this.areaJuego.yMin + this.areaJuego.yMax) / 2 };
     estado.virusEliminados = 0;
     estado.jefeActivo = false;
     estado.combo = 0;
@@ -2500,7 +2631,9 @@ class EscenaJuego extends Phaser.Scene {
   crearElementoVisual(tipo, x, y, opciones = {}) {
     const configuracionNivel = NIVELES[estado.indiceNivel];
     const escalaVisual = opciones.escalaVisual || 1;
-    const color = colorPorTipo(tipo);
+    const letra = tipo === 'seguro' ? null : tipo === 'reparacion' ? 'A'
+      : opciones.letra || Phaser.Utils.Array.GetRandom(Object.keys(BOTONES_ATAQUE));
+    const color = BOTONES_ATAQUE[letra]?.color ?? colorPorTipo(tipo);
 
     // Un contenedor agrupa el círculo, el anillo de tiempo y el ícono
     const contenedor = this.add.container(x, y);
@@ -2515,6 +2648,9 @@ class EscenaJuego extends Phaser.Scene {
     dibujarIconoPorTipo(icono, tipo, color);
 
     contenedor.add([circuloFondo, anilloTiempo, icono]);
+    const letraTexto = this.crearTexto(0, -34, letra || 'SEGURO', {
+      tamano: letra ? 24 : 10, mono: true, negrita: true, origenX: .5, origenY: .5, contenedor,
+    });
 
     // Etiqueta permanente "REPARACIÓN" (a diferencia del resto de tipos,
     // que solo revelan su identidad al usar el escáner)
@@ -2534,7 +2670,7 @@ class EscenaJuego extends Phaser.Scene {
     let escudoGrafico = null;
     if (tipo === 'resistente') {
       escudoGrafico = this.add.circle(0, 0, 60, 0, 0);
-      escudoGrafico.setStrokeStyle(3, PALETA.morado, 0.9);
+      escudoGrafico.setStrokeStyle(3, color, 0.9);
       contenedor.add(escudoGrafico);
     }
 
@@ -2562,7 +2698,7 @@ class EscenaJuego extends Phaser.Scene {
 
     const elemento = {
       contenedor, circuloFondo, anilloTiempo, icono, tipo, temporizador: null, tweenSacudida: null,
-      escudoGrafico,
+      escudoGrafico, letra, letraTexto,
       golpesRestantes: tipo === 'resistente' ? 2 : 1,
       movil,
       velX: movil ? Math.cos(anguloMovimiento) * velocidad : 0,
@@ -2589,9 +2725,7 @@ class EscenaJuego extends Phaser.Scene {
 
     // El comportamiento al hacer clic depende del tipo de elemento
     circuloFondo.on('pointerdown', () => {
-      if (tipo === 'reparacion') this.repararServidor(elemento);
-      else if (tipo === 'duplicador') this.dividirDuplicador(elemento);
-      else this.eliminarVirus(elemento, true);
+      this.apuntarA(contenedor.x, contenedor.y);
     });
 
     // Temporizador: si expira sin clic, se resuelve como "no atendido"
@@ -2640,7 +2774,7 @@ class EscenaJuego extends Phaser.Scene {
 
     const rotoEnFragmentos = elemento.tipo === 'resistente' && fueEliminadoPorClic;
     const duracionSalida = this.movimientoReducido ? 1 : rotoEnFragmentos ? 160 : 220;
-    const color = colorPorTipo(elemento.tipo);
+    const color = colorElemento(elemento);
 
     if (esAmenazaReal(elemento.tipo) && fueEliminadoPorClic) {
       // Amenaza real eliminada a tiempo: suma puntos (con el multiplicador
@@ -3557,6 +3691,8 @@ class EscenaJuego extends Phaser.Scene {
 
     this.jefe = {
       config: configuracionJefe,
+      secuencia: COMBINACIONES_JEFE[estado.indiceNivel].slice(),
+      progresoCombinacion: 0,
       vida: configuracionJefe.vidaMaxima,
       vidaMaxima: configuracionJefe.vidaMaxima,
       contenedor,
@@ -3578,11 +3714,16 @@ class EscenaJuego extends Phaser.Scene {
       velY: Phaser.Math.FloatBetween(0.4, 0.8) * (Math.random() < 0.5 ? -1 : 1),
     };
 
+    this.jefe.textoCombinacion = this.crearTexto(0, 112, '', {
+      tamano: 22, mono: true, negrita: true, origenX: .5, origenY: .5, contenedor,
+    });
+    this.actualizarCombinacionJefe();
+
     if (configuracionJefe.puntoDebil) {
       this.crearPuntoDebilJefe();
     } else {
       circuloBase.setInteractive({ useHandCursor: true });
-      circuloBase.on('pointerdown', () => this.golpearJefe());
+      circuloBase.on('pointerdown', () => this.apuntarA(contenedor.x, contenedor.y));
     }
 
     this.actualizarBarraVidaJefe(true);
@@ -3610,7 +3751,7 @@ class EscenaJuego extends Phaser.Scene {
     g.setStrokeStyle(3, 0xffffff, 0.6);
     this.jefe.contenedor.add(g);
     this.jefe.puntoDebil = { circulo: g };
-    g.on('pointerdown', () => this.golpearJefe());
+    g.on('pointerdown', () => this.apuntarA(this.jefe.contenedor.x, this.jefe.contenedor.y));
     this.reposicionarPuntoDebil();
     this.iniciarParpadeoPuntoDebil();
   }
@@ -3843,9 +3984,9 @@ class EscenaJuego extends Phaser.Scene {
     this.mundo.add(contenedor);
 
     const circuloFondo = this.add.circle(0, 0, 48, PALETA.superficie, 0.95);
-    circuloFondo.setStrokeStyle(3, PALETA.azul, 1);
+    circuloFondo.setStrokeStyle(3, colorPorTipo('seguro'), 1);
     const icono = this.add.graphics();
-    dibujarIconoSeguro(icono, PALETA.azul);
+    dibujarIconoSeguro(icono, colorPorTipo('seguro'));
 
     contenedor.add([circuloFondo, icono]);
     contenedor.setSize(96, 96);
@@ -3860,7 +4001,7 @@ class EscenaJuego extends Phaser.Scene {
     circuloFondo.setInteractive({ useHandCursor: true });
 
     const trampa = { contenedor, temporizador: null, procesado: false };
-    circuloFondo.on('pointerdown', () => this.resolverTrampaJefe(trampa, true));
+    circuloFondo.on('pointerdown', () => this.apuntarA(contenedor.x, contenedor.y));
     const vida = Phaser.Math.Between(2600, 3400);
     trampa.temporizador = this.time.delayedCall(vida, () => this.resolverTrampaJefe(trampa, false));
 
@@ -4026,6 +4167,23 @@ function construirConfiguracionPhaser() {
 }
 
 let juegoPhaser = null;
+
+// Puente pequeño para el receptor del mando, sin simular clics sobre el canvas.
+window.controlJuego = {
+  mover(x, y) { juegoPhaser?.scene.keys.EscenaJuego?.moverControl(x, y); },
+  atacar(letra) { juegoPhaser?.scene.keys.EscenaJuego?.atacarControl(letra); },
+  estado() {
+    const escena = juegoPhaser?.scene.keys.EscenaJuego;
+    const jefe = escena?.jefe;
+    return {
+      charges: escena?.escanerCargas ?? 0,
+      feedback: escena && Date.now() < escena.feedbackControlHasta ? escena.feedbackControl : '',
+      boss: jefe && !jefe.destruido ? {
+        name: jefe.config.nombre, sequence: jefe.secuencia, progress: jefe.progresoCombinacion,
+      } : null,
+    };
+  },
+};
 
 /* ------------------------------------------------------------------
    8. FUNCIONES DE CONTROL GENERAL DEL JUEGO (conectan HTML con Phaser)
@@ -4302,6 +4460,14 @@ document.getElementById('formulario-gamertag').addEventListener('submit', guarda
 
 // Atajo de teclado: tecla "S" activa el escáner mientras se está jugando
 window.addEventListener('keydown', (evento) => {
+  if (evento.target?.matches('input, textarea, [contenteditable="true"]')) return;
+  if (evento.repeat) return;
+  const letra = evento.key.toUpperCase();
+  if (BOTONES_ATAQUE[letra] && document.getElementById('pantalla-juego').classList.contains('activa')) {
+    evento.preventDefault();
+    window.controlJuego.atacar(letra);
+    return;
+  }
   if (evento.key.toLowerCase() !== 's') return;
   if (!document.getElementById('pantalla-juego').classList.contains('activa')) return;
   activarEscanerDesdeUI();

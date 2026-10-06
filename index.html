@@ -12,7 +12,7 @@
     rel="stylesheet"
   />
 
-  <link rel="stylesheet" href="style.css?v=16" />
+  <link rel="stylesheet" href="style.css?v=17" />
 </head>
 <body>
 
@@ -118,7 +118,7 @@
             <path d="M5 3 L19 12 L12.5 13.2 L15.5 19.5 L13 20.5 L10 14.3 L6.5 17.5 Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
           </svg>
           <h2 class="tarjeta-titulo">Elimina</h2>
-          <p class="tarjeta-texto">Haz clic antes de que termine el tiempo.</p>
+          <p class="tarjeta-texto">Mueve la mira y pulsa A, B, X o Y según el color.</p>
         </article>
 
         <article class="tarjeta">
@@ -136,14 +136,13 @@
         <span class="footer-nombres">Cesar del Angel <span class="sep">·</span> Jean Barrera</span>
       </footer>
 
-      <!-- Código QR para abrir el juego desde el móvil -->
-      <section class="qr-bloque">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 33 33" class="qr-img" role="img" aria-label="Código QR con el enlace del juego" shape-rendering="crispEdges"><path fill="#fff" d="M0 0h33v33h-33z"/><path class="qrline" stroke="#000" d="M2 2.5h7m3 0h3m1 0h2m3 0h1m2 0h7m-29 1h1m5 0h1m2 0h1m2 0h4m1 0h2m3 0h1m5 0h1m-29 1h1m1 0h3m1 0h1m7 0h1m2 0h1m4 0h1m1 0h3m1 0h1m-29 1h1m1 0h3m1 0h1m4 0h2m1 0h2m2 0h1m3 0h1m1 0h3m1 0h1m-29 1h1m1 0h3m1 0h1m2 0h1m2 0h1m1 0h3m1 0h1m3 0h1m1 0h3m1 0h1m-29 1h1m5 0h1m1 0h3m1 0h1m2 0h3m1 0h2m1 0h1m5 0h1m-29 1h7m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h1m1 0h7m-19 1h2m2 0h2m1 0h1m2 0h1m-21 1h1m2 0h1m1 0h2m1 0h1m4 0h1m4 0h1m1 0h2m1 0h1m-23 1h5m1 0h3m2 0h1m3 0h1m3 0h1m1 0h1m2 0h1m2 0h1m-26 1h2m1 0h2m2 0h3m4 0h1m1 0h1m3 0h5m-26 1h2m4 0h2m2 0h2m5 0h4m3 0h2m-27 1h1m1 0h1m2 0h1m2 0h2m1 0h1m1 0h4m1 0h4m2 0h1m1 0h2m-29 1h2m1 0h1m4 0h2m1 0h1m7 0h3m-22 1h5m1 0h2m1 0h1m1 0h1m5 0h2m1 0h1m1 0h1m2 0h4m-29 1h1m2 0h1m1 0h1m1 0h1m1 0h1m1 0h3m2 0h3m1 0h1m2 0h1m1 0h1m1 0h1m-25 1h1m1 0h6m2 0h3m1 0h1m1 0h3m1 0h1m3 0h1m-27 1h1m1 0h3m2 0h1m1 0h1m1 0h1m1 0h1m1 0h2m4 0h2m1 0h1m2 0h1m-29 1h1m1 0h1m2 0h3m1 0h1m3 0h1m3 0h1m2 0h5m2 0h2m-26 1h2m5 0h1m1 0h2m1 0h1m1 0h4m1 0h1m4 0h2m-29 1h1m2 0h5m1 0h2m1 0h1m1 0h1m1 0h1m1 0h7m1 0h1m-19 1h1m4 0h1m2 0h1m2 0h2m3 0h1m1 0h3m-29 1h7m4 0h4m2 0h1m2 0h1m1 0h1m1 0h1m2 0h1m-28 1h1m5 0h1m1 0h1m1 0h1m1 0h2m1 0h2m1 0h3m3 0h3m1 0h1m-29 1h1m1 0h3m1 0h1m2 0h3m2 0h1m1 0h2m2 0h5m2 0h2m-29 1h1m1 0h3m1 0h1m1 0h1m3 0h1m1 0h1m2 0h2m2 0h7m-28 1h1m1 0h3m1 0h1m3 0h5m6 0h1m2 0h3m1 0h1m-29 1h1m5 0h1m4 0h1m2 0h2m1 0h1m2 0h3m1 0h1m2 0h1m-28 1h7m1 0h1m6 0h1m1 0h1m1 0h3m2 0h2m1 0h1"/></svg>
-
+      <section class="qr-bloque" aria-label="Conectar teléfono como control">
+        <div id="qr-control" class="qr-img"></div>
         <div class="qr-texto">
-          <span class="qr-titulo">Juega desde tu móvil</span>
-          <span class="qr-sub">Escanea el código con la cámara</span>
-          <a class="qr-enlace" href="https://cesarau90.github.io/videojuego/">cesarau90.github.io/videojuego</a>
+          <strong class="qr-titulo">Usa tu teléfono como control</strong>
+          <span class="qr-sub">Escanea el QR: joystick para mover la mira y A, B, X, Y para atacar.</span>
+          <span id="estado-control" class="estado-control" role="status">Preparando conexión…</span>
+          <a id="enlace-control" class="qr-enlace" href="#">Abrir control</a>
         </div>
       </section>
     </div>
@@ -162,8 +161,16 @@
         </svg>
         <span class="boton-escaner-texto">ESCÁNER · 2</span>
       </button>
+      <button id="btn-ver-qr" class="boton-escaner" type="button">Conectar teléfono</button>
     </div>
   </div>
+  <dialog id="dialogo-control" class="dialogo-control">
+    <button id="btn-cerrar-qr" class="cerrar-control" type="button" aria-label="Cerrar">×</button>
+    <h2>Conectar teléfono</h2>
+    <div id="qr-control-dialogo" class="qr-img"></div>
+    <p>Escanea el QR. Usa el joystick y los botones A, B, X, Y mientras miras la PC.</p>
+    <p id="estado-control-dialogo" role="status"></p>
+  </dialog>
 
   <!-- ============================================= -->
   <!-- PANTALLA 2B: PREGUNTA DE SEGURIDAD             -->
@@ -298,7 +305,10 @@
 
   <!-- Librería Phaser 3 desde CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <!-- Lógica del juego -->
-  <script src="game.js?v=21"></script>
+  <script src="game.js?v=22"></script>
+  <script src="remote-host.js?v=2"></script>
 </body>
 </html>

@@ -1,5 +1,47 @@
 # Elimina el Malware
 
+## Control desde el teléfono
+
+Esta versión permite jugar en la PC usando el teléfono como control. Abre el
+juego en la PC desde GitHub Pages (o desde un servidor HTTPS), escanea el QR de
+la portada y espera a que ambos dispositivos indiquen que están conectados.
+Mira el tablero en la PC y mueve la mira con el joystick del teléfono.
+Apunta al enemigo y pulsa su letra: **A verde, B rojo, X azul, Y amarillo**.
+Cada enemigo muestra su letra además del color. La letra incorrecta no lo
+elimina. Puedes mantener el joystick con un dedo y atacar con otro.
+Al soltar, cancelar el toque, ocultar la página o perder la conexión,
+el movimiento se detiene. El mando también incluye escáner, inicio,
+continuación, reintento y respuestas 1–4 (visibles durante las preguntas).
+
+Los archivos seguros ahora son **grises y sin letra**: atacarlos con cualquier
+botón cuesta un servidor. La reparación sigue siendo verde y se activa con A.
+Las amenazas reciben al azar uno de los cuatro colores de ataque, independientemente
+de su tipo. Los resistentes requieren dos ataques correctos; los duplicadores
+se dividen al recibir su letra correcta y cada hijo tiene su propia letra.
+
+Los jefes requieren una combinación **en orden**, con pulsaciones separadas:
+Troyano **A → B**, Botnet **X → Y → A**, Ransomware **B → X → A → Y**.
+Cada combinación completa quita una vida al jefe; una letra incorrecta reinicia
+la combinación. El progreso se muestra en la PC y el móvil. En Ransomware,
+pulsa la última letra con el punto débil visible: si está cerrado, se conserva
+el prefijo para que puedas esperar y completar el golpe apuntando al jefe.
+
+En PC también puedes jugar con mouse o flechas para mover la mira y las teclas
+**A, B, X, Y** para atacar. Un clic solo apunta, ya no elimina.
+Los tiempos de vida normal son 7, 6 y 5.2 segundos por nivel para permitir
+llegar con el joystick; los ciclos de los jefes son 10, 10 y 12 segundos.
+
+La PC y el teléfono necesitan Internet. La conexión usa un canal temporal de
+Supabase Realtime con un identificador aleatorio en el QR; se crea uno nuevo al
+recargar la página de la PC. En el proyecto de Supabase debe estar habilitado
+**Realtime → Allow public access to channels**. El QR antiguo, que solo abría
+otra copia del juego en el móvil, se reemplazó por el QR de control.
+
+Archivos nuevos: `remote-host.js` recibe las pulsaciones en la PC;
+`control.html`, `control.css` y `control.js` muestran el mando del teléfono.
+Si se publica en otro repositorio de GitHub Pages, el QR usa automáticamente
+la dirección de esa nueva publicación.
+
 Videojuego web de ciberseguridad hecho con HTML, CSS, JavaScript y Phaser 3
 (cargado por CDN). No requiere servidor, base de datos ni instalación.
 
@@ -14,14 +56,15 @@ derrotar al jefe de cada nivel para proteger el sistema.
 
 En el tablero pueden aparecer varios elementos a la vez (hasta 2, 3 o 4 según
 el nivel), algunos quietos y otros en movimiento lento que rebota dentro del
-área de juego. Cada tipo tiene su propio ícono, color y comportamiento:
+área de juego. Cada tipo tiene su propio ícono y comportamiento; el color de
+ataque se elige al azar:
 
-| Tipo | Color | Clics | Puntos | Detalle |
+| Tipo | Color / letra | Ataques | Puntos | Detalle |
 |---|---|---|---|---|
-| Malware normal | Rojo | 1 | 10 | Ícono de alerta (triángulo). |
-| Malware crítico | Naranja | 1 | 20 | Ícono de rayo; desaparece más rápido que el normal. |
-| Malware resistente | Morado | 2 | 15 | Ícono de "bug"; el primer clic rompe su escudo exterior, el segundo lo elimina. |
-| Archivo seguro (falso positivo) | Azul | — | — | Escudo con marca; **no hay que tocarlo**. Si se le da clic, se pierde un servidor y aparece "Falso positivo". Si expira solo, no pasa nada. |
+| Malware normal | A / B / X / Y | 1 | 10 | Ícono de alerta (triángulo). |
+| Malware crítico | A / B / X / Y | 1 | 20 | Ícono de rayo; desaparece más rápido que el normal. |
+| Malware resistente | A / B / X / Y | 2 | 15 | Ícono de "bug"; el primer ataque correcto rompe el escudo, el segundo lo elimina. |
+| Archivo seguro (falso positivo) | Gris | — | — | Escudo con marca; **no hay que atacarlo**. Si se pulsa cualquier letra apuntándolo, se pierde un servidor y aparece "Falso positivo". Si expira solo, no pasa nada. |
 
 Cada amenaza real dibuja una línea tenue hacia el servidor que está
 "atacando", para que el jugador sepa qué está en riesgo.
@@ -30,13 +73,13 @@ Cada amenaza real dibuja una línea tenue hacia el servidor que está
 
 Desde el nivel 1 puede aparecer, además de las amenazas normales, un
 elemento especial de **reparación**; desde el nivel 2 se suma el **malware
-duplicador**. Ambos usan el mismo círculo y las mismas reglas de clic/toque
+duplicador**. Ambos usan el mismo círculo y las reglas de apuntar y atacar
 que el resto de elementos.
 
 | Mecánica | Nivel | Color | Detalle |
 |---|---|---|---|
-| Reparación de servidor | 1, 2 y 3 | Verde (ícono de cruz, etiqueta "REPARACIÓN") | Solo aparece si al menos un servidor está fuera de línea, como máximo **una vez por nivel**. Un clic recupera un servidor caído; no entrega puntos ni cuenta como amenaza eliminada. Si expira sin que le den clic, no hay penalización. |
-| Malware duplicador | 2 y 3 | Magenta (ícono de división; el escáner revela "DUPLICADOR") | Al hacer clic, en vez de eliminarse se **divide en dos amenazas pequeñas** (5 puntos cada una, con la misma duración de vida). Si una o ambas escapan sin ser eliminadas, solo se pierde **un servidor** por esa pareja, nunca dos. |
+| Reparación de servidor | 1, 2 y 3 | Verde / A (cruz, etiqueta "REPARACIÓN") | Solo aparece si al menos un servidor está fuera de línea, como máximo **una vez por nivel**. Apuntar y pulsar A recupera un servidor caído; no entrega puntos ni cuenta como amenaza eliminada. Si expira, no hay penalización. |
+| Malware duplicador | 2 y 3 | A / B / X / Y (ícono de división; el escáner revela "DUPLICADOR") | Al pulsar su letra correcta, se **divide en dos amenazas pequeñas** (5 puntos cada una, con la misma duración de vida). Si una o ambas escapan, solo se pierde **un servidor** por esa pareja. |
 | Sobrecarga de red | 2 y 3 | Aviso "SOBRECARGA DE RED" | Se activa **una sola vez por nivel**, al llegar aproximadamente a la mitad del objetivo de amenazas. Durante 5 segundos los elementos aparecen con más frecuencia y se permite un elemento simultáneo más de lo normal; al terminar, todo vuelve exactamente a la velocidad y el máximo originales. Nunca se activa durante el combate contra el jefe, y se cancela automáticamente si el jefe aparece antes de que termine. |
 
 ## Combo
@@ -49,7 +92,7 @@ que multiplica los puntos obtenidos:
 - 6 o más aciertos seguidos: multiplicador **x3** (máximo).
 
 El combo se reinicia a 0 si una amenaza real escapa sin ser eliminada o si
-el jugador hace clic en un archivo seguro. El multiplicador **no** se aplica
+el jugador ataca un archivo seguro. El multiplicador **no** se aplica
 a los puntos que entregan los jefes de nivel.
 
 ## Sistema de vidas: tres servidores
@@ -88,18 +131,18 @@ pantalla (sin penalizar al jugador) y aparece el jefe. El nivel solo se
 considera superado cuando el jefe es derrotado.
 
 - **Nivel 1 — Troyano** (naranja): 3 golpes, casi fijo en el centro, ciclo
-  de ataque de 7s, recompensa 50 pts.
+  de ataque de 10s, recompensa 50 pts.
 - **Nivel 2 — Botnet** (azul/morado): 5 golpes, cambia de posición tras
   cada golpe, genera hasta 1 falso positivo a la vez, ciclo de ataque de
-  6s, recompensa 100 pts.
+  10s, recompensa 100 pts.
 - **Nivel 3 — Ransomware** (rojo/magenta): 8 golpes, se desplaza
-  lentamente y solo recibe daño en su punto débil (que aparece y
-  desaparece), genera hasta 2 falsos positivos, entra en una fase más
-  rápida y agresiva al perder 4 puntos de vida, ciclo de ataque de 5s,
+  lentamente y solo recibe daño al completar la combinación mientras el
+  punto débil esté visible, genera hasta 2 falsos positivos, entra en una fase más
+  rápida y agresiva al perder 4 puntos de vida, ciclo de ataque de 12s,
   recompensa 200 pts. Al derrotarlo se muestra la victoria final.
 
 Cada jefe tiene nombre, barra de vida, anillo de tiempo, un breve período de
-protección tras cada golpe (para no registrar varios clics como si fueran
+protección tras cada golpe (para no registrar varias pulsaciones como si fueran
 distintos) y, si el jugador no llega a tiempo en un ciclo de ataque, pierde
 un servidor pero el jefe conserva todo el daño ya recibido.
 
@@ -107,9 +150,9 @@ un servidor pero el jefe conserva todo el daño ya recibido.
 
 | Nivel | Amenazas | Aparición | Máximo | Movimiento | Vida normal | Seguros | Críticos | Resistentes | Duplicadores |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | 10 | 1800 ms | 2 | 15% | 4000 ms | 15% | 8% | 0% | 0% |
-| 2 | 15 | 1100 ms | 3 | 50% | 3100 ms | 25% | 15% | 13% | 14% |
-| 3 | 25 | 800 ms | 5 | 75% | 2700 ms | 30% | 18% | 17% | 20% |
+| 1 | 10 | 1800 ms | 2 | 15% | 7000 ms | 15% | 8% | 0% | 0% |
+| 2 | 15 | 1100 ms | 3 | 50% | 6000 ms | 25% | 15% | 13% | 14% |
+| 3 | 25 | 800 ms | 5 | 75% | 5200 ms | 30% | 18% | 17% | 20% |
 
 Primero se decide si el elemento es seguro. Los porcentajes de críticos,
 resistentes y duplicadores se aplican después entre los elementos peligrosos;
@@ -121,10 +164,10 @@ forma progresiva pero el juego sigue siendo completable en los tres niveles.
 
 ## Controles
 
-- **Computadora:** clic del mouse sobre el elemento; tecla **S** para el
-  escáner.
-- **Celular / táctil:** toque directo sobre el elemento y sobre el botón
-  "ESCÁNER".
+- **Computadora:** mouse o flechas para mover la mira; **A, B, X, Y** para
+  atacar por color; tecla **S** para el escáner.
+- **Celular como mando:** escanea el QR de la PC y usa el joystick y los
+  botones **A, B, X, Y**. Mira el juego en la PC.
 
 ## Victoria y derrota
 
@@ -142,7 +185,7 @@ forma progresiva pero el juego sigue siendo completable en los tres niveles.
 - JavaScript (ES6) para toda la lógica del juego.
 - **Phaser 3** (CDN): dibuja el tablero, el HUD, los servidores, los
   elementos y los jefes (todo con formas vectoriales, sin emojis ni
-  imágenes), y gestiona los clics y toques.
+  imágenes), y gestiona la mira y los ataques por letra.
 - **Web Audio API**: sonidos generados en el navegador (acierto, error,
   combo, escudo roto, servidor perdido, alerta de jefe, nivel superado,
   victoria y derrota), sin archivos de audio externos.
@@ -189,7 +232,8 @@ y visita `http://localhost:8000`.
 
 ## Publicar en GitHub Pages
 
-1. Sube `index.html`, `style.css`, `game.js` y este `README.md` a la raíz de
+1. Sube `index.html`, `style.css`, `game.js`, `remote-host.js`, `control.html`,
+   `control.css`, `control.js` y este `README.md` a la raíz de
    un repositorio de GitHub.
 2. En **Settings → Pages**, elige la rama `main` y la carpeta `/root`.
 3. Guarda: GitHub generará una URL pública tipo
