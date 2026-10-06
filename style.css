@@ -1241,12 +1241,15 @@ html.vista-movil .barra-escaner {
    apuntar y luego su letra. En PC no se muestran (se usa el teclado o el mando). */
 .botones-ataque-pantalla { display: none; }
 
-html.vista-movil .botones-ataque-pantalla {
+html.vista-movil.modo-mando .botones-ataque-pantalla {
     display: flex;
     gap: 8px;
 }
 
 html.vista-movil #btn-ver-qr { display: none; }
+/* "Conectar teléfono" solo tiene sentido en el modo con mando */
+html:not(.modo-mando) #btn-ver-qr { display: none; }
+#btn-activar-sonido[hidden] { display: none; }
 
 .ataque-pantalla {
     width: 48px;

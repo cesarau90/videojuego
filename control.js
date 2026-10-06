@@ -29,8 +29,9 @@
     controls.forEach((button) => {
       const action = button.dataset.action;
       // En la pregunta solo se usa A (confirmar respuesta / continuar).
-      button.disabled = !connected() || (button.dataset.letter && hostState.screen !== 'pantalla-juego'
-          && !(hostState.screen === 'pantalla-pregunta' && button.dataset.letter === 'A'))
+      const normalMode = hostState.screen === 'pantalla-juego' && hostState.mando === false;
+      button.disabled = !connected() || (button.dataset.letter && (normalMode || (hostState.screen !== 'pantalla-juego'
+          && !(hostState.screen === 'pantalla-pregunta' && button.dataset.letter === 'A'))))
         || (action === 'scan' && (hostState.screen !== 'pantalla-juego' || hostState.charges <= 0))
         || (['start', 'start2'].includes(action) && hostState.screen !== 'pantalla-inicio')
         || (action === 'next' && !['pantalla-pregunta', 'pantalla-nivel-completado'].includes(hostState.screen))
@@ -72,7 +73,10 @@
     document.getElementById('combat-title').textContent = question ? 'PREGUNTA DE SEGURIDAD'
       : boss ? boss.name + ' · COMBINACIÓN' : 'APUNTA Y ATACA';
     const feedback = Array.isArray(payload.feedback) ? payload.feedback[player - 1] : '';
-    document.getElementById('combat-hint').textContent = question
+    const normalMode = payload.mando === false && payload.screen === 'pantalla-juego';
+    document.getElementById('combat-hint').textContent = normalMode
+      ? 'Esta partida está en modo normal (clic en la PC). Para usar el mando, reinicia y pulsa INICIAR aquí.'
+      : question
       ? 'Mueve el joystick arriba o abajo para elegir y pulsa A para responder. Después, A para continuar.'
       : feedback || (boss
       ? 'Apunta al jefe y pulsa en orden. Cada combinación completa le quita una vida.'
@@ -162,7 +166,8 @@
   }
   pad.addEventListener('pointerdown', (event) => {
     event.preventDefault();
-    if (pointer !== null || !connected() || !joystickScreens.includes(hostState.screen)) return;
+    if (pointer !== null || !connected() || !joystickScreens.includes(hostState.screen)
+      || (hostState.screen === 'pantalla-juego' && hostState.mando === false)) return;
     pointer = event.pointerId;
     pad.setPointerCapture(pointer);
     movePointer(event);

@@ -12,7 +12,7 @@
     rel="stylesheet"
   />
 
-  <link rel="stylesheet" href="style.css?v=20" />
+  <link rel="stylesheet" href="style.css?v=21" />
 </head>
 <body>
 
@@ -57,6 +57,10 @@
               <svg class="boton-flecha" viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden="true">
                 <path d="M4 2.5 L12 8 L4 13.5 Z" fill="currentColor" />
               </svg>
+            </button>
+            <!-- Modo con mando: mira + letras A/B/X/Y (teléfono o teclado) -->
+            <button id="btn-jugar-mando" class="boton-primario boton-secundario" title="Teléfono (QR) o flechas + teclas A/B/X/Y">
+              Jugar con mando
             </button>
             <!-- Modo cooperativo: dos miras en la misma pantalla -->
             <button id="btn-jugar-2" class="boton-primario boton-secundario" title="J2: teléfono, o I/J/K/L y 7/8/9/0">
@@ -124,7 +128,7 @@
             <path d="M5 3 L19 12 L12.5 13.2 L15.5 19.5 L13 20.5 L10 14.3 L6.5 17.5 Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
           </svg>
           <h2 class="tarjeta-titulo">Elimina</h2>
-          <p class="tarjeta-texto">Mueve la mira y pulsa la letra (A, B, X o Y) del enemigo.</p>
+          <p class="tarjeta-texto">Haz clic antes de que termine el tiempo.</p>
         </article>
 
         <article class="tarjeta">
@@ -169,6 +173,7 @@
       </button>
       <button id="btn-ver-qr" class="boton-escaner" type="button">Conectar teléfono</button>
       <span id="marcador-jugadores" class="marcador-jugadores" hidden></span>
+      <button id="btn-activar-sonido" class="boton-escaner" type="button" hidden>Activar sonido</button>
       <!-- Botones de ataque en pantalla: solo en vista móvil (jugar sin mando) -->
       <div class="botones-ataque-pantalla" aria-label="Atacar con la letra del enemigo">
         <button type="button" class="ataque-pantalla ataque-a" data-letra="A">A</button>
@@ -322,7 +327,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <!-- Lógica del juego -->
-  <script src="game.js?v=26"></script>
-  <script src="remote-host.js?v=5"></script>
+  <script src="game.js?v=27"></script>
+  <script src="remote-host.js?v=6"></script>
 </body>
 </html>

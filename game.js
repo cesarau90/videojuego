@@ -13,26 +13,28 @@
      pasar de nivel (los elementos "seguros" no cuentan)
    - tiempoAparicion: cada cuántos milisegundos aparece un elemento nuevo
    - tiempoVidaVirus: cuántos milisegundos dura un elemento en pantalla
-     antes de expirar solo
+     antes de expirar solo (modo normal, el juego original)
+   - tiempoVidaVirusMando: lo mismo en el modo con mando, más largo para
+     dar tiempo a mover la mira con el joystick
    - probabilidadSeguro: probabilidad (0 a 1) de que el elemento
      generado sea un "falso positivo" (elemento seguro) en vez de
      una amenaza real
    ------------------------------------------------------------------ */
 const NIVELES = [
   {
-    numero: 1, virusRequeridos: 10, tiempoAparicion: 1800, tiempoVidaVirus: 7000, probabilidadSeguro: 0.15,
+    numero: 1, virusRequeridos: 10, tiempoAparicion: 1800, tiempoVidaVirus: 4000, tiempoVidaVirusMando: 7000, probabilidadSeguro: 0.15,
     maxElementos: 2, probabilidadMovimiento: 0.15, probabilidadCritica: 0.08, probabilidadResistente: 0,
     velocidadMin: 0.4, velocidadMax: 0.7,
     probabilidadDuplicador: 0,
   },
   {
-    numero: 2, virusRequeridos: 15, tiempoAparicion: 1100, tiempoVidaVirus: 6000, probabilidadSeguro: 0.25,
+    numero: 2, virusRequeridos: 15, tiempoAparicion: 1100, tiempoVidaVirus: 3100, tiempoVidaVirusMando: 6000, probabilidadSeguro: 0.25,
     maxElementos: 3, probabilidadMovimiento: 0.5, probabilidadCritica: 0.15, probabilidadResistente: 0.13,
     velocidadMin: 0.6, velocidadMax: 1.0,
     probabilidadDuplicador: 0.14,
   },
   {
-    numero: 3, virusRequeridos: 25, tiempoAparicion: 800, tiempoVidaVirus: 5200, probabilidadSeguro: 0.3,
+    numero: 3, virusRequeridos: 25, tiempoAparicion: 800, tiempoVidaVirus: 2700, tiempoVidaVirusMando: 5200, probabilidadSeguro: 0.3,
     maxElementos: 5, probabilidadMovimiento: 0.75, probabilidadCritica: 0.18, probabilidadResistente: 0.17,
     velocidadMin: 0.9, velocidadMax: 1.4,
     probabilidadDuplicador: 0.2,
@@ -343,6 +345,11 @@ const ELEMENTOS_EXTRA_2J = 1;
 // Teclas del jugador 2 para atacar (en el teclado de la PC).
 const TECLAS_ATAQUE_J2 = { 7: 'A', 8: 'B', 9: 'X', 0: 'Y' };
 const COMBINACIONES_JEFE = [['A', 'B'], ['X', 'Y', 'A'], ['B', 'X', 'A', 'Y']];
+// Tiempo de vida de un elemento según el modo de juego.
+function vidaVirusNivel(configuracionNivel) {
+  return estado.modoMando ? configuracionNivel.tiempoVidaVirusMando : configuracionNivel.tiempoVidaVirus;
+}
+
 // Convierte un color numérico de Phaser (0xRRGGBB) a texto CSS (#rrggbb).
 function colorHexTexto(color) {
   return '#' + color.toString(16).padStart(6, '0');
@@ -456,7 +463,8 @@ const JEFES = [
     nombre: 'TROYANO',
     subtitulo: 'ACCESO NO AUTORIZADO',
     vidaMaxima: 3,
-    tiempoAtaque: 10000,
+    tiempoAtaque: 7000, // modo normal
+    tiempoAtaqueMando: 10000, // modo con mando
     colorPrincipal: PALETA.naranja,
     colorSecundario: PALETA.naranja,
     puntosRecompensa: 50,
@@ -470,7 +478,8 @@ const JEFES = [
     nombre: 'BOTNET',
     subtitulo: 'CONTROLADOR CENTRAL',
     vidaMaxima: 5,
-    tiempoAtaque: 10000,
+    tiempoAtaque: 6000, // modo normal
+    tiempoAtaqueMando: 10000, // modo con mando
     colorPrincipal: PALETA.azul,
     colorSecundario: PALETA.morado,
     puntosRecompensa: 100,
@@ -484,7 +493,8 @@ const JEFES = [
     nombre: 'RANSOMWARE',
     subtitulo: 'NÚCLEO PRINCIPAL',
     vidaMaxima: 8,
-    tiempoAtaque: 12000,
+    tiempoAtaque: 5000, // modo normal
+    tiempoAtaqueMando: 12000, // modo con mando
     colorPrincipal: PALETA.peligro,
     colorSecundario: PALETA.magenta,
     puntosRecompensa: 200,
@@ -558,7 +568,10 @@ const estado = {
   juegoActivo: false,
   jefeActivo: false, // true durante el combate contra el jefe del nivel
   combo: 0, // aciertos consecutivos sobre amenazas reales (parte normal del nivel)
-  multijugador: false, // true en el modo cooperativo de 2 jugadores
+  // Modo de juego: normal (el original, clic/toque directo sobre la amenaza)
+  // o con mando (mira + letras A/B/X/Y, para el teléfono o el teclado).
+  modoMando: false,
+  multijugador: false, // true en el modo cooperativo de 2 jugadores (siempre con mando)
   puntosJugadores: [0, 0], // puntos conseguidos por cada jugador
 };
 
@@ -574,8 +587,31 @@ function obtenerContextoAudio() {
     const AudioContextClase = window.AudioContext || window.webkitAudioContext;
     contextoAudio = new AudioContextClase();
   }
+  // Si el navegador lo dejó en pausa, se intenta reanudar.
+  if (contextoAudio.state === 'suspended') contextoAudio.resume().catch(() => {});
   return contextoAudio;
 }
+
+// Los navegadores solo dejan sonar el audio después de un clic, toque o
+// tecla en la página. Antes el contexto se creaba con el primer sonido (a
+// veces sin que hubiera habido un clic, sobre todo al iniciar desde el
+// teléfono) y se quedaba en pausa todo el nivel 1. Ahora se activa con
+// cualquier interacción en la PC, y si aún falta, se muestra el botón
+// "Activar sonido" bajo el tablero.
+function activarAudio() {
+  try { obtenerContextoAudio(); } catch (e) { /* navegador sin Web Audio */ }
+  actualizarAvisoSonido();
+}
+
+function actualizarAvisoSonido() {
+  const boton = document.getElementById('btn-activar-sonido');
+  if (!boton) return;
+  boton.hidden = !estado.juegoActivo || !contextoAudio || contextoAudio.state === 'running';
+}
+
+['pointerdown', 'keydown', 'touchend'].forEach((tipo) =>
+  window.addEventListener(tipo, activarAudio, { capture: true, passive: true }));
+setInterval(actualizarAvisoSonido, 1000);
 
 function reproducirSonido(tipo) {
   try {
@@ -1413,6 +1449,7 @@ class EscenaJuego extends Phaser.Scene {
   }
 
   jugadorActivo(indice) {
+    if (!estado.modoMando) return false; // en modo normal no hay mira: se hace clic directo
     return indice === 0 || (indice === 1 && estado.multijugador);
   }
 
@@ -2695,10 +2732,10 @@ class EscenaJuego extends Phaser.Scene {
 
     const servidorObjetivo = esAmenazaReal(tipo) || tipo === 'duplicador' ? this.elegirServidorObjetivo() : null;
     const tiempoVida = tipo === 'critica'
-      ? Math.round(configuracionNivel.tiempoVidaVirus * 0.75)
+      ? Math.round(vidaVirusNivel(configuracionNivel) * 0.75)
       : tipo === 'resistente'
-        ? Math.round(configuracionNivel.tiempoVidaVirus * 1.15)
-        : configuracionNivel.tiempoVidaVirus;
+        ? Math.round(vidaVirusNivel(configuracionNivel) * 1.15)
+        : vidaVirusNivel(configuracionNivel);
 
     this.crearElementoVisual(tipo, x, y, { duracionVida: tiempoVida, servidorObjetivo });
   }
@@ -2711,7 +2748,7 @@ class EscenaJuego extends Phaser.Scene {
   crearElementoVisual(tipo, x, y, opciones = {}) {
     const configuracionNivel = NIVELES[estado.indiceNivel];
     const escalaVisual = opciones.escalaVisual || 1;
-    const letra = tipo === 'seguro' ? null : tipo === 'reparacion' ? 'A'
+    const letra = !estado.modoMando || tipo === 'seguro' ? null : tipo === 'reparacion' ? 'A'
       : opciones.letra || Phaser.Utils.Array.GetRandom(Object.keys(BOTONES_ATAQUE));
     const color = colorPorTipo(tipo);
 
@@ -2737,7 +2774,8 @@ class EscenaJuego extends Phaser.Scene {
       pastilla.setStrokeStyle(2.5, colorLetra, 1);
       contenedor.add(pastilla);
     }
-    const letraTexto = this.crearTexto(0, -34, letra || 'SEGURO', {
+    // En modo normal no se muestra ninguna etiqueta, como en el juego original.
+    const letraTexto = !estado.modoMando ? null : this.crearTexto(0, -34, letra || 'SEGURO', {
       tamano: letra ? 22 : 10, mono: true, negrita: true, origenX: .5, origenY: .5, contenedor,
       color: colorLetra ? colorHexTexto(colorLetra) : undefined,
     });
@@ -2813,13 +2851,17 @@ class EscenaJuego extends Phaser.Scene {
       elemento.lineaObjetivo = linea;
     }
 
-    // El comportamiento al hacer clic depende del tipo de elemento
+    // Modo normal: el clic/toque actúa directo según el tipo de elemento.
+    // Modo con mando: el clic solo apunta; se ataca con la letra.
     circuloFondo.on('pointerdown', () => {
-      this.apuntarA(contenedor.x, contenedor.y);
+      if (estado.modoMando) this.apuntarA(contenedor.x, contenedor.y);
+      else if (tipo === 'reparacion') this.repararServidor(elemento);
+      else if (tipo === 'duplicador') this.dividirDuplicador(elemento);
+      else this.eliminarVirus(elemento, true);
     });
 
     // Temporizador: si expira sin clic, se resuelve como "no atendido"
-    const duracionVida = opciones.duracionVida || configuracionNivel.tiempoVidaVirus;
+    const duracionVida = opciones.duracionVida || vidaVirusNivel(configuracionNivel);
     elemento.temporizador = this.time.delayedCall(duracionVida, () => {
       this.eliminarVirus(elemento, false);
     });
@@ -3063,7 +3105,7 @@ class EscenaJuego extends Phaser.Scene {
 
     const configuracionNivel = NIVELES[estado.indiceNivel];
     const grupo = { perdidoServidor: false };
-    const duracionPequenas = Math.round(configuracionNivel.tiempoVidaVirus * 0.9);
+    const duracionPequenas = Math.round(vidaVirusNivel(configuracionNivel) * 0.9);
     const area = this.areaJuego;
 
     // Las dos amenazas pequeñas salen en direcciones opuestas (un ángulo
@@ -3817,16 +3859,22 @@ class EscenaJuego extends Phaser.Scene {
       velY: Phaser.Math.FloatBetween(0.4, 0.8) * (Math.random() < 0.5 ? -1 : 1),
     };
 
-    this.jefe.textoCombinacion = this.crearTexto(0, 112, '', {
-      tamano: 22, mono: true, negrita: true, origenX: .5, origenY: .5, contenedor,
-    });
-    this.actualizarCombinacionJefe();
+    // La combinación de letras solo existe en el modo con mando.
+    if (estado.modoMando) {
+      this.jefe.textoCombinacion = this.crearTexto(0, 112, '', {
+        tamano: 22, mono: true, negrita: true, origenX: .5, origenY: .5, contenedor,
+      });
+      this.actualizarCombinacionJefe();
+    }
 
     if (configuracionJefe.puntoDebil) {
       this.crearPuntoDebilJefe();
     } else {
       circuloBase.setInteractive({ useHandCursor: true });
-      circuloBase.on('pointerdown', () => this.apuntarA(contenedor.x, contenedor.y));
+      circuloBase.on('pointerdown', () => {
+        if (estado.modoMando) this.apuntarA(contenedor.x, contenedor.y);
+        else this.golpearJefe();
+      });
     }
 
     this.actualizarBarraVidaJefe(true);
@@ -3854,7 +3902,10 @@ class EscenaJuego extends Phaser.Scene {
     g.setStrokeStyle(3, 0xffffff, 0.6);
     this.jefe.contenedor.add(g);
     this.jefe.puntoDebil = { circulo: g };
-    g.on('pointerdown', () => this.apuntarA(this.jefe.contenedor.x, this.jefe.contenedor.y));
+    g.on('pointerdown', () => {
+      if (estado.modoMando) this.apuntarA(this.jefe.contenedor.x, this.jefe.contenedor.y);
+      else this.golpearJefe();
+    });
     this.reposicionarPuntoDebil();
     this.iniciarParpadeoPuntoDebil();
   }
@@ -3899,7 +3950,7 @@ class EscenaJuego extends Phaser.Scene {
 
   iniciarCicloAtaqueJefe() {
     if (!this.jefe || this.jefe.destruido) return;
-    this.jefe.temporizadorAtaque = this.time.delayedCall(this.jefe.config.tiempoAtaque, () => {
+    this.jefe.temporizadorAtaque = this.time.delayedCall(estado.modoMando ? this.jefe.config.tiempoAtaqueMando : this.jefe.config.tiempoAtaque, () => {
       this.onCicloAtaqueJefeTerminado();
     });
   }
@@ -4104,7 +4155,10 @@ class EscenaJuego extends Phaser.Scene {
     circuloFondo.setInteractive({ useHandCursor: true });
 
     const trampa = { contenedor, temporizador: null, procesado: false };
-    circuloFondo.on('pointerdown', () => this.apuntarA(contenedor.x, contenedor.y));
+    circuloFondo.on('pointerdown', () => {
+      if (estado.modoMando) this.apuntarA(contenedor.x, contenedor.y);
+      else this.resolverTrampaJefe(trampa, true);
+    });
     const vida = Phaser.Math.Between(2600, 3400);
     trampa.temporizador = this.time.delayedCall(vida, () => this.resolverTrampaJefe(trampa, false));
 
@@ -4282,6 +4336,7 @@ window.controlJuego = {
     return {
       charges: escena?.escanerCargas ?? 0,
       multi: estado.multijugador,
+      mando: estado.modoMando,
       points: estado.puntosJugadores,
       feedback: (escena?.jugadores || []).map((j) => (Date.now() < j.feedbackHasta ? j.feedback : '')),
       boss: jefe && !jefe.destruido ? {
@@ -4313,10 +4368,16 @@ function textoPuntosJugadores() {
   return ` (J1: ${estado.puntosJugadores[0]} · J2: ${estado.puntosJugadores[1]})`;
 }
 
-// Inicia una partida nueva. "multijugador" indica el modo elegido; si no se
-// indica (por ejemplo, al reintentar) se conserva el modo de la partida anterior.
-function iniciarJuegoDesdeCero(multijugador) {
-  if (typeof multijugador === 'boolean') estado.multijugador = multijugador;
+// Inicia una partida nueva. "modo" puede ser 'normal' (el juego original con
+// clic/toque), 'mando' (mira + letras, 1 jugador) o '2j' (cooperativo con
+// mando). Si no se indica (por ejemplo, al reintentar) se conserva el modo anterior.
+function iniciarJuegoDesdeCero(modo) {
+  if (modo) {
+    estado.modoMando = modo !== 'normal';
+    estado.multijugador = modo === '2j';
+  }
+  document.documentElement.classList.toggle('modo-mando', estado.modoMando);
+  activarAudio();
   reiniciarEstado();
   sincronizarClaseVistaMovil();
   mostrarPantalla('pantalla-juego');
@@ -4567,8 +4628,9 @@ function activarEscanerDesdeUI() {
 /* ------------------------------------------------------------------
    9. CONEXIÓN DE BOTONES DEL HTML
    ------------------------------------------------------------------ */
-document.getElementById('btn-jugar').addEventListener('click', () => iniciarJuegoDesdeCero(false));
-document.getElementById('btn-jugar-2').addEventListener('click', () => iniciarJuegoDesdeCero(true));
+document.getElementById('btn-jugar').addEventListener('click', () => iniciarJuegoDesdeCero('normal'));
+document.getElementById('btn-jugar-mando').addEventListener('click', () => iniciarJuegoDesdeCero('mando'));
+document.getElementById('btn-jugar-2').addEventListener('click', () => iniciarJuegoDesdeCero('2j'));
 document.getElementById('btn-siguiente-nivel').addEventListener('click', continuarAlSiguienteNivel);
 document.getElementById('btn-reintentar').addEventListener('click', () => iniciarJuegoDesdeCero());
 document.getElementById('btn-jugar-de-nuevo').addEventListener('click', () => iniciarJuegoDesdeCero());

@@ -1,8 +1,24 @@
 # Elimina el Malware
 
-## Control desde el teléfono
+## Modos de juego
 
-Esta versión permite jugar en la PC usando el teléfono como control. Abre el
+En la portada hay tres botones:
+
+- **Iniciar defensa — modo normal (el juego original):** se hace clic (o se toca,
+  en el celular) directamente sobre las amenazas y el jefe. Sin mira ni letras,
+  con los tiempos originales.
+- **Jugar con mando:** se mueve una mira y se ataca con la letra A, B, X o Y que
+  lleva cada enemigo, usando el teléfono como mando o el teclado.
+- **2 jugadores:** cooperativo con dos miras (ver más abajo).
+
+Si al iniciar desde el teléfono no hay sonido, haz clic en cualquier parte de la
+PC o pulsa **Activar sonido** bajo el tablero: los navegadores solo dejan sonar el
+audio después de una interacción en la página.
+
+## Control desde el teléfono (modo con mando)
+
+Esta versión permite jugar en la PC usando el teléfono como control. Pulsar
+**INICIAR** en el teléfono arranca el modo con mando. Abre el
 juego en la PC desde GitHub Pages (o desde un servidor HTTPS), escanea el QR de
 la portada y espera a que ambos dispositivos indiquen que están conectados.
 Mira el tablero en la PC y mueve la mira con el joystick del teléfono.
@@ -186,9 +202,11 @@ forma progresiva pero el juego sigue siendo completable en los tres niveles.
 
 ## Controles
 
-- **Computadora:** mouse o flechas para mover la mira; **A, B, X, Y** para
-  atacar con la letra del enemigo; tecla **S** para el escáner.
-- **Jugar directo en el celular (sin PC):** toca el enemigo para apuntarle y
+- **Modo normal (PC o celular):** clic o toque sobre la amenaza; tecla **S**
+  para el escáner.
+- **Modo con mando en la computadora:** mouse o flechas para mover la mira;
+  **A, B, X, Y** para atacar con la letra del enemigo; tecla **S** para el escáner.
+- **Modo con mando directo en el celular:** toca el enemigo para apuntarle y
   luego pulsa su letra en los botones **A, B, X, Y** que aparecen bajo el tablero.
 - **Celular como mando:** escanea el QR de la PC y usa el joystick y los
   botones **A, B, X, Y**. Mira el juego en la PC.

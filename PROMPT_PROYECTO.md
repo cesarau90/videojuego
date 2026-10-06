@@ -33,9 +33,9 @@ genérica de IA:
   etiqueta "Proyecto ISND".
 - Sección principal en dos columnas:
   - Izquierda: etiqueta "Incidente 001 · Nivel crítico", título "El
-    servidor está bajo ataque", texto breve, botón "Iniciar defensa" y
-    a su lado el botón secundario (contorno verde) "2 jugadores" (sección
-    13), indicadores (3 niveles / 3 vidas / 10 puntos por amenaza).
+    servidor está bajo ataque", texto breve, botón "Iniciar defensa" (modo normal) y
+    a su lado los botones secundarios (contorno verde) "Jugar con mando" y
+    "2 jugadores" (secciones 13 y 14), indicadores (3 niveles / 3 vidas / 10 puntos por amenaza).
   - Derecha: ilustración de un servidor hecha con HTML/CSS (línea de
     escaneo animada, nodos con estado, indicador de red), sin imágenes.
 - Tres tarjetas de instrucciones: Detecta / Elimina / Sobrevive.
@@ -139,12 +139,17 @@ forzar el mismo tablero en cualquier pantalla:
 - **Objetivos móviles**: una fracción de los elementos se mueve lentamente
   y rebota dentro del área de juego (≈15% nivel 1, ≈50% nivel 2, ≈75%
   nivel 3).
-- **Forma de atacar (ataque por letras):** el jugador mueve una **mira** y
-  pulsa la letra **A, B, X o Y** que aparece encima del enemigo (como en un
-  mando de consola). Un clic/toque solo apunta, ya no elimina. La letra de
-  cada amenaza se elige al azar; la letra incorrecta no la elimina y avisa
-  "USA LA LETRA X". El **color de cada elemento sigue siendo el de su tipo**
-  (no el de la letra), como en el juego original.
+- **Dos modos de juego** (`estado.modoMando`, ver sección 14):
+  - **Modo normal (el original):** un clic/toque directo sobre el elemento
+    lo ataca. Sin mira ni letras.
+  - **Modo con mando:** el jugador mueve una **mira** y pulsa la letra
+    **A, B, X o Y** que aparece encima del enemigo (como en un mando de
+    consola); el clic/toque solo apunta. La letra de cada amenaza se elige
+    al azar y se dibuja con el color de su botón (A verde, B rojo, X azul,
+    Y amarillo) dentro de una pastilla; la letra incorrecta no la elimina y
+    avisa "USA LA LETRA X".
+  - En ambos modos el **color de cada elemento es el de su tipo**, como en
+    el juego original.
 - Cuatro tipos, cada uno con ícono, color y comportamiento propios:
   - **Malware normal** (rojo): 1 ataque, 10 puntos.
   - **Malware crítico** (naranja, ícono de rayo): 1 ataque, 20 puntos,
@@ -158,9 +163,10 @@ forzar el mismo tablero en cualquier pantalla:
     nada.
 - Cada amenaza real traza una línea tenue hacia el servidor al que
   "ataca".
-- Tiempo de vida de una amenaza normal: **7 s (nivel 1) / 6 s (nivel
-  2) / 5.2 s (nivel 3)** (más largos que antes para dar tiempo a mover la
-  mira con el joystick); la crítica dura el 75% de ese valor. Aparición de
+- Tiempo de vida de una amenaza normal: modo normal **4.0 s / 3.1 s /
+  2.7 s** (`tiempoVidaVirus`, el original); modo con mando **7 s / 6 s /
+  5.2 s** (`tiempoVidaVirusMando`, para dar tiempo a mover la mira con el
+  joystick; `vidaVirusNivel()` elige el valor); la crítica dura el 75% de ese valor. Aparición de
   elementos nuevos cada 1.8 s (nivel 1) / 1.1 s (nivel 2) / 0.8 s (nivel 3).
 - Probabilidades configuradas: nivel 1 (seguros 15%, críticos 8%, resistentes
   0%, duplicadores 0%); nivel 2 (seguros 25%, críticos 15%, resistentes 13%,
@@ -471,8 +477,8 @@ era el `resizeInterval` de Phaser.)
 ## 10. Control de versiones de caché (evitar que Chrome cargue código viejo)
 
 `index.html` referencia sus archivos locales (`style.css`, `game.js`)
-con un parámetro de versión (actualmente `style.css?v=19`, `game.js?v=25` y
-`remote-host.js?v=4`; en `control.html`: `control.css?v=3` y `control.js?v=3`). Cada vez
+con un parámetro de versión (actualmente `style.css?v=21`, `game.js?v=27` y
+`remote-host.js?v=6`; en `control.html`: `control.css?v=4` y `control.js?v=5`). Cada vez
 que se sube una modificación a esos archivos, ese número debe
 **incrementarse** (`v=4`, `v=5`, …) para forzar que el navegador
 descargue la versión nueva en vez de servir una copia en caché con la
@@ -574,6 +580,20 @@ ninguna contraseña ni clave secreta.
   quedan con `.activa`); `currentScreen()` en `remote-host.js` le da
   prioridad a `pantalla-pregunta` para que el mando pueda responder y
   continuar.
+- **Joystick:** el teléfono envía los ejes a ritmo fijo (cada 80 ms) en vez
+  de un mensaje por cada movimiento del dedo (eso saturaba el canal, se
+  perdían mensajes y la mira se pasaba de largo); al soltar, el alto se
+  envía de inmediato y se repite. En la PC la respuesta es progresiva
+  (poca inclinación = movimiento lento para afinar) y la mira frena a la
+  mitad sobre un objetivo.
+- **Pregunta de seguridad con el mando:** joystick arriba/abajo resalta una
+  opción (un paso por movimiento, hay que volver al centro), **A** responde
+  y, ya respondida, **A** continúa. Los botones 1–4 siguen funcionando.
+- **Safari/iPhone:** el mando desactiva la selección de texto, el menú de
+  "copiar" al mantener presionado, el resaltado al tocar y el zoom por
+  doble toque (`user-select`, `-webkit-touch-callout`, `touch-action`).
+- La combinación del jefe en la PC toma el color de la siguiente letra que
+  hay que pulsar.
 - Puente con el juego: `window.controlJuego` en `game.js`
   (`mover(x, y, jugador)`, `atacar(letra, jugador)`, `estado()`), sin
   simular clics sobre el canvas.
@@ -609,6 +629,32 @@ ninguna contraseña ni clave secreta.
   pantalla. Si se pidiera multijugador en línea (cada jugador viendo su
   propia pantalla), habría que sincronizar el estado completo del juego
   entre dispositivos; queda pendiente de confirmar.
+
+## 14. Modos de juego y sonido
+
+- Portada con tres botones: **"Iniciar defensa"** (modo normal, el juego
+  original), **"Jugar con mando"** y **"2 jugadores"** (los dos últimos con
+  contorno verde). `iniciarJuegoDesdeCero(modo)` recibe `'normal'`,
+  `'mando'` o `'2j'`; "Volver a intentar" conserva el modo. INICIAR en el
+  teléfono arranca el modo con mando.
+- **Modo normal:** idéntico al original — clic/toque directo sobre
+  amenazas, jefe, punto débil del Ransomware y falsos positivos del jefe;
+  sin mira, sin letras ni etiquetas sobre los elementos, sin combinación del
+  jefe; tiempos originales (vida 4.0/3.1/2.7 s, ciclos de jefe 7/6/5 s).
+  No se muestra "Conectar teléfono" ni los botones A/B/X/Y del celular. Si
+  hay un teléfono conectado, sus letras y joystick se desactivan y avisa
+  que la partida está en modo normal.
+- **Modo con mando:** mira, letras y combinaciones (secciones 4, 5, 12 y
+  13); ciclos de jefe 10/10/12 s (`tiempoAtaqueMando`). La clase
+  `html.modo-mando` muestra los botones A/B/X/Y en la vista móvil.
+- **Sonido:** los navegadores solo permiten audio tras un clic, toque o
+  tecla en la página. Antes el contexto de audio se creaba con el primer
+  sonido, a veces sin interacción (sobre todo al iniciar desde el
+  teléfono), y quedaba en pausa todo el nivel 1. Ahora `activarAudio()` lo
+  crea/reanuda con cualquier `pointerdown`/`keydown`/`touchend` y al
+  iniciar la partida, `obtenerContextoAudio()` reanuda si está en pausa, y
+  si aún está en pausa durante la partida se muestra el botón **"Activar
+  sonido"** bajo el tablero.
 
 ## Reglas de trabajo durante todo el proyecto
 

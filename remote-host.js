@@ -124,7 +124,8 @@
   }
 
   const buttons = {
-    start: 'btn-jugar', start2: 'btn-jugar-2', scan: 'btn-escaner', next: 'btn-siguiente-nivel',
+    // INICIAR desde el teléfono arranca el modo con mando.
+    start: 'btn-jugar-mando', start2: 'btn-jugar-2', scan: 'btn-escaner', next: 'btn-siguiente-nivel',
     retry: 'btn-reintentar', again: 'btn-jugar-de-nuevo',
     continue: 'btn-continuar-pregunta',
   };
