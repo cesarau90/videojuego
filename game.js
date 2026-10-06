@@ -319,19 +319,28 @@ function colorPorTipo(tipo) {
   if (tipo === 'reparacion') return PALETA.verde;
   if (tipo === 'critica') return PALETA.naranja;
   if (tipo === 'resistente') return PALETA.morado;
-  return 0x91a8a0; // Los archivos seguros son grises, distintos de los enemigos X.
+  return PALETA.azul; // 'seguro'
 }
 
-// La letra/color de ataque es independiente del tipo de malware.
+// El color de cada elemento depende de su tipo (como en el juego original);
+// la letra de ataque (A/B/X/Y) se muestra encima y se elige al azar.
 const BOTONES_ATAQUE = {
   A: { color: PALETA.verde, nombre: 'VERDE' },
   B: { color: PALETA.peligro, nombre: 'ROJO' },
   X: { color: PALETA.azul, nombre: 'AZUL' },
   Y: { color: 0xffd34e, nombre: 'AMARILLO' },
 };
+// Jugadores del modo cooperativo: cada uno tiene su mira de color y su
+// propio marcador. En modo de 1 jugador solo se usa el primero.
+const JUGADORES = [
+  { etiqueta: 'J1', color: PALETA.azul, colorTexto: PALETA.azulTexto },
+  { etiqueta: 'J2', color: 0xffd34e, colorTexto: '#ffd34e' },
+];
+// Teclas del jugador 2 para atacar (en el teclado de la PC).
+const TECLAS_ATAQUE_J2 = { 7: 'A', 8: 'B', 9: 'X', 0: 'Y' };
 const COMBINACIONES_JEFE = [['A', 'B'], ['X', 'Y', 'A'], ['B', 'X', 'A', 'Y']];
 function colorElemento(elemento) {
-  return BOTONES_ATAQUE[elemento.letra]?.color ?? colorPorTipo(elemento.tipo);
+  return colorPorTipo(elemento.tipo);
 }
 
 // Tamaño lógico fijo del tablero de escritorio (mínimo 1280x720, como pide
@@ -541,6 +550,8 @@ const estado = {
   juegoActivo: false,
   jefeActivo: false, // true durante el combate contra el jefe del nivel
   combo: 0, // aciertos consecutivos sobre amenazas reales (parte normal del nivel)
+  multijugador: false, // true en el modo cooperativo de 2 jugadores
+  puntosJugadores: [0, 0], // puntos conseguidos por cada jugador
 };
 
 /* ------------------------------------------------------------------
@@ -1353,59 +1364,99 @@ class EscenaJuego extends Phaser.Scene {
     }
   }
 
-  // PC y móvil comparten una mira y las mismas reglas de ataque.
+  // Cada jugador tiene su propia mira; ambos comparten las reglas de ataque.
+  // Jugador 1: mouse, flechas, teclas A/B/X/Y o un teléfono.
+  // Jugador 2 (solo en modo 2 jugadores): I/J/K/L, teclas 7/8/9/0 o un teléfono.
   crearControlMira() {
-    this.mira = { x: this.anchoLogico / 2, y: (this.areaJuego.yMin + this.areaJuego.yMax) / 2 };
-    this.ejesControl = { x: 0, y: 0, recibido: 0 };
-    this.ultimoAtaqueControl = -Infinity;
-    this.feedbackControl = '';
-    this.feedbackControlHasta = 0;
-    this.graficoMira = this.add.graphics();
-    this.mundo.add(this.graficoMira);
+    this.jugadores = JUGADORES.map((config) => {
+      const texto = this.add.text(0, 0, config.etiqueta, {
+        fontFamily: 'monospace', fontSize: '13px', fontStyle: 'bold', color: config.colorTexto,
+      }).setOrigin(0.5);
+      const grafico = this.add.graphics();
+      this.mundo.add(grafico);
+      this.mundo.add(texto);
+      return {
+        ...config, grafico, texto,
+        mira: { x: 0, y: 0 },
+        ejes: { x: 0, y: 0, recibido: 0 },
+        ultimoAtaque: -Infinity,
+        feedback: '', feedbackHasta: 0,
+      };
+    });
+    this.centrarMiras();
+    this.jugadorAtacante = 0;
     this.flechasControl = this.input.keyboard.createCursorKeys();
+    // Sin captura, para no bloquear esas letras al escribir el gamertag.
+    this.teclasJugador2 = this.input.keyboard.addKeys('I,J,K,L', false);
     this.input.on('pointermove', (pointer) => {
       if (pointer.event?.pointerType === 'mouse') this.apuntarA(pointer.x / this.factorResolucion, pointer.y / this.factorResolucion);
     });
     this.input.on('pointerdown', (pointer) => this.apuntarA(pointer.x / this.factorResolucion, pointer.y / this.factorResolucion));
   }
 
-  apuntarA(x, y) {
-    if (!estado.juegoActivo || this.introNivelActiva) return;
-    const area = this.areaJuego;
-    this.mira.x = Phaser.Math.Clamp(x, area.xMin, area.xMax);
-    this.mira.y = Phaser.Math.Clamp(y, area.yMin, area.yMax);
+  // Con dos jugadores, cada mira empieza en una mitad del tablero.
+  centrarMiras() {
+    const y = (this.areaJuego.yMin + this.areaJuego.yMax) / 2;
+    this.jugadores.forEach((jugador, i) => {
+      jugador.ejes = { x: 0, y: 0, recibido: 0 };
+      jugador.mira.x = estado.multijugador ? this.anchoLogico * (i === 0 ? 0.35 : 0.65) : this.anchoLogico / 2;
+      jugador.mira.y = y;
+    });
   }
 
-  moverControl(x, y) {
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  jugadorActivo(indice) {
+    return indice === 0 || (indice === 1 && estado.multijugador);
+  }
+
+  apuntarA(x, y, indice = 0) {
+    if (!estado.juegoActivo || this.introNivelActiva || !this.jugadorActivo(indice)) return;
+    const area = this.areaJuego;
+    const mira = this.jugadores[indice].mira;
+    mira.x = Phaser.Math.Clamp(x, area.xMin, area.xMax);
+    mira.y = Phaser.Math.Clamp(y, area.yMin, area.yMax);
+  }
+
+  moverControl(x, y, indice = 0) {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !this.jugadores?.[indice]) return;
     const longitud = Math.max(1, Math.hypot(x, y));
-    this.ejesControl = { x: x / longitud, y: y / longitud, recibido: Date.now() };
+    this.jugadores[indice].ejes = { x: x / longitud, y: y / longitud, recibido: Date.now() };
   }
 
   actualizarControlMira(delta = 16) {
     const jugando = estado.juegoActivo && !this.introNivelActiva && document.getElementById('pantalla-juego').classList.contains('activa');
-    this.graficoMira.setVisible(jugando);
-    if (!jugando) return;
-    // Caduca el movimiento si se pierde la conexión o el paquete de soltar.
-    const remoto = Date.now() - this.ejesControl.recibido < 400;
-    let x = remoto ? this.ejesControl.x : 0;
-    let y = remoto ? this.ejesControl.y : 0;
-    x += Number(this.flechasControl.right.isDown) - Number(this.flechasControl.left.isDown);
-    y += Number(this.flechasControl.down.isDown) - Number(this.flechasControl.up.isDown);
-    const longitud = Math.max(1, Math.hypot(x, y));
-    const paso = 650 * Math.min(delta, 50) / 1000;
-    this.apuntarA(this.mira.x + x / longitud * paso, this.mira.y + y / longitud * paso);
-    const color = this.objetivoControl() ? PALETA.verde : PALETA.azul;
-    const g = this.graficoMira;
-    g.clear(); g.lineStyle(2, color, 1); g.strokeCircle(this.mira.x, this.mira.y, 18);
-    g.lineBetween(this.mira.x - 27, this.mira.y, this.mira.x - 10, this.mira.y);
-    g.lineBetween(this.mira.x + 10, this.mira.y, this.mira.x + 27, this.mira.y);
-    g.lineBetween(this.mira.x, this.mira.y - 27, this.mira.x, this.mira.y - 10);
-    g.lineBetween(this.mira.x, this.mira.y + 10, this.mira.x, this.mira.y + 27);
-    this.mundo.bringToTop(g);
+    const teclado = [
+      [this.flechasControl.right, this.flechasControl.left, this.flechasControl.down, this.flechasControl.up],
+      [this.teclasJugador2.L, this.teclasJugador2.J, this.teclasJugador2.K, this.teclasJugador2.I],
+    ];
+    this.jugadores.forEach((jugador, i) => {
+      const visible = jugando && this.jugadorActivo(i);
+      jugador.grafico.setVisible(visible);
+      jugador.texto.setVisible(visible && estado.multijugador);
+      if (!visible) return;
+      // Caduca el movimiento si se pierde la conexión o el paquete de soltar.
+      const remoto = Date.now() - jugador.ejes.recibido < 400;
+      const [der, izq, abajo, arriba] = teclado[i];
+      const x = (remoto ? jugador.ejes.x : 0) + Number(der.isDown) - Number(izq.isDown);
+      const y = (remoto ? jugador.ejes.y : 0) + Number(abajo.isDown) - Number(arriba.isDown);
+      const longitud = Math.max(1, Math.hypot(x, y));
+      const paso = 650 * Math.min(delta, 50) / 1000;
+      const mira = jugador.mira;
+      this.apuntarA(mira.x + x / longitud * paso, mira.y + y / longitud * paso, i);
+      const color = this.objetivoControl(i) ? PALETA.verde : jugador.color;
+      const g = jugador.grafico;
+      g.clear(); g.lineStyle(2, color, 1); g.strokeCircle(mira.x, mira.y, 18);
+      g.lineBetween(mira.x - 27, mira.y, mira.x - 10, mira.y);
+      g.lineBetween(mira.x + 10, mira.y, mira.x + 27, mira.y);
+      g.lineBetween(mira.x, mira.y - 27, mira.x, mira.y - 10);
+      g.lineBetween(mira.x, mira.y + 10, mira.x, mira.y + 27);
+      jugador.texto.setPosition(mira.x + 26, mira.y + 26);
+      this.mundo.bringToTop(g);
+      this.mundo.bringToTop(jugador.texto);
+    });
   }
 
-  objetivoControl() {
+  objetivoControl(indice = 0) {
+    const mira = this.jugadores[indice].mira;
     const candidatos = estado.virusActivos.filter((e) => !e.procesado).map((e) => ({
       elemento: e, contenedor: e.contenedor, radio: 56 * Math.abs(e.contenedor.scaleX),
     }));
@@ -1414,28 +1465,37 @@ class EscenaJuego extends Phaser.Scene {
       this.jefe.trampas.filter((t) => !t.procesado).forEach((t) =>
         candidatos.push({ trampa: t, contenedor: t.contenedor, radio: 48 * Math.abs(t.contenedor.scaleX) }));
     }
-    return candidatos.map((c) => ({ ...c, distancia: Math.hypot(c.contenedor.x - this.mira.x, c.contenedor.y - this.mira.y) }))
+    return candidatos.map((c) => ({ ...c, distancia: Math.hypot(c.contenedor.x - mira.x, c.contenedor.y - mira.y) }))
       .filter((c) => c.distancia <= c.radio).sort((a, b) => a.distancia - b.distancia)[0];
   }
 
   avisarControl(texto) {
-    this.feedbackControl = texto;
-    this.feedbackControlHasta = Date.now() + 2200;
-    this.mostrarTextoFlotante(this.mira.x, this.mira.y - 36, texto, PALETA.texto);
+    const jugador = this.jugadores[this.jugadorAtacante];
+    jugador.feedback = texto;
+    jugador.feedbackHasta = Date.now() + 2200;
+    this.mostrarTextoFlotante(jugador.mira.x, jugador.mira.y - 36, texto, PALETA.texto);
   }
 
-  atacarControl(letra) {
-    if (!BOTONES_ATAQUE[letra] || !estado.juegoActivo || this.introNivelActiva ||
+  // Suma los puntos al total del equipo y al jugador que los consiguió.
+  sumarPuntos(puntos, indice = this.jugadorAtacante) {
+    estado.puntuacion += puntos;
+    estado.puntosJugadores[indice] += puntos;
+  }
+
+  atacarControl(letra, indice = 0) {
+    if (!BOTONES_ATAQUE[letra] || !estado.juegoActivo || this.introNivelActiva || !this.jugadorActivo(indice) ||
       !document.getElementById('pantalla-juego').classList.contains('activa')) return;
-    if (Date.now() - this.ultimoAtaqueControl < 110) return;
-    this.ultimoAtaqueControl = Date.now();
-    const objetivo = this.objetivoControl();
+    const jugador = this.jugadores[indice];
+    if (Date.now() - jugador.ultimoAtaque < 110) return;
+    jugador.ultimoAtaque = Date.now();
+    this.jugadorAtacante = indice;
+    const objetivo = this.objetivoControl(indice);
     if (!objetivo) { this.avisarControl('APUNTA AL OBJETIVO'); return; }
     if (objetivo.trampa) { this.resolverTrampaJefe(objetivo.trampa, true); return; }
     if (objetivo.jefe) { this.pulsarCombinacionJefe(letra); return; }
     const e = objetivo.elemento;
     if (e.tipo !== 'seguro' && e.letra !== letra) {
-      this.avisarControl('USA ' + e.letra + ' · ' + BOTONES_ATAQUE[e.letra].nombre); return;
+      this.avisarControl('USA LA LETRA ' + e.letra); return;
     }
     if (e.tipo === 'reparacion') this.repararServidor(e);
     else if (e.tipo === 'duplicador') this.dividirDuplicador(e);
@@ -1462,7 +1522,9 @@ class EscenaJuego extends Phaser.Scene {
     }
     jefe.progresoCombinacion += 1;
     if (jefe.progresoCombinacion === jefe.secuencia.length) {
-      jefe.progresoCombinacion = 0; this.golpearJefe();
+      // En cooperativo la combinación es compartida: J1 puede pulsar A y J2 B.
+      // El último golpe decide a quién se le anota la recompensa del jefe.
+      jefe.progresoCombinacion = 0; this.ultimoGolpeadorJefe = this.jugadorAtacante; this.golpearJefe();
     }
     this.actualizarCombinacionJefe();
   }
@@ -1850,11 +1912,10 @@ class EscenaJuego extends Phaser.Scene {
   // y el duplicador se agrega a partir del nivel 2.
   obtenerEntradasLeyenda(todas) {
     const entradas = [
-      { colores: [PALETA.verde], etiqueta: 'A', desdeNivel: 0 },
-      { colores: [PALETA.peligro], etiqueta: 'B', desdeNivel: 0 },
-      { colores: [PALETA.azul], etiqueta: 'X', desdeNivel: 0 },
-      { colores: [0xffd34e], etiqueta: 'Y', desdeNivel: 0 },
-      { colores: [0x91a8a0], etiqueta: 'Seguro: evitar', desdeNivel: 0 },
+      { colores: [PALETA.peligro, PALETA.naranja, PALETA.morado], etiqueta: 'Eliminar', desdeNivel: 0 },
+      { colores: [PALETA.azul], etiqueta: 'Ignorar', desdeNivel: 0 },
+      { colores: [PALETA.verde], etiqueta: 'Reparación', desdeNivel: 0 },
+      { colores: [PALETA.magenta], etiqueta: 'Duplicador', desdeNivel: 1 },
     ];
     return todas ? entradas : entradas.filter((e) => estado.indiceNivel >= e.desdeNivel);
   }
@@ -2392,8 +2453,7 @@ class EscenaJuego extends Phaser.Scene {
   /* ---------------- CONTROL DE NIVELES ---------------- */
 
   iniciarNivelActual() {
-    this.moverControl(0, 0);
-    this.mira = { x: this.anchoLogico / 2, y: (this.areaJuego.yMin + this.areaJuego.yMax) / 2 };
+    this.centrarMiras();
     estado.virusEliminados = 0;
     estado.jefeActivo = false;
     estado.combo = 0;
@@ -2633,7 +2693,7 @@ class EscenaJuego extends Phaser.Scene {
     const escalaVisual = opciones.escalaVisual || 1;
     const letra = tipo === 'seguro' ? null : tipo === 'reparacion' ? 'A'
       : opciones.letra || Phaser.Utils.Array.GetRandom(Object.keys(BOTONES_ATAQUE));
-    const color = BOTONES_ATAQUE[letra]?.color ?? colorPorTipo(tipo);
+    const color = colorPorTipo(tipo);
 
     // Un contenedor agrupa el círculo, el anillo de tiempo y el ícono
     const contenedor = this.add.container(x, y);
@@ -2782,7 +2842,7 @@ class EscenaJuego extends Phaser.Scene {
       estado.combo += 1;
       const multiplicador = calcularMultiplicadorCombo(estado.combo);
       const puntosGanados = PUNTOS_POR_TIPO[elemento.tipo] * multiplicador;
-      estado.puntuacion += puntosGanados;
+      this.sumarPuntos(puntosGanados);
       estado.virusEliminados += 1;
 
       if (elemento.tipo === 'critica') {
@@ -3352,10 +3412,19 @@ class EscenaJuego extends Phaser.Scene {
     }
   }
 
+  // Marcador HTML bajo el tablero con los puntos de cada jugador.
+  actualizarMarcadorJugadores() {
+    const marcador = document.getElementById('marcador-jugadores');
+    marcador.hidden = !estado.multijugador;
+    if (!estado.multijugador) return;
+    marcador.innerHTML = `<span class="j1">J1 ${estado.puntosJugadores[0]}</span> · <span class="j2">J2 ${estado.puntosJugadores[1]}</span>`;
+  }
+
   actualizarHUD() {
     const configuracionNivel = NIVELES[estado.indiceNivel];
 
     this.textoPuntuacion.setText(`${estado.puntuacion}`);
+    this.actualizarMarcadorJugadores();
 
     this.textoNivel.setText(`${configuracionNivel.numero}/${NIVELES.length}`);
     this.etiquetaNivel.x = this.textoNivel.x - this.textoNivel.width - 10;
@@ -3467,7 +3536,7 @@ class EscenaJuego extends Phaser.Scene {
 
     const mostrarPantallaDerrota = () => {
       document.getElementById('texto-puntaje-derrota').textContent =
-        `Puntuación final: ${estado.puntuacion} puntos`;
+        `Puntuación final: ${estado.puntuacion} puntos${textoPuntosJugadores()}`;
       mostrarPantalla('pantalla-derrota');
     };
 
@@ -3588,13 +3657,13 @@ class EscenaJuego extends Phaser.Scene {
         if (esUltimoNivel) {
           reproducirSonido('victoria');
           document.getElementById('texto-puntaje-victoria').textContent =
-            `Puntuación final: ${estado.puntuacion} puntos`;
+            `Puntuación final: ${estado.puntuacion} puntos${textoPuntosJugadores()}`;
           prepararClasificacionVictoria();
           mostrarPantalla('pantalla-victoria');
         } else {
           const configuracionNivel = NIVELES[estado.indiceNivel];
           document.getElementById('texto-nivel-completado').textContent =
-            `Superaste el nivel ${configuracionNivel.numero} con ${estado.puntuacion} puntos.`;
+            `Superaste el nivel ${configuracionNivel.numero} con ${estado.puntuacion} puntos.${textoPuntosJugadores()}`;
           animarConteoPuntos(puntuacionInicial, estado.puntuacion);
           mostrarPantalla('pantalla-nivel-completado');
         }
@@ -4084,7 +4153,7 @@ class EscenaJuego extends Phaser.Scene {
     this.crearOndaExpansiva(this.anchoLogico / 2, this.servidorY, PALETA.verde);
 
     // 4) Puntos adicionales
-    estado.puntuacion += recompensa;
+    this.sumarPuntos(recompensa, this.ultimoGolpeadorJefe ?? 0);
     this.mostrarTextoFlotante(x, y, `+${recompensa}`, PALETA.verde);
     this.actualizarHUD();
 
@@ -4169,15 +4238,18 @@ function construirConfiguracionPhaser() {
 let juegoPhaser = null;
 
 // Puente pequeño para el receptor del mando, sin simular clics sobre el canvas.
+// "jugador" es 1 o 2.
 window.controlJuego = {
-  mover(x, y) { juegoPhaser?.scene.keys.EscenaJuego?.moverControl(x, y); },
-  atacar(letra) { juegoPhaser?.scene.keys.EscenaJuego?.atacarControl(letra); },
+  mover(x, y, jugador = 1) { juegoPhaser?.scene.keys.EscenaJuego?.moverControl(x, y, jugador - 1); },
+  atacar(letra, jugador = 1) { juegoPhaser?.scene.keys.EscenaJuego?.atacarControl(letra, jugador - 1); },
   estado() {
     const escena = juegoPhaser?.scene.keys.EscenaJuego;
     const jefe = escena?.jefe;
     return {
       charges: escena?.escanerCargas ?? 0,
-      feedback: escena && Date.now() < escena.feedbackControlHasta ? escena.feedbackControl : '',
+      multi: estado.multijugador,
+      points: estado.puntosJugadores,
+      feedback: (escena?.jugadores || []).map((j) => (Date.now() < j.feedbackHasta ? j.feedback : '')),
       boss: jefe && !jefe.destruido ? {
         name: jefe.config.nombre, sequence: jefe.secuencia, progress: jefe.progresoCombinacion,
       } : null,
@@ -4198,9 +4270,19 @@ function reiniciarEstado() {
   estado.juegoActivo = true;
   estado.jefeActivo = false;
   estado.combo = 0;
+  estado.puntosJugadores = [0, 0];
 }
 
-function iniciarJuegoDesdeCero() {
+// Texto con el reparto de puntos del equipo (solo en modo 2 jugadores).
+function textoPuntosJugadores() {
+  if (!estado.multijugador) return '';
+  return ` (J1: ${estado.puntosJugadores[0]} · J2: ${estado.puntosJugadores[1]})`;
+}
+
+// Inicia una partida nueva. "multijugador" indica el modo elegido; si no se
+// indica (por ejemplo, al reintentar) se conserva el modo de la partida anterior.
+function iniciarJuegoDesdeCero(multijugador) {
+  if (typeof multijugador === 'boolean') estado.multijugador = multijugador;
   reiniciarEstado();
   sincronizarClaseVistaMovil();
   mostrarPantalla('pantalla-juego');
@@ -4451,10 +4533,11 @@ function activarEscanerDesdeUI() {
 /* ------------------------------------------------------------------
    9. CONEXIÓN DE BOTONES DEL HTML
    ------------------------------------------------------------------ */
-document.getElementById('btn-jugar').addEventListener('click', iniciarJuegoDesdeCero);
+document.getElementById('btn-jugar').addEventListener('click', () => iniciarJuegoDesdeCero(false));
+document.getElementById('btn-jugar-2').addEventListener('click', () => iniciarJuegoDesdeCero(true));
 document.getElementById('btn-siguiente-nivel').addEventListener('click', continuarAlSiguienteNivel);
-document.getElementById('btn-reintentar').addEventListener('click', iniciarJuegoDesdeCero);
-document.getElementById('btn-jugar-de-nuevo').addEventListener('click', iniciarJuegoDesdeCero);
+document.getElementById('btn-reintentar').addEventListener('click', () => iniciarJuegoDesdeCero());
+document.getElementById('btn-jugar-de-nuevo').addEventListener('click', () => iniciarJuegoDesdeCero());
 document.getElementById('btn-escaner').addEventListener('click', activarEscanerDesdeUI);
 document.getElementById('formulario-gamertag').addEventListener('submit', guardarPuntuacionGlobal);
 
@@ -4465,7 +4548,13 @@ window.addEventListener('keydown', (evento) => {
   const letra = evento.key.toUpperCase();
   if (BOTONES_ATAQUE[letra] && document.getElementById('pantalla-juego').classList.contains('activa')) {
     evento.preventDefault();
-    window.controlJuego.atacar(letra);
+    window.controlJuego.atacar(letra, 1);
+    return;
+  }
+  if (TECLAS_ATAQUE_J2[evento.key] && estado.multijugador &&
+    document.getElementById('pantalla-juego').classList.contains('activa')) {
+    evento.preventDefault();
+    window.controlJuego.atacar(TECLAS_ATAQUE_J2[evento.key], 2);
     return;
   }
   if (evento.key.toLowerCase() !== 's') return;

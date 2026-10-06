@@ -1,4 +1,4 @@
-/* Conexión temporal entre la PC y un teléfono mediante Supabase Realtime. */
+/* Conexión temporal entre la PC y hasta dos teléfonos mediante Supabase Realtime. */
 (() => {
   'use strict';
 
@@ -43,11 +43,19 @@
   const client = supabase.createClient(url, key);
   const channel = client.channel(`control-${token}`);
   let subscribed = false;
-  let lastPhone = 0;
-  let lastAttack = 0;
   let lastState = '';
   let lastStateSent = 0;
-  const gameState = () => ({ screen: currentScreen(), ...window.controlJuego?.estado() });
+  // Teléfonos conectados: id del teléfono -> { slot: 1 | 2, last, lastAttack }.
+  // Ambos escanean el mismo QR; el primero es J1 y el segundo J2.
+  const phones = new Map();
+  const PHONE_TIMEOUT = 7000;
+  const multi = () => window.controlJuego?.estado().multi === true;
+  // En modo de 1 jugador todos los teléfonos manejan al jugador 1.
+  const playerOf = (phone) => (multi() ? phone.slot : 1);
+  const gameState = () => ({
+    screen: currentScreen(), ...window.controlJuego?.estado(),
+    players: Object.fromEntries([...phones].map(([id, phone]) => [id, phone.slot])),
+  });
   const sendState = () => send('state', gameState());
 
   const send = (event, payload = {}) => {
@@ -58,8 +66,27 @@
     return document.querySelector('.pantalla.activa')?.id || 'pantalla-inicio';
   }
 
+  function freeSlot(exceptId) {
+    const used = new Set([...phones].filter(([id]) => id !== exceptId).map(([, phone]) => phone.slot));
+    return [1, 2].find((slot) => !used.has(slot)) ?? 1;
+  }
+
+  function updateStatus() {
+    const count = phones.size;
+    showStatus(count === 0 ? 'Esperando al teléfono…'
+      : count === 1 ? 'Teléfono conectado'
+      : `${count} teléfonos conectados`);
+  }
+
+  // Devuelve el teléfono que envió el mensaje (si es válido y sigue activo).
+  function phoneFrom(payload) {
+    const phone = typeof payload?.id === 'string' ? phones.get(payload.id) : null;
+    if (phone) phone.last = Date.now();
+    return phone;
+  }
+
   const buttons = {
-    start: 'btn-jugar', scan: 'btn-escaner', next: 'btn-siguiente-nivel',
+    start: 'btn-jugar', start2: 'btn-jugar-2', scan: 'btn-escaner', next: 'btn-siguiente-nivel',
     retry: 'btn-reintentar', again: 'btn-jugar-de-nuevo',
     continue: 'btn-continuar-pregunta',
   };
@@ -75,47 +102,72 @@
     }
     if (action === 'retry' && currentScreen() === 'pantalla-victoria') action = 'again';
     if (action === 'next' && currentScreen() === 'pantalla-pregunta') action = 'continue';
-    const allowed = { start: 'pantalla-inicio', scan: 'pantalla-juego', next: 'pantalla-nivel-completado', retry: 'pantalla-derrota', again: 'pantalla-victoria', continue: 'pantalla-pregunta' };
+    const allowed = { start: 'pantalla-inicio', start2: 'pantalla-inicio', scan: 'pantalla-juego', next: 'pantalla-nivel-completado', retry: 'pantalla-derrota', again: 'pantalla-victoria', continue: 'pantalla-pregunta' };
     if (allowed[action] !== currentScreen()) return;
     const id = buttons[action];
     if (id) document.getElementById(id)?.click();
   }
 
   channel
-    .on('broadcast', { event: 'hello' }, () => {
-      lastPhone = Date.now();
-      showStatus('Teléfono conectado');
+    .on('broadcast', { event: 'hello' }, ({ payload }) => {
+      const id = payload?.id;
+      if (typeof id !== 'string' || !/^[a-f0-9-]{36}$/i.test(id)) return;
+      const phone = phones.get(id) || { slot: freeSlot(id), lastAttack: 0 };
+      phone.last = Date.now();
+      phones.set(id, phone);
+      updateStatus();
       sendState();
     })
-    .on('broadcast', { event: 'ping' }, () => { lastPhone = Date.now(); })
+    .on('broadcast', { event: 'ping' }, ({ payload }) => {
+      if (!phoneFrom(payload)) send('state', gameState()); // el teléfono volverá a presentarse
+    })
+    .on('broadcast', { event: 'choose' }, ({ payload }) => {
+      // El teléfono pide cambiar de jugador; se intercambia con el otro si está ocupado.
+      const phone = phoneFrom(payload);
+      if (!phone || ![1, 2].includes(payload.slot) || phone.slot === payload.slot) return;
+      const other = [...phones.values()].find((p) => p !== phone && p.slot === payload.slot);
+      window.controlJuego?.mover(0, 0, phone.slot);
+      if (other) other.slot = phone.slot;
+      phone.slot = payload.slot;
+      sendState();
+    })
     .on('broadcast', { event: 'move' }, ({ payload }) => {
-      if (Date.now() - lastPhone >= 7000 || currentScreen() !== 'pantalla-juego') return;
-      if (!Number.isFinite(payload?.x) || !Number.isFinite(payload?.y) || Math.abs(payload.x) > 1 || Math.abs(payload.y) > 1) return;
-      window.controlJuego?.mover(payload.x, payload.y);
+      const phone = phoneFrom(payload);
+      if (!phone || currentScreen() !== 'pantalla-juego') return;
+      if (!Number.isFinite(payload.x) || !Number.isFinite(payload.y) || Math.abs(payload.x) > 1 || Math.abs(payload.y) > 1) return;
+      window.controlJuego?.mover(payload.x, payload.y, playerOf(phone));
     })
     .on('broadcast', { event: 'attack' }, ({ payload }) => {
-      if (Date.now() - lastPhone >= 7000 || currentScreen() !== 'pantalla-juego') return;
-      if (!['A', 'B', 'X', 'Y'].includes(payload?.letter) || Date.now() - lastAttack < 110) return;
-      lastAttack = Date.now();
-      window.controlJuego?.atacar(payload.letter);
+      const phone = phoneFrom(payload);
+      if (!phone || currentScreen() !== 'pantalla-juego') return;
+      if (!['A', 'B', 'X', 'Y'].includes(payload.letter) || Date.now() - phone.lastAttack < 110) return;
+      phone.lastAttack = Date.now();
+      window.controlJuego?.atacar(payload.letter, playerOf(phone));
       sendState();
     })
     .on('broadcast', { event: 'button' }, ({ payload }) => {
-      if (Date.now() - lastPhone < 7000) pressButton(payload?.action);
+      if (phoneFrom(payload)) pressButton(payload.action);
     })
     .subscribe((state) => {
       subscribed = state === 'SUBSCRIBED';
-      if (subscribed) showStatus('Esperando al teléfono…');
+      if (subscribed) updateStatus();
       else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT') {
         showStatus('No se pudo conectar. Revisa Realtime en Supabase.');
       }
     });
 
   setInterval(() => {
-    if (lastPhone && Date.now() - lastPhone > 7000) {
-      lastPhone = 0;
-      window.controlJuego?.mover(0, 0);
-      showStatus('Teléfono desconectado. Vuelve a escanear el QR.');
+    let removed = false;
+    phones.forEach((phone, id) => {
+      if (Date.now() - phone.last > PHONE_TIMEOUT) {
+        window.controlJuego?.mover(0, 0, phone.slot);
+        phones.delete(id);
+        removed = true;
+      }
+    });
+    if (removed) {
+      updateStatus();
+      if (phones.size === 0) showStatus('Teléfono desconectado. Vuelve a escanear el QR.');
     }
     const nextState = gameState();
     const serialized = JSON.stringify(nextState);

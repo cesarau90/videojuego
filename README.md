@@ -6,17 +6,17 @@ Esta versión permite jugar en la PC usando el teléfono como control. Abre el
 juego en la PC desde GitHub Pages (o desde un servidor HTTPS), escanea el QR de
 la portada y espera a que ambos dispositivos indiquen que están conectados.
 Mira el tablero en la PC y mueve la mira con el joystick del teléfono.
-Apunta al enemigo y pulsa su letra: **A verde, B rojo, X azul, Y amarillo**.
-Cada enemigo muestra su letra además del color. La letra incorrecta no lo
-elimina. Puedes mantener el joystick con un dedo y atacar con otro.
+Apunta al enemigo y pulsa la letra (**A, B, X o Y**) que aparece encima de él.
+La letra incorrecta no lo elimina. Puedes mantener el joystick con un dedo y atacar con otro.
 Al soltar, cancelar el toque, ocultar la página o perder la conexión,
 el movimiento se detiene. El mando también incluye escáner, inicio,
 continuación, reintento y respuestas 1–4 (visibles durante las preguntas).
 
-Los archivos seguros ahora son **grises y sin letra**: atacarlos con cualquier
-botón cuesta un servidor. La reparación sigue siendo verde y se activa con A.
-Las amenazas reciben al azar uno de los cuatro colores de ataque, independientemente
-de su tipo. Los resistentes requieren dos ataques correctos; los duplicadores
+Los elementos conservan los **colores del juego original** según su tipo
+(amenaza roja, crítica naranja, resistente morada, duplicador magenta,
+reparación verde y archivo seguro azul). La letra de ataque de cada amenaza se
+elige al azar. Los archivos seguros no tienen letra: atacarlos con cualquier
+botón cuesta un servidor. La reparación se activa con A. Los resistentes requieren dos ataques correctos; los duplicadores
 se dividen al recibir su letra correcta y cada hijo tiene su propia letra.
 
 Los jefes requieren una combinación **en orden**, con pulsaciones separadas:
@@ -52,19 +52,36 @@ del equipo de respuesta: debe detectar y eliminar las amenazas reales antes
 de que dañen los servidores, evitando los falsos positivos, y finalmente
 derrotar al jefe de cada nivel para proteger el sistema.
 
+## Modo 2 jugadores (cooperativo)
+
+En la portada, el botón **2 jugadores** inicia una partida cooperativa en la
+misma pantalla: aparecen dos miras (J1 azul y J2 amarilla) que defienden los
+mismos servidores. Cada jugador puede usar un teléfono o el teclado:
+
+- **J1:** mouse o flechas para mover y teclas **A, B, X, Y** para atacar, o un teléfono.
+- **J2:** teclas **I, J, K, L** para mover y **7, 8, 9, 0** (= A, B, X, Y) para
+  atacar, o un teléfono.
+
+Ambos teléfonos escanean el mismo QR: el primero que se conecta es J1 y el
+segundo J2 (se puede cambiar con el botón "Cambiar a J2/J1" del mando). La
+combinación de los jefes es compartida, así que J1 puede pulsar una letra y J2
+la siguiente. Los puntos se suman al equipo y además se lleva el marcador de
+cada jugador (se muestra bajo el tablero y al final de cada nivel). El escáner
+y los servidores son compartidos. "Volver a intentar" conserva el modo elegido.
+
 ## Amenazas y elementos
 
 En el tablero pueden aparecer varios elementos a la vez (hasta 2, 3 o 4 según
 el nivel), algunos quietos y otros en movimiento lento que rebota dentro del
-área de juego. Cada tipo tiene su propio ícono y comportamiento; el color de
-ataque se elige al azar:
+área de juego. Cada tipo tiene su propio ícono, color y comportamiento; la letra
+de ataque se elige al azar:
 
 | Tipo | Color / letra | Ataques | Puntos | Detalle |
 |---|---|---|---|---|
-| Malware normal | A / B / X / Y | 1 | 10 | Ícono de alerta (triángulo). |
-| Malware crítico | A / B / X / Y | 1 | 20 | Ícono de rayo; desaparece más rápido que el normal. |
-| Malware resistente | A / B / X / Y | 2 | 15 | Ícono de "bug"; el primer ataque correcto rompe el escudo, el segundo lo elimina. |
-| Archivo seguro (falso positivo) | Gris | — | — | Escudo con marca; **no hay que atacarlo**. Si se pulsa cualquier letra apuntándolo, se pierde un servidor y aparece "Falso positivo". Si expira solo, no pasa nada. |
+| Malware normal | Rojo · A / B / X / Y | 1 | 10 | Ícono de alerta (triángulo). |
+| Malware crítico | Naranja · A / B / X / Y | 1 | 20 | Ícono de rayo; desaparece más rápido que el normal. |
+| Malware resistente | Morado · A / B / X / Y | 2 | 15 | Ícono de "bug"; el primer ataque correcto rompe el escudo, el segundo lo elimina. |
+| Archivo seguro (falso positivo) | Azul, sin letra | — | — | Escudo con marca; **no hay que atacarlo**. Si se pulsa cualquier letra apuntándolo, se pierde un servidor y aparece "Falso positivo". Si expira solo, no pasa nada. |
 
 Cada amenaza real dibuja una línea tenue hacia el servidor que está
 "atacando", para que el jugador sepa qué está en riesgo.
@@ -79,7 +96,7 @@ que el resto de elementos.
 | Mecánica | Nivel | Color | Detalle |
 |---|---|---|---|
 | Reparación de servidor | 1, 2 y 3 | Verde / A (cruz, etiqueta "REPARACIÓN") | Solo aparece si al menos un servidor está fuera de línea, como máximo **una vez por nivel**. Apuntar y pulsar A recupera un servidor caído; no entrega puntos ni cuenta como amenaza eliminada. Si expira, no hay penalización. |
-| Malware duplicador | 2 y 3 | A / B / X / Y (ícono de división; el escáner revela "DUPLICADOR") | Al pulsar su letra correcta, se **divide en dos amenazas pequeñas** (5 puntos cada una, con la misma duración de vida). Si una o ambas escapan, solo se pierde **un servidor** por esa pareja. |
+| Malware duplicador | 2 y 3 | Magenta · A / B / X / Y (ícono de división; el escáner revela "DUPLICADOR") | Al pulsar su letra correcta, se **divide en dos amenazas pequeñas** (5 puntos cada una, con la misma duración de vida). Si una o ambas escapan, solo se pierde **un servidor** por esa pareja. |
 | Sobrecarga de red | 2 y 3 | Aviso "SOBRECARGA DE RED" | Se activa **una sola vez por nivel**, al llegar aproximadamente a la mitad del objetivo de amenazas. Durante 5 segundos los elementos aparecen con más frecuencia y se permite un elemento simultáneo más de lo normal; al terminar, todo vuelve exactamente a la velocidad y el máximo originales. Nunca se activa durante el combate contra el jefe, y se cancela automáticamente si el jefe aparece antes de que termine. |
 
 ## Combo
@@ -165,9 +182,11 @@ forma progresiva pero el juego sigue siendo completable en los tres niveles.
 ## Controles
 
 - **Computadora:** mouse o flechas para mover la mira; **A, B, X, Y** para
-  atacar por color; tecla **S** para el escáner.
+  atacar con la letra del enemigo; tecla **S** para el escáner.
 - **Celular como mando:** escanea el QR de la PC y usa el joystick y los
   botones **A, B, X, Y**. Mira el juego en la PC.
+- **Jugador 2 (modo 2 jugadores):** **I, J, K, L** para mover y **7, 8, 9, 0**
+  para atacar, o un segundo teléfono.
 
 ## Victoria y derrota
 

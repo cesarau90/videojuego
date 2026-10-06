@@ -1,6 +1,16 @@
 ﻿(() => {
   'use strict';
   const token = new URLSearchParams(location.search).get('s');
+  // Identificador de este teléfono, para que la PC distinga a J1 de J2.
+  let phoneId = null;
+  try { phoneId = sessionStorage.getItem('mando-id'); } catch (e) { /* sin almacenamiento */ }
+  if (!phoneId) {
+    phoneId = crypto.randomUUID();
+    try { sessionStorage.setItem('mando-id', phoneId); } catch (e) { /* sin almacenamiento */ }
+  }
+  const playerBadge = document.getElementById('player-badge');
+  const switchButton = document.getElementById('switch-player');
+  let mySlot = 0;
   const status = document.getElementById('connection');
   const pad = document.getElementById('joystick');
   const knob = document.getElementById('joystick-knob');
@@ -16,7 +26,7 @@
       const action = button.dataset.action;
       button.disabled = !connected() || (button.dataset.letter && hostState.screen !== 'pantalla-juego')
         || (action === 'scan' && (hostState.screen !== 'pantalla-juego' || hostState.charges <= 0))
-        || (action === 'start' && hostState.screen !== 'pantalla-inicio')
+        || (['start', 'start2'].includes(action) && hostState.screen !== 'pantalla-inicio')
         || (action === 'next' && !['pantalla-pregunta', 'pantalla-nivel-completado'].includes(hostState.screen))
         || (action === 'retry' && !['pantalla-derrota', 'pantalla-victoria'].includes(hostState.screen));
     });
@@ -36,16 +46,26 @@
   );
   const channel = client.channel('control-' + token);
   const send = (event, payload = {}) => {
-    if (subscribed) channel.send({ type: 'broadcast', event, payload });
+    if (subscribed) channel.send({ type: 'broadcast', event, payload: { ...payload, id: phoneId } });
   };
   function renderState(payload = {}) {
     hostState = payload;
+    // Si la PC no conoce este teléfono (por ejemplo, se recargó), se presenta otra vez.
+    mySlot = payload.players?.[phoneId] || 0;
+    if (!mySlot && Date.now() - lastHello > 1500) { send('hello'); lastHello = Date.now(); }
+    const player = payload.multi ? mySlot : 1;
+    playerBadge.hidden = !mySlot;
+    playerBadge.textContent = payload.multi ? 'JUGADOR ' + player : 'JUGADOR 1 · MODO 1 JUGADOR';
+    playerBadge.className = 'player-badge j' + player;
+    switchButton.hidden = !payload.multi || !mySlot;
+    switchButton.textContent = 'Cambiar a J' + (mySlot === 1 ? 2 : 1);
     document.getElementById('answers').hidden = payload.screen !== 'pantalla-pregunta';
     const boss = payload.boss;
     document.getElementById('combat-title').textContent = boss ? boss.name + ' · COMBINACIÓN' : 'APUNTA Y ATACA';
-    document.getElementById('combat-hint').textContent = payload.feedback || (boss
+    const feedback = Array.isArray(payload.feedback) ? payload.feedback[player - 1] : '';
+    document.getElementById('combat-hint').textContent = feedback || (boss
       ? 'Apunta al jefe y pulsa en orden. Cada combinación completa le quita una vida.'
-      : 'A verde · B rojo · X azul · Y amarillo. Evita los escudos grises.');
+      : 'Pulsa la letra que muestra el enemigo. No ataques los archivos seguros (azules).');
     const sequence = document.getElementById('boss-sequence');
     sequence.replaceChildren();
     if (boss && Array.isArray(boss.sequence)) boss.sequence.forEach((letter, index) => {
@@ -136,6 +156,9 @@
     }
     button.addEventListener('pointerdown', (event) => { event.preventDefault(); attack(); });
     button.addEventListener('click', (event) => { if (event.detail === 0) attack(); });
+  });
+  switchButton.addEventListener('click', () => {
+    if (connected() && mySlot) send('choose', { slot: mySlot === 1 ? 2 : 1 });
   });
   document.querySelectorAll('[data-action]').forEach((button) => {
     button.addEventListener('click', () => { if (connected()) send('button', { action: button.dataset.action }); });

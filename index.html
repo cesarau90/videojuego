@@ -12,7 +12,7 @@
     rel="stylesheet"
   />
 
-  <link rel="stylesheet" href="style.css?v=17" />
+  <link rel="stylesheet" href="style.css?v=18" />
 </head>
 <body>
 
@@ -51,12 +51,18 @@
             antes de que comprometan la red.
           </p>
 
-          <button id="btn-jugar" class="boton-primario">
-            Iniciar defensa
-            <svg class="boton-flecha" viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden="true">
-              <path d="M4 2.5 L12 8 L4 13.5 Z" fill="currentColor" />
-            </svg>
-          </button>
+          <div class="botones-inicio">
+            <button id="btn-jugar" class="boton-primario">
+              Iniciar defensa
+              <svg class="boton-flecha" viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden="true">
+                <path d="M4 2.5 L12 8 L4 13.5 Z" fill="currentColor" />
+              </svg>
+            </button>
+            <!-- Modo cooperativo: dos miras en la misma pantalla -->
+            <button id="btn-jugar-2" class="boton-primario boton-secundario" title="J2: teléfono, o I/J/K/L y 7/8/9/0">
+              2 jugadores
+            </button>
+          </div>
 
           <div class="hero-indicadores">
             <div class="indicador">
@@ -118,7 +124,7 @@
             <path d="M5 3 L19 12 L12.5 13.2 L15.5 19.5 L13 20.5 L10 14.3 L6.5 17.5 Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
           </svg>
           <h2 class="tarjeta-titulo">Elimina</h2>
-          <p class="tarjeta-texto">Mueve la mira y pulsa A, B, X o Y según el color.</p>
+          <p class="tarjeta-texto">Mueve la mira y pulsa la letra (A, B, X o Y) del enemigo.</p>
         </article>
 
         <article class="tarjeta">
@@ -162,6 +168,7 @@
         <span class="boton-escaner-texto">ESCÁNER · 2</span>
       </button>
       <button id="btn-ver-qr" class="boton-escaner" type="button">Conectar teléfono</button>
+      <span id="marcador-jugadores" class="marcador-jugadores" hidden></span>
     </div>
   </div>
   <dialog id="dialogo-control" class="dialogo-control">
@@ -308,7 +315,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <!-- Lógica del juego -->
-  <script src="game.js?v=22"></script>
-  <script src="remote-host.js?v=2"></script>
+  <script src="game.js?v=23"></script>
+  <script src="remote-host.js?v=3"></script>
 </body>
 </html>

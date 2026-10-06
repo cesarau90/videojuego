@@ -7,6 +7,11 @@ body { padding: max(16px, env(safe-area-inset-top)) max(12px, env(safe-area-inse
 h1 { margin: .2rem 0 .5rem; font-size: clamp(1.4rem, 6vw, 2rem); }
 #connection { margin: 0; color: #ffb86c; font-size: .85rem; }
 #connection.connected { color: #00d99b; }
+.player-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.player-badge { padding: 4px 10px; border: 1px solid currentColor; border-radius: 999px; font-size: .72rem; font-weight: 800; letter-spacing: .08em; }
+.player-badge.j1 { color: #38bdf8; }
+.player-badge.j2 { color: #ffd34e; }
+.switch-player { min-height: 32px; padding: 4px 10px; font-size: .7rem; }
 .hint, #combat-hint { color: #91a8a0; line-height: 1.45; font-size: .8rem; }
 .gamepad { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; padding: 18px 8px; border: 1px solid #246353; border-radius: 24px; background: linear-gradient(145deg, #102c29, #0d1b18); }
 .movement, .combat { display: grid; justify-items: center; gap: 12px; min-width: 0; }
@@ -35,6 +40,7 @@ button:active, button.pressed { filter: brightness(1.4); transform: scale(.94); 
 .sequence-letter.done { background: #246353; opacity: .45; }
 .sequence-letter.next { box-shadow: 0 0 0 2px currentColor; }
 .buttons, .answer-buttons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.buttons { grid-template-columns: repeat(auto-fit, minmax(68px, 1fr)); }
 .buttons button, .answer-buttons button { min-width: 0; padding: 8px 4px; }
 @media (max-width: 360px) { .buttons { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 button:focus-visible, .joystick:focus-visible { outline: 2px solid #e7f5ef; outline-offset: 3px; }

@@ -258,6 +258,19 @@ body {
   filter: brightness(1.05);
 }
 
+/* Botones de la portada: "Iniciar defensa" y "2 jugadores" */
+.botones-inicio {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.boton-secundario {
+  background: transparent;
+  color: var(--verde);
+  box-shadow: inset 0 0 0 1px var(--verde);
+}
+
 .boton-primario:focus-visible {
   outline: 2px solid var(--verde);
   outline-offset: 3px;
@@ -1101,8 +1114,21 @@ body {
   max-width: 1120px;
   margin: 20px auto 0;
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
+  gap: 10px;
 }
+
+/* Puntos de cada jugador en el modo cooperativo */
+.marcador-jugadores {
+  font-family: var(--fuente-mono);
+  font-size: 0.78rem;
+  color: var(--texto);
+}
+
+.marcador-jugadores .j1 { color: var(--azul); }
+.marcador-jugadores .j2 { color: #ffd34e; }
 
 .boton-escaner {
   display: inline-flex;
