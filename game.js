@@ -45,8 +45,9 @@ const NIVELES = [
 // La dificultad se elige antes de empezar y se conserva al reintentar.
 // Los valores medios dejan intactos los niveles originales.
 const DIFICULTADES = {
-  facil: { nombre: 'Fácil', vidaVirus: 1.3, aparicion: 1.2, velocidad: 0.75, elementosExtra: -1, vidaJefe: 0.75, tiempoJefe: 1.25, escaner: 3,
-    descripcion: 'Más tiempo para reaccionar, menos enemigos y 3 usos de escáner por nivel.' },
+  facil: { nombre: 'Fácil', objetivos: [6, 10, 15], vidaVirus: 1.8, aparicion: 1.6, velocidad: 0.5, elementosExtra: -2,
+    probabilidadesEspeciales: 0.5, vidaJefe: 0.5, tiempoJefe: 1.6, escaner: 4, segundosPregunta: 20, sobrecarga: false,
+    descripcion: '6, 10 y 15 amenazas por nivel, más tiempo, enemigos lentos y 4 usos de escáner.' },
   medio: { nombre: 'Medio', vidaVirus: 1, aparicion: 1, velocidad: 1, elementosExtra: 0, vidaJefe: 1, tiempoJefe: 1, escaner: 2,
     descripcion: 'El ritmo original del juego, con 2 usos de escáner por nivel.' },
   dificil: { nombre: 'Difícil', vidaVirus: 0.8, aparicion: 0.85, velocidad: 1.25, elementosExtra: 1, vidaJefe: 1.25, tiempoJefe: 0.85, escaner: 1,
@@ -65,11 +66,15 @@ function obtenerConfiguracionNivel(indice = estado.indiceNivel) {
   const dificultad = dificultadActual();
   return {
     ...base,
-    virusRequeridos: estado.dificultad === 'facil' && indice === NIVELES.length - 1 ? 20 : base.virusRequeridos,
+    virusRequeridos: dificultad.objetivos?.[indice] ?? base.virusRequeridos,
     tiempoAparicion: Math.round(base.tiempoAparicion * dificultad.aparicion),
     tiempoVidaVirus: Math.round(base.tiempoVidaVirus * dificultad.vidaVirus),
     tiempoVidaVirusMando: Math.round(base.tiempoVidaVirusMando * dificultad.vidaVirus),
     maxElementos: Math.max(1, base.maxElementos + dificultad.elementosExtra),
+    probabilidadMovimiento: base.probabilidadMovimiento * (dificultad.probabilidadesEspeciales ?? 1),
+    probabilidadCritica: base.probabilidadCritica * (dificultad.probabilidadesEspeciales ?? 1),
+    probabilidadResistente: base.probabilidadResistente * (dificultad.probabilidadesEspeciales ?? 1),
+    probabilidadDuplicador: base.probabilidadDuplicador * (dificultad.probabilidadesEspeciales ?? 1),
     velocidadMin: base.velocidadMin * dificultad.velocidad,
     velocidadMax: base.velocidadMax * dificultad.velocidad,
   };
@@ -898,7 +903,7 @@ function animarConteoPuntos(desde, hasta, duracion = 650) {
 
 /* ------------------------------------------------------------------
    4A. PREGUNTA DE SEGURIDAD (entre el jefe derrotado y "Nivel superado")
-   Muestra la pregunta del nivel indicado, corre un contador de 10s y,
+   Muestra la pregunta del nivel indicado, corre un contador según la dificultad y,
    al responder (clic/toque) o agotarse el tiempo, revela la respuesta
    correcta y una explicación breve. Acertar da un bono de puntos; fallar
    o agotar el tiempo desactiva un servidor al azar (igual que un falso
@@ -931,13 +936,15 @@ function mostrarPreguntaNivel(indiceNivel, escena, callback) {
   botonContinuar.hidden = true;
   botonContinuar.onclick = null;
 
-  let segundosRestantes = SEGUNDOS_PREGUNTA;
+  const segundosPregunta = dificultadActual().segundosPregunta ?? SEGUNDOS_PREGUNTA;
+  let segundosRestantes = segundosPregunta;
   elementoContador.textContent = segundosRestantes;
 
   // La barra queda llena y detenida hasta que todas las opciones estén
-  // listas (ver iniciarRespuesta): los 10 segundos no corren durante la
+  // listas (ver iniciarRespuesta): el tiempo no corre durante la
   // animación de entrada.
   elementoBarra.classList.remove('en-marcha');
+  elementoBarra.style.transitionDuration = segundosPregunta + 's';
   elementoBarra.style.width = ''; // sin ancho en línea: manda la hoja de estilos (100%, o 0% con .en-marcha)
 
   // Las opciones entran una tras otra, con 50 ms de separación, cuando la
@@ -969,11 +976,11 @@ function mostrarPreguntaNivel(indiceNivel, escena, callback) {
   });
 
   // Se ejecuta cuando ya se ven las cuatro opciones: las habilita para
-  // pulsarse y solo entonces arranca el contador y la barra de 10 s.
+  // pulsarse y solo entonces arranca el contador y la barra.
   function iniciarRespuesta() {
     if (respondida) return;
     botones.forEach((boton) => boton.classList.add('lista'));
-    // Barra: transición de ancho a 0 en 10s (ver style.css), iniciada en
+    // Barra: transición de ancho a 0 con el tiempo elegido, iniciada en
     // el siguiente frame para que parta del 100%
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -1876,7 +1883,8 @@ class EscenaJuego extends Phaser.Scene {
       if (this.jefe.config.movimiento === 'lento' && !this.movimientoReducido) {
         // El escáner también puede ralentizar al jefe durante 2s, sin
         // tocar su vida, temporizadores de ataque ni punto débil.
-        const velocidad = (this.jefe.fase === 2 ? 1 : 0.6) * this.factorEscaner;
+        const velocidad = (this.jefe.fase === 2 ? 1 : 0.6) * this.factorEscaner *
+            (estado.dificultad === 'facil' ? dificultadActual().velocidad : 1);
         const area = this.areaJuego;
         const margen = 100;
         this.jefe.contenedor.x += this.jefe.velX * velocidad;
@@ -3541,7 +3549,7 @@ class EscenaJuego extends Phaser.Scene {
   // originales. Nunca se activa durante el combate contra el jefe, ni
   // mientras ya hay una sobrecarga en curso.
   verificarSobrecargaPorProgreso() {
-    if (estado.jefeActivo || this.sobrecargaActiva) return;
+    if (dificultadActual().sobrecarga === false || estado.jefeActivo || this.sobrecargaActiva) return;
     const umbrales = UMBRALES_SOBRECARGA[estado.indiceNivel] || [];
     if (this.sobrecargaIndice >= umbrales.length) return;
     const configuracionNivel = obtenerConfiguracionNivel();

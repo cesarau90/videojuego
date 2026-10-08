@@ -29,12 +29,17 @@ si el navegador permite almacenamiento y se conserva al reintentar, en los cinco
 
 | Dificultad | Tiempo de las amenazas | Aparición | Velocidad | Elementos simultáneos | Vida del jefe | Tiempo para su ataque | Escáner por nivel |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Fácil | +30% | Intervalo +20% | −25% | Uno menos (mínimo 1) | −25% | +25% | 3 |
+| Fácil | +80% | Intervalo +60% | −50% | Dos menos (mínimo 1) | −50% | +60% | 4 |
 | Medio | Original | Original | Original | Original | Original | Original | 2 |
 | Difícil | −20% | Intervalo −15% | +25% | Uno más | +25% | −15% | 1 |
 
-En fácil, los objetivos son **10, 15 y 20 amenazas** por nivel; en medio y
+En fácil, los objetivos son **6, 10 y 15 amenazas** por nivel; en medio y
 difícil siguen siendo **10, 15 y 25**. Al alcanzar el objetivo aparece el jefe.
+
+En fácil, las probabilidades de movimiento y de amenazas críticas, resistentes o
+duplicadoras se reducen a la mitad. Los jefes también se mueven más despacio,
+no hay sobrecargas de red y las preguntas dan **20 segundos** para responder
+(en medio y difícil, 10). El bono máximo de la pregunta sigue siendo 50 puntos.
 
 Los valores se calculan sobre cada nivel; las vidas del jefe se redondean.
 Los ajustes cooperativos se añaden a la dificultad elegida. En fácil, si solo
@@ -266,7 +271,7 @@ tres quedan fuera de línea, aparece la pantalla de derrota.
 ## Escáner
 
 Botón "ESCÁNER" en la esquina del tablero, también activable con la tecla
-**S**. Cada nivel da **3 usos en fácil, 2 en medio y 1 en difícil**. Al activarlo, durante 2 segundos:
+**S**. Cada nivel da **4 usos en fácil, 2 en medio y 1 en difícil**. Al activarlo, durante 2 segundos:
 
 - Ralentiza el movimiento de los elementos activos (y el del jefe, si se
   está desplazando).
@@ -281,7 +286,9 @@ tocar. Las cargas se restauran al iniciar cada nivel.
 Al eliminar la cantidad de amenazas reales requerida en el nivel, se
 detiene la generación de elementos normales, se retiran los que queden en
 pantalla (sin penalizar al jugador) y aparece el jefe. El nivel solo se
-considera superado cuando el jefe es derrotado.
+considera superado cuando el jefe es derrotado. Las cifras siguientes son para
+dificultad media con un mando. En fácil, un jugador necesita **2, 3 y 4 golpes**
+respectivamente y tiene un 60% más de tiempo por ciclo.
 
 - **Nivel 1 — Troyano** (naranja): 3 golpes, casi fijo en el centro, ciclo
   de ataque de 10s, recompensa 50 pts.
@@ -300,6 +307,9 @@ distintos) y, si el jugador no llega a tiempo en un ciclo de ataque, pierde
 un servidor pero el jefe conserva todo el daño ya recibido.
 
 ## Niveles y dificultad progresiva
+
+Valores base de dificultad media con mando; los ajustes de fácil y difícil
+se describen en la sección Dificultad.
 
 | Nivel | Amenazas | Aparición | Máximo | Movimiento | Vida normal | Seguros | Críticos | Resistentes | Duplicadores |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|

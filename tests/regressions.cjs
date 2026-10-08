@@ -384,7 +384,11 @@ test('Medio mantiene los niveles originales; fácil y difícil ajustan todos los
     env.run('seleccionarDificultad("dificil");');
     const hard = JSON.parse(env.run('JSON.stringify(obtenerConfiguracionNivel(' + i + '))'));
     const hardBoss = JSON.parse(env.run('JSON.stringify(obtenerConfiguracionJefe(' + i + '))'));
-    assert.equal(easy.virusRequeridos, i === 2 ? 20 : base.virusRequeridos);
+    assert.equal(easy.virusRequeridos, [6, 10, 15][i]);
+    assert.equal(easy.velocidadMax, base.velocidadMax * 0.5);
+    assert.equal(easy.tiempoVidaVirus, Math.round(base.tiempoVidaVirus * 1.8));
+    assert.equal(easy.probabilidadResistente, base.probabilidadResistente * 0.5);
+    assert.equal(easy.probabilidadDuplicador, base.probabilidadDuplicador * 0.5);
     assert.equal(hard.virusRequeridos, base.virusRequeridos);
     assert.ok(easy.tiempoVidaVirus > base.tiempoVidaVirus && hard.tiempoVidaVirus < base.tiempoVidaVirus);
     assert.ok(easy.tiempoVidaVirusMando > base.tiempoVidaVirusMando && hard.tiempoVidaVirusMando < base.tiempoVidaVirusMando);
@@ -405,7 +409,7 @@ test('Selección inválida o durante la partida no altera la dificultad; reinten
   env.screen('pantalla-juego');
   env.run('seleccionarDificultad("dificil"); reiniciarEstado();');
   assert.equal(env.run('estado.dificultad'), 'facil');
-  assert.equal(env.run('dificultadActual().escaner'), 3);
+  assert.equal(env.run('dificultadActual().escaner'), 4);
   env.run('estado.dificultad = "dato-inválido";');
   assert.equal(env.run('dificultadActual().nombre'), 'Medio');
 });
@@ -602,4 +606,55 @@ test('Un único azul en el segundo nivel fácil genera una amenaza sin esperar s
   assert.equal(env.run('estado.virusActivos.length'), 2);
   assert.equal(env.run('estado.virusActivos[0].tipo'), 'seguro', 'el azul permanece para aprender a ignorarlo');
   assert.equal(env.run('esAmenazaReal(estado.virusActivos[1].tipo) || estado.virusActivos[1].tipo === "duplicador"'), true);
+});
+
+
+test('El jefe aparece al completar 6, 10 y 15 amenazas en fácil', () => {
+  const env = gameEnvironment();
+  env.context.bossStarts = 0;
+  env.run('estado.dificultad = "facil"; var easyScene = new EscenaJuego(); easyScene.iniciarCombateJefe = () => bossStarts++;');
+  for (let i = 0; i < 3; i++) {
+    const target = [6,10,15][i];
+    env.run('estado.indiceNivel = '+i+'; estado.jefeActivo = false; estado.virusEliminados = '+(target-1)+'; easyScene.verificarEstadoJuego();');
+    assert.equal(env.context.bossStarts, i);
+    env.run('estado.virusEliminados++; easyScene.verificarEstadoJuego();');
+    assert.equal(env.context.bossStarts, i+1);
+  }
+});
+
+test('Fácil elimina las sobrecargas; medio y difícil mantienen sus umbrales', () => {
+  const env = gameEnvironment();
+  env.context.overloads = 0;
+  env.run('var overloadScene = new EscenaJuego(); overloadScene.activarSobrecarga = () => overloads++; estado.indiceNivel = 2; estado.jefeActivo = false; overloadScene.sobrecargaActiva = false; overloadScene.sobrecargaIndice = 0;');
+  for (const difficulty of ['facil','medio','dificil']) {
+    env.run('estado.dificultad = '+JSON.stringify(difficulty)+'; estado.virusEliminados = obtenerConfiguracionNivel().virusRequeridos - 1; overloadScene.verificarSobrecargaPorProgreso();');
+    assert.equal(env.context.overloads, difficulty === 'facil' ? 0 : difficulty === 'medio' ? 1 : 2);
+  }
+});
+
+test('Las preguntas dan 20 segundos en fácil, 10 en los demás y nunca más de 50 puntos', () => {
+  for (const difficulty of ['facil','medio','dificil']) {
+    for (const timeout of [true,false]) {
+      const env = gameEnvironment();
+      env.context.losses = 0; env.context.bonus = null;
+      env.context.matchMedia = () => ({ matches: true });
+      env.context.requestAnimationFrame = (fn) => fn();
+      env.run('estado.dificultad = '+JSON.stringify(difficulty)+'; elegirPreguntaAleatoria = () => ({pregunta:"Prueba", opciones:["Sí","No","Otra","Ninguna"],correcta:0,explicacion:"Explicación"}); mostrarPreguntaNivel(0, {desactivarServidorAleatorio(){losses++;}}, (points) => bonus = points);');
+      const seconds = difficulty === 'facil' ? 20 : 10;
+      assert.equal(env.get('contador-pregunta').textContent, seconds);
+      assert.equal(env.get('barra-tiempo-pregunta').style.transitionDuration, seconds+'s');
+      env.advance(0);
+      const activeIntervals = env.intervals.size;
+      const tick = [...env.intervals.values()].at(-1);
+      if (timeout) {
+        for (let i = 0; i < seconds-1; i++) tick();
+        assert.equal(env.context.losses, 0, 'no perder vida antes del límite');
+        tick(); tick();
+        assert.equal(env.context.losses, 1, 'el vencimiento solo penaliza una vez');
+        assert.equal(env.intervals.size, activeIntervals - 1);
+      } else env.get('opciones-pregunta').children[0].click();
+      env.get('btn-continuar-pregunta').click();
+      assert.equal(env.context.bonus, timeout ? 0 : 50);
+    }
+  }
 });
