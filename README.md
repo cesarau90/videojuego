@@ -34,7 +34,10 @@ si el navegador permite almacenamiento y se conserva al reintentar, en los cinco
 | Difícil | −20% | Intervalo −15% | +25% | Uno más | +25% | −15% | 1 |
 
 Los valores se calculan sobre cada nivel; las vidas del jefe se redondean.
-Los ajustes cooperativos se añaden a la dificultad elegida.
+Los ajustes cooperativos se añaden a la dificultad elegida. En fácil, si solo
+quedan archivos seguros azules, el siguiente turno de generación produce una
+amenaza real. Para evitar que los azules bloqueen la partida, ese caso permite
+un único espacio adicional; cuando ya hay una amenaza, rige el límite habitual.
 
 **Sonido:** los navegadores solo dejan sonar el audio después de un clic o una
 tecla en la página de la PC. Si vas a iniciar desde el teléfono, haz **un clic en

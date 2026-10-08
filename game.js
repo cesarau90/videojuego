@@ -2815,8 +2815,15 @@ class EscenaJuego extends Phaser.Scene {
     // máximo de elementos simultáneos (aparece como mucho una vez por nivel).
     if (this.intentarGenerarReparacion()) return;
 
-    if (estado.virusActivos.length >= this.maxElementosActual()) return;
-    this.generarVirus();
+    // En fácil, los archivos seguros no deben dejar la partida sin objetivos.
+    // Si solo quedan azules (y quizá una reparación), el siguiente turno genera
+    // una amenaza; se permite como máximo un espacio extra para ese caso.
+    const forzarAmenaza = estado.dificultad === 'facil' &&
+      estado.virusActivos.some((e) => e.tipo === 'seguro') &&
+      !estado.virusActivos.some((e) => esAmenazaReal(e.tipo) || e.tipo === 'duplicador');
+    const limite = this.maxElementosActual() + (forzarAmenaza ? 1 : 0);
+    if (estado.virusActivos.length >= limite) return;
+    this.generarVirus(forzarAmenaza);
   }
 
   limpiarVirusActivos() {
@@ -2934,7 +2941,7 @@ class EscenaJuego extends Phaser.Scene {
 
   /* ---------------- GENERACIÓN PROCEDURAL DE ELEMENTOS ---------------- */
 
-  generarVirus() {
+  generarVirus(forzarAmenaza = false) {
     if (!estado.juegoActivo || estado.jefeActivo) return;
 
     const configuracionNivel = obtenerConfiguracionNivel();
@@ -2949,7 +2956,7 @@ class EscenaJuego extends Phaser.Scene {
     // además si es crítica, resistente o duplicadora según el nivel.
     let tipo = 'amenaza';
     const protegerInicioNivel1 = estado.indiceNivel === 0 && this.contadorElementosNivel < 3;
-    if (!protegerInicioNivel1 && Math.random() < configuracionNivel.probabilidadSeguro) {
+    if (!forzarAmenaza && !protegerInicioNivel1 && Math.random() < configuracionNivel.probabilidadSeguro) {
       tipo = 'seguro';
     } else {
       const sorteo = Math.random();

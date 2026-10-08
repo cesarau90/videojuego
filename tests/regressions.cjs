@@ -532,3 +532,72 @@ test('La bonificación compartida mantiene la suma de los marcadores en todos lo
     assert.deepEqual(points, ['2j','duo','hibrido'].includes(mode) ? [12,13] : [25,0]);
   }
 });
+
+
+function spawnEnvironment() {
+  const env = gameEnvironment();
+  env.run([
+    'estado.juegoActivo = true; estado.jefeActivo = false;',
+    'var spawnScene = new EscenaJuego(); spawnScene.introNivelActiva = false;',
+    'spawnScene.contadorElementosNivel = 5;',
+    'spawnScene.areaJuego = { xMin: 100, xMax: 1000, yMin: 200, yMax: 450 };',
+    'spawnScene.intentarGenerarReparacion = () => false;',
+    'spawnScene.elegirServidorObjetivo = () => null;',
+    'spawnScene.crearElementoVisual = (tipo) => estado.virusActivos.push({ tipo });',
+    'Phaser.Math = { Between: (min) => min }; Math.random = () => 0;'
+  ].join('\n'));
+  return env;
+}
+
+test('En fácil un azul no bloquea nuevas amenazas en los tres niveles y cinco modos', () => {
+  const env = spawnEnvironment();
+  for (let level = 0; level < 3; level++) {
+    for (const mode of ['normal', 'mando', '2j', 'duo', 'hibrido']) {
+      env.run('estado.dificultad = "facil"; estado.indiceNivel = '+level+'; estado.virusEliminados = 0; estado.multijugador = '+(mode==='2j')+'; estado.modoDuo = '+(mode==='duo')+'; estado.modoHibrido = '+(mode==='hibrido')+'; estado.modoMando = '+(['mando','2j','hibrido'].includes(mode))+';');
+      // Reproduce el bloqueo con todos los espacios ocupados por azules.
+      env.run('estado.virusActivos = Array.from({length:spawnScene.maxElementosActual()}, () => ({tipo:"seguro"}));');
+      const cap = env.run('spawnScene.maxElementosActual()');
+      env.run('spawnScene.intentarGenerarElemento();');
+      assert.equal(env.run('estado.virusActivos.length'), cap+1);
+      assert.equal(env.run('estado.virusActivos.at(-1).tipo === "seguro"'), false);
+      env.run('spawnScene.intentarGenerarElemento();');
+      assert.equal(env.run('estado.virusActivos.length'), cap+1, 'no acumular amenazas por encima del límite');
+    }
+  }
+});
+
+test('El espacio extra no aumenta la presión si ya hay amenaza ni altera medio o difícil', () => {
+  const env = spawnEnvironment();
+  for (const difficulty of ['facil','medio','dificil']) {
+    for (const type of ['amenaza','critica','resistente','duplicador','duplicado_pequeno']) {
+      env.run('estado.dificultad = '+JSON.stringify(difficulty)+'; estado.virusActivos = Array.from({length:spawnScene.maxElementosActual()}, () => ({tipo:"seguro"})); estado.virusActivos[0].tipo = '+JSON.stringify(type)+';');
+      const count = env.run('estado.virusActivos.length');
+      env.run('spawnScene.intentarGenerarElemento();');
+      assert.equal(env.run('estado.virusActivos.length'), count);
+    }
+    if (difficulty !== 'facil') {
+      env.run('estado.virusActivos = Array.from({length:spawnScene.maxElementosActual()}, () => ({tipo:"seguro"}));');
+      const count = env.run('estado.virusActivos.length');
+      env.run('spawnScene.intentarGenerarElemento();');
+      assert.equal(env.run('estado.virusActivos.length'), count);
+    }
+  }
+});
+
+test('La excepción de los azules respeta pausa, intro, jefe y objetivo completado', () => {
+  const env = spawnEnvironment();
+  env.run('estado.dificultad = "facil";');
+  for (const setup of ['estado.juegoActivo = false', 'estado.jefeActivo = true', 'spawnScene.introNivelActiva = true', 'estado.virusEliminados = obtenerConfiguracionNivel().virusRequeridos']) {
+    env.run('estado.juegoActivo = true; estado.jefeActivo = false; spawnScene.introNivelActiva = false; estado.virusEliminados = 0; estado.virusActivos = [{tipo:"seguro"}]; '+setup+'; spawnScene.intentarGenerarElemento();');
+    assert.equal(env.run('estado.virusActivos.length'), 1);
+  }
+});
+
+
+test('Un único azul en el segundo nivel fácil genera una amenaza sin esperar su expiración', () => {
+  const env = spawnEnvironment();
+  env.run('estado.dificultad = "facil"; estado.indiceNivel = 1; estado.virusActivos = [{tipo:"seguro"}]; spawnScene.intentarGenerarElemento();');
+  assert.equal(env.run('estado.virusActivos.length'), 2);
+  assert.equal(env.run('estado.virusActivos[0].tipo'), 'seguro', 'el azul permanece para aprender a ignorarlo');
+  assert.equal(env.run('esAmenazaReal(estado.virusActivos[1].tipo) || estado.virusActivos[1].tipo === "duplicador"'), true);
+});
