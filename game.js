@@ -46,8 +46,8 @@ const VIDAS_INICIALES = 3;
 /* ------------------------------------------------------------------
    1B. PREGUNTAS DE SEGURIDAD (banco de 5 por nivel, una al azar)
    Aparecen tras derrotar al jefe, antes de la tarjeta "Nivel superado"
-   o "Victoria". No quitan vidas ni provocan derrota: solo dan un bono
-   de puntos si se acierta dentro del tiempo. Ver mostrarPreguntaNivel().
+   o "Victoria". Acertar a tiempo da un bono; fallar o agotar el tiempo
+   apaga un servidor y puede provocar derrota. Ver mostrarPreguntaNivel().
    ------------------------------------------------------------------ */
 const SEGUNDOS_PREGUNTA = 10;
 const PUNTOS_POR_SEGUNDO_PREGUNTA = 5;
@@ -1065,6 +1065,9 @@ function dibujarTablaGlobal(registros) {
 }
 
 async function cargarTablaGlobal() {
+  const consultaActual = ++consultaClasificacion;
+  const partidaActual = idPartidaVictoria;
+  const vigente = () => consultaActual === consultaClasificacion && partidaActual === idPartidaVictoria;
   mostrarEstadoTabla('Cargando clasificación…');
   const columnas = 'gamertag,puntuacion,creado_en,partida_id';
   const consulta = `select=${columnas}&order=puntuacion.desc,creado_en.asc&limit=${MAXIMO_REGISTROS_GLOBALES}`;
@@ -1075,8 +1078,9 @@ async function cargarTablaGlobal() {
     });
     if (!respuesta.ok) throw new Error(`Supabase respondió ${respuesta.status}`);
     const registros = await respuesta.json();
-    dibujarTablaGlobal(Array.isArray(registros) ? registros : []);
+    if (vigente()) dibujarTablaGlobal(Array.isArray(registros) ? registros : []);
   } catch (error) {
+    if (!vigente()) return;
     console.warn('No se pudo cargar la clasificación global:', error);
     mostrarEstadoTabla('Clasificación temporalmente no disponible');
   }
@@ -1094,6 +1098,7 @@ function leerGamertagGuardado() {
 }
 
 let guardandoPuntuacionGlobal = false;
+let consultaClasificacion = 0;
 
 // Prepara la pantalla de victoria. Hay dos modos:
 // - Primera vez en este dispositivo (no hay gamertag guardado): se muestra
@@ -1130,14 +1135,20 @@ function prepararClasificacionVictoria() {
   }
 
   mostrarMensajeGamertag('El gamertag se guardará en este dispositivo y no podrá cambiarse después.');
-  setTimeout(() => campo.focus({ preventScroll: true }), 500);
+  const partidaPreparada = idPartidaVictoria;
+  setTimeout(() => {
+    if (idPartidaVictoria === partidaPreparada) campo.focus({ preventScroll: true });
+  }, 500);
 }
 
 // Envía la puntuación de esta partida a Supabase con el gamertag indicado.
 // "automatico" es true cuando el nombre viene del dispositivo (no hay campo
 // que editar); en ese caso, si falla el envío, se ofrece solo "Reintentar".
 async function enviarPuntuacionGlobal(gamertag, automatico) {
-  if (partidaGlobalGuardada || guardandoPuntuacionGlobal) return;
+  if (!idPartidaVictoria || partidaGlobalGuardada || guardandoPuntuacionGlobal) return;
+  const partidaEnviada = idPartidaVictoria;
+  const puntuacionEnviada = puntuacionVictoriaPendiente;
+  const vigente = () => idPartidaVictoria === partidaEnviada;
   guardandoPuntuacionGlobal = true;
 
   const formulario = document.getElementById('formulario-gamertag');
@@ -1147,6 +1158,7 @@ async function enviarPuntuacionGlobal(gamertag, automatico) {
   formulario.classList.remove('reintentar');
   boton.disabled = true;
   boton.textContent = 'Guardando…';
+  campo.disabled = true;
   mostrarMensajeGamertag(automatico ? `Guardando tu puntuación como "${gamertag}"…` : 'Enviando puntuación…');
 
   try {
@@ -1163,15 +1175,16 @@ async function enviarPuntuacionGlobal(gamertag, automatico) {
       },
       body: JSON.stringify({
         p_gamertag: gamertag,
-        p_puntuacion: puntuacionVictoriaPendiente,
-        p_partida_id: idPartidaVictoria,
+        p_puntuacion: puntuacionEnviada,
+        p_partida_id: partidaEnviada,
       }),
     });
     if (!respuesta.ok) throw new Error(`Supabase respondió ${respuesta.status}`);
 
     const [resultado] = await respuesta.json();
+    if (!vigente()) return;
     const guardado = !!resultado?.guardado;
-    const mejorPuntaje = resultado?.mejor_puntaje ?? puntuacionVictoriaPendiente;
+    const mejorPuntaje = resultado?.mejor_puntaje ?? puntuacionEnviada;
 
     if (guardado) {
       // Solo se recuerda el gamertag cuando el servidor lo aceptó con esta
@@ -1186,7 +1199,7 @@ async function enviarPuntuacionGlobal(gamertag, automatico) {
       boton.textContent = 'Puntuación guardada';
       mostrarMensajeGamertag(
         automatico
-          ? `Nuevo récord de ${puntuacionVictoriaPendiente} puntos guardado para "${gamertag}".`
+          ? `Nuevo récord de ${puntuacionEnviada} puntos guardado para "${gamertag}".`
           : 'Puntuación guardada: ya aparece en la clasificación global.',
         'exito'
       );
@@ -1194,7 +1207,7 @@ async function enviarPuntuacionGlobal(gamertag, automatico) {
       // El récord anterior se conserva; no hay nada más que hacer
       partidaGlobalGuardada = true;
       mostrarMensajeGamertag(
-        `Tu récord con "${gamertag}" es de ${mejorPuntaje} puntos. Esta partida (${puntuacionVictoriaPendiente}) no lo superó, así que se conserva el anterior.`,
+        `Tu récord con "${gamertag}" es de ${mejorPuntaje} puntos. Esta partida (${puntuacionEnviada}) no lo superó, así que se conserva el anterior.`,
         'info'
       );
     } else {
@@ -1210,13 +1223,17 @@ async function enviarPuntuacionGlobal(gamertag, automatico) {
     }
     await cargarTablaGlobal();
   } catch (error) {
+    if (!vigente()) return;
     console.warn('No se pudo guardar la puntuación global:', error);
     boton.disabled = false;
     boton.textContent = automatico ? 'Reintentar' : 'Guardar puntuación';
     if (automatico) formulario.classList.add('reintentar');
     mostrarMensajeGamertag('No se pudo guardar. Inténtalo nuevamente.', 'error');
   } finally {
-    guardandoPuntuacionGlobal = false;
+    if (vigente()) {
+      guardandoPuntuacionGlobal = false;
+      campo.disabled = partidaGlobalGuardada || automatico;
+    }
   }
 }
 
@@ -4715,6 +4732,7 @@ function construirConfiguracionPhaser() {
 }
 
 let juegoPhaser = null;
+const transicionNivel = { activa: false, salida: null, entrada: null };
 
 // Puente pequeño para el receptor del mando, sin simular clics sobre el canvas.
 // "jugador" es 1 o 2.
@@ -4752,6 +4770,11 @@ window.controlJuego = {
    ------------------------------------------------------------------ */
 
 function reiniciarEstado() {
+  cancelarTransicionNivel();
+  // Las respuestas de una victoria anterior no deben modificar esta partida.
+  idPartidaVictoria = null;
+  partidaGlobalGuardada = false;
+  guardandoPuntuacionGlobal = false;
   estado.puntuacion = 0;
   estado.vidas = VIDAS_INICIALES;
   estado.indiceNivel = 0;
@@ -5072,23 +5095,43 @@ function registrarAjusteCanvasEscritorio() {
 // 1) desvanece la tarjeta, 2) muestra una pantalla breve de transición
 // con una línea de escaneo, 3) comienza el siguiente nivel. Todo dura
 // menos de dos segundos (o casi nada con movimiento reducido).
+function cancelarTransicionNivel() {
+  clearTimeout(transicionNivel.salida);
+  clearTimeout(transicionNivel.entrada);
+  transicionNivel.salida = null;
+  transicionNivel.entrada = null;
+  transicionNivel.activa = false;
+  document.getElementById('panel-nivel-completado').classList.remove('saliendo');
+  document.getElementById('btn-siguiente-nivel').disabled = false;
+}
+
 function continuarAlSiguienteNivel() {
+  const pantalla = document.getElementById('pantalla-nivel-completado');
+  const indiceSiguiente = estado.indiceNivel + 1;
+  if (transicionNivel.activa || !pantalla.classList.contains('activa') ||
+      !NIVELES[indiceSiguiente] || !juegoPhaser) return;
+
   const panel = document.getElementById('panel-nivel-completado');
   const reducido = prefiereMovimientoReducido();
   const duracionSalida = reducido ? 30 : 200;
   const duracionTransicion = reducido ? 350 : 900;
 
+  // Bloquear antes de animar: también protege contra dos órdenes del mando.
+  transicionNivel.activa = true;
+  document.getElementById('btn-siguiente-nivel').disabled = true;
   panel.classList.add('saliendo');
 
-  setTimeout(() => {
-    estado.indiceNivel += 1;
-    const siguienteNivel = NIVELES[estado.indiceNivel];
+  transicionNivel.salida = setTimeout(() => {
+    transicionNivel.salida = null;
+    estado.indiceNivel = indiceSiguiente;
+    const siguienteNivel = NIVELES[indiceSiguiente];
     document.getElementById('texto-transicion').textContent =
       `Inicializando nivel ${siguienteNivel.numero}/${NIVELES.length}`;
     mostrarPantalla('pantalla-transicion');
 
-    setTimeout(() => {
-      panel.classList.remove('saliendo');
+    transicionNivel.entrada = setTimeout(() => {
+      transicionNivel.entrada = null;
+      cancelarTransicionNivel();
       estado.juegoActivo = true;
       mostrarPantalla('pantalla-juego');
 

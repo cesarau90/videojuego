@@ -39,7 +39,8 @@
   const keys = new Set();
   let hostState = {};
   const controls = document.querySelectorAll('button');
-  const connected = () => subscribed && Date.now() - lastHost < 7000;
+  const hostAvailable = () => subscribed && Date.now() - lastHost < 7000;
+  const connected = () => hostAvailable() && mySlot !== 0;
   function updateButtons() {
     controls.forEach((button) => {
       const action = button.dataset.action;
@@ -75,7 +76,14 @@
   function renderState(payload = {}) {
     hostState = payload;
     // Si la PC no conoce este teléfono (por ejemplo, se recargó), se presenta otra vez.
+    const previousSlot = mySlot;
     mySlot = payload.players?.[phoneId] || 0;
+    if (previousSlot && !mySlot) reset();
+    const full = !mySlot && Object.keys(payload.players || {}).length >= 2;
+    status.textContent = mySlot ? 'Conectado a la PC'
+      : full ? 'Sala llena: ya hay dos mandos. Espera a que se libere un puesto.'
+      : 'Esperando un puesto en la PC…';
+    status.classList.toggle('connected', !!mySlot);
     if (!mySlot && Date.now() - lastHello > 1500) { send('hello'); lastHello = Date.now(); }
     const player = payload.multi ? mySlot : 1;
     playerBadge.hidden = !mySlot;
@@ -135,8 +143,6 @@
   }
   channel.on('broadcast', { event: 'state' }, ({ payload }) => {
     lastHost = Date.now();
-    status.textContent = 'Conectado a la PC';
-    status.classList.add('connected');
     renderState(payload);
   }).subscribe((state) => {
     subscribed = state === 'SUBSCRIBED';
@@ -155,7 +161,7 @@
   });
   setInterval(() => {
     if (!subscribed) return;
-    if (!connected()) {
+    if (!hostAvailable()) {
       reset();
       status.textContent = 'Esperando la PC…';
       status.classList.remove('connected');
@@ -164,6 +170,11 @@
         send('hello');
         lastHello = Date.now();
       }
+    }
+    // Un mando en espera vuelve a pedir un puesto sin enviar órdenes de juego.
+    if (hostAvailable() && !mySlot && Date.now() - lastHello > 2500) {
+      send('hello');
+      lastHello = Date.now();
     }
     send('ping');
   }, 2000);

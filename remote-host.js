@@ -82,7 +82,7 @@
 
   function freeSlot(exceptId) {
     const used = new Set([...phones].filter(([id]) => id !== exceptId).map(([, phone]) => phone.slot));
-    return [1, 2].find((slot) => !used.has(slot)) ?? 1;
+    return [1, 2].find((slot) => !used.has(slot)) ?? null;
   }
 
   function updateStatus() {
@@ -95,8 +95,30 @@
   // Devuelve el teléfono que envió el mensaje (si es válido y sigue activo).
   function phoneFrom(payload) {
     const phone = typeof payload?.id === 'string' ? phones.get(payload.id) : null;
-    if (phone) phone.last = Date.now();
+    if (!phone) return null;
+    if (Date.now() - phone.last > PHONE_TIMEOUT) {
+      removeExpiredPhones();
+      return null;
+    }
+    phone.last = Date.now();
     return phone;
+  }
+
+  // Libera puestos antes de admitir otro mando y detiene el movimiento vencido.
+  function removeExpiredPhones() {
+    let removed = false;
+    phones.forEach((phone, id) => {
+      if (Date.now() - phone.last > PHONE_TIMEOUT) {
+        window.controlJuego?.mover(0, 0, playerOf(phone));
+        phones.delete(id);
+        removed = true;
+      }
+    });
+    if (removed) {
+      updateStatus();
+      if (phones.size === 0) showStatus('Teléfono desconectado. Vuelve a escanear el QR.');
+      tellGame();
+    }
   }
 
   // ---- Pregunta de seguridad con el joystick ----
@@ -163,7 +185,10 @@
     .on('broadcast', { event: 'hello' }, ({ payload }) => {
       const id = payload?.id;
       if (typeof id !== 'string' || !/^[a-f0-9-]{36}$/i.test(id)) return;
-      const phone = phones.get(id) || { slot: freeSlot(id), lastAttack: 0, lastMove: 0 };
+      removeExpiredPhones();
+      const slot = phones.get(id)?.slot ?? freeSlot(id);
+      if (slot === null) { sendState(); return; } // sala llena: no duplica J1
+      const phone = phones.get(id) || { slot, lastAttack: 0, lastMove: 0 };
       phone.last = Date.now();
       phones.set(id, phone);
       updateStatus();
@@ -227,18 +252,7 @@
     });
 
   setInterval(() => {
-    let removed = false;
-    phones.forEach((phone, id) => {
-      if (Date.now() - phone.last > PHONE_TIMEOUT) {
-        window.controlJuego?.mover(0, 0, phone.slot);
-        phones.delete(id);
-        removed = true;
-      }
-    });
-    if (removed) {
-      updateStatus();
-      if (phones.size === 0) showStatus('Teléfono desconectado. Vuelve a escanear el QR.');
-    }
+    removeExpiredPhones();
     tellGame();
     const nextState = gameState();
     const serialized = JSON.stringify(nextState);

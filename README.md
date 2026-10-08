@@ -1,5 +1,9 @@
 # Elimina el Malware
 
+La versión principal está en la raíz de este repositorio. La carpeta
+`videojuego-control-remoto/`, si está presente, es una copia anterior; no se
+sincroniza ni debe usarse como fuente para publicar los cambios actuales.
+
 ## Modos de juego
 
 En la portada hay cuatro botones:
@@ -84,7 +88,11 @@ llegar con el joystick; los ciclos de los jefes son 10, 10 y 12 segundos.
 
 La PC y el teléfono necesitan Internet. La conexión usa un canal temporal de
 Supabase Realtime con un identificador aleatorio en el QR; se crea uno nuevo al
-recargar la página de la PC. En el proyecto de Supabase debe estar habilitado
+recargar la página de la PC. La sala admite como máximo dos teléfonos: si
+un tercero escanea el QR, muestra «Sala llena» y sus controles quedan bloqueados.
+Puede entrar automáticamente cuando se libere un puesto; los teléfonos que
+dejan de enviar mensajes durante más de 7 segundos liberan su puesto.
+En el proyecto de Supabase debe estar habilitado
 **Realtime → Allow public access to channels**. El QR antiguo, que solo abría
 otra copia del juego en el móvil, se reemplazó por el QR de control.
 
@@ -95,7 +103,8 @@ Si se publica en otro repositorio de GitHub Pages, el QR usa automáticamente
 la dirección de esa nueva publicación.
 
 Videojuego web de ciberseguridad hecho con HTML, CSS, JavaScript y Phaser 3
-(cargado por CDN). No requiere servidor, base de datos ni instalación.
+(cargado por CDN). El juego base no requiere instalación ni servidor de
+aplicación. El mando remoto y la clasificación global usan Supabase.
 
 ## Historia y objetivo
 
@@ -314,7 +323,8 @@ simultáneos también dependen del nivel, por lo que cada partida es distinta.
 - `style.css` — estilos, animaciones y diseño responsive.
 - `game.js` — lógica del juego, escena de Phaser, jefes, servidores, combo
   escáner y clasificación global (comentado en español).
-- `SUPABASE_SETUP.sql` — crea la tabla de puntuaciones y sus permisos seguros.
+- `SUPABASE_SETUP.sql` — crea la tabla y limita su lectura/escritura.
+- `tests/regressions.cjs` — pruebas locales con DOM, reloj y canal simulados.
 
 ## Preparar la clasificación global
 
@@ -326,6 +336,34 @@ simultáneos también dependen del nivel, por lo que cada partida es distinta.
 El juego usa solamente la URL y la clave publicable del proyecto. Nunca se
 debe incluir una clave `sb_secret_`, `service_role` ni la contraseña de la
 base de datos en estos archivos.
+
+### Alcance del ranking
+
+La clasificación actual es recreativa. La función SQL valida el formato del
+gamertag y el rango del puntaje, y conserva el mejor registro, pero acepta
+datos enviados por el navegador: no demuestra que se haya jugado una partida
+ni reserva el gamertag a una persona. La clave publicable y el UUID de partida
+no son mecanismos contra trampas. Recordar el nombre en localStorage es una
+preferencia de este dispositivo, no una comprobación de identidad.
+
+Para una clasificación competitiva se necesita un servicio que valide las
+acciones y calcule el puntaje en el servidor, además de identificar al jugador;
+solo ese servicio debería poder guardar resultados. Agregar validaciones en
+JavaScript u ocultar la clave publicable no resuelve esta limitación.
+
+## Verificar las correcciones
+
+Con Node.js instalado, desde la raíz:
+
+```bash
+node --test tests/regressions.cjs
+```
+
+Las pruebas cubren continuación repetida, límites de nivel, cancelación de
+transiciones al reiniciar, límite de dos mandos, reconexión/cambio de puesto,
+aviso de sala llena y respuestas obsoletas del ranking. No contactan Supabase.
+Para probar los dispositivos reales, abre dos mandos y un tercero: este último
+debe quedar bloqueado; tras cerrar uno y esperar más de 7 segundos, debe entrar.
 
 ## Ejecutar localmente
 
@@ -340,7 +378,7 @@ y visita `http://localhost:8000`.
 ## Publicar en GitHub Pages
 
 1. Sube `index.html`, `style.css`, `game.js`, `remote-host.js`, `control.html`,
-   `control.css`, `control.js` y este `README.md` a la raíz de
+   `control.css`, `control.js`, `sin-zoom.js` y este `README.md` a la raíz de
    un repositorio de GitHub.
 2. En **Settings → Pages**, elige la rama `main` y la carpeta `/root`.
 3. Guarda: GitHub generará una URL pública tipo
