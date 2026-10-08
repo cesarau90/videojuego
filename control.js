@@ -290,7 +290,13 @@
   }
   zone.addEventListener('pointerdown', (event) => {
     event.preventDefault();
-    if (pointer !== null || !connected()) return;
+    if (!connected()) return;
+    if (pointer !== null) {
+      // Un nuevo dedo principal indica que el toque anterior terminó aunque
+      // el navegador haya perdido su pointerup. El segundo dedo no lo sustituye.
+      if (!event.isPrimary) return;
+      reset();
+    }
     pointer = event.pointerId;
     // Si el navegador no puede capturar el puntero, el joystick sigue funcionando.
     try { zone.setPointerCapture(pointer); } catch (e) { /* el puntero ya terminó o no se admite */ }
@@ -306,6 +312,14 @@
   });
   ['pointerup', 'pointercancel', 'lostpointercapture'].forEach((type) =>
     zone.addEventListener(type, (event) => { if (event.pointerId === pointer) reset(); }));
+  // Si la captura falla, seguir y soltar fuera de la zona también debe funcionar.
+  window.addEventListener('pointermove', (event) => {
+    if (event.pointerId !== pointer || (event.target && zone.contains(event.target))) return;
+    event.preventDefault();
+    steer(event);
+  }, { passive: false });
+  ['pointerup', 'pointercancel'].forEach((type) =>
+    window.addEventListener(type, (event) => { if (event.pointerId === pointer) reset(); }));
   document.querySelectorAll('[data-letter]').forEach((button) => {
     function attack() {
       if (button.disabled || !connected()) return;

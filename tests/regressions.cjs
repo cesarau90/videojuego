@@ -658,3 +658,51 @@ test('Las preguntas dan 20 segundos en fácil, 10 en los demás y nunca más de 
     }
   }
 });
+
+
+test('El joystick se recupera al soltar fuera de su zona sin captura del puntero', () => {
+  const env = channelEnvironment('control.js');
+  env.receive('state', {screen:'pantalla-juego',mando:true,players:{[PHONE3]:1},boss:{name:'BOTNET',sequence:['A','B','Y'],progress:0}});
+  const zone = env.get('.movement');
+  const pointer = (id,x) => ({pointerId:id,isPrimary:true,clientX:x,clientY:200,preventDefault(){}});
+  zone.dispatch('pointerdown', pointer(1,200));
+  zone.dispatch('pointermove', pointer(1,225));
+  assert.ok(env.sent.filter(m=>m.event==='move').at(-1).payload.x > 0);
+  // La captura falla en este DOM: el dedo termina fuera y solo llega a window.
+  (env.events.pointerup || []).forEach(fn=>fn(pointer(1,430)));
+  const stop = env.sent.filter(m=>m.event==='move').at(-1).payload;
+  assert.equal(stop.x, 0, 'soltar fuera debe detener y liberar el mando');
+  zone.dispatch('pointerdown', pointer(2,200));
+  zone.dispatch('pointermove', pointer(2,170));
+  env.advance(50);
+  assert.ok(env.sent.filter(m=>m.event==='move').at(-1).payload.x < 0, 'el siguiente toque debe mover otra vez');
+});
+
+
+test('Un toque principal nuevo libera un joystick atascado sin perder el control por el segundo dedo', () => {
+  const env = channelEnvironment('control.js');
+  env.receive('state', {screen:'pantalla-juego',mando:true,players:{[PHONE3]:1}});
+  const zone = env.get('.movement');
+  const pointer = (id,x,primary=true) => ({pointerId:id,isPrimary:primary,clientX:x,clientY:200,preventDefault(){}});
+  zone.dispatch('pointerdown',pointer(1,200)); zone.dispatch('pointermove',pointer(1,225));
+  zone.dispatch('pointerdown',pointer(2,200,false));
+  (env.events.pointerup || []).forEach(fn=>fn(pointer(2,200,false)));
+  assert.ok(env.sent.filter(m=>m.event==='move').at(-1).payload.x > 0, 'soltar el dedo de ataque no detiene el joystick');
+  // Simula un pointerup perdido: el siguiente toque principal recupera el mando.
+  zone.dispatch('pointerdown',pointer(3,200)); zone.dispatch('pointermove',pointer(3,170));
+  env.advance(50);
+  assert.ok(env.sent.filter(m=>m.event==='move').at(-1).payload.x < 0);
+  (env.events.pointercancel || []).forEach(fn=>fn(pointer(3,170)));
+  assert.equal(env.sent.filter(m=>m.event==='move').at(-1).payload.x,0);
+});
+
+test('Sin captura el joystick sigue al dedo fuera de su zona y se detiene al soltar', () => {
+  const env = channelEnvironment('control.js');
+  env.receive('state', {screen:'pantalla-juego',mando:true,players:{[PHONE3]:1}});
+  const pointer = (x) => ({pointerId:1,isPrimary:true,clientX:x,clientY:200,preventDefault(){}});
+  env.get('.movement').dispatch('pointerdown',pointer(200));
+  env.events.pointermove.forEach(fn=>fn(pointer(430)));
+  assert.ok(env.sent.filter(m=>m.event==='move').at(-1).payload.x > 0.95);
+  env.events.pointerup.forEach(fn=>fn(pointer(430)));
+  assert.equal(env.sent.filter(m=>m.event==='move').at(-1).payload.x,0);
+});

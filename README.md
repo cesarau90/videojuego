@@ -76,7 +76,10 @@ la pantalla queda ampliada, se puede deshacer pellizcando, se corrige sola y,
 como último recurso, aparece un botón **Quitar zoom**.
 Al soltar, cancelar el toque, ocultar la página o perder la conexión,
 el movimiento se detiene. También se detiene al girar o redimensionar el
-teléfono. El mando incluye escáner, inicio,
+teléfono. Si el navegador no captura el dedo, el joystick sigue funcionando al salir de
+su zona y se libera al soltar. Un nuevo toque principal recupera el control si
+se perdió el aviso de fin del toque anterior; el segundo dedo puede atacar sin
+interrumpir el joystick. El mando incluye escáner, inicio,
 continuación, reintento y respuestas 1–4 (visibles durante las preguntas).
 
 El mando se adapta a vertical y horizontal. En teléfonos en horizontal
