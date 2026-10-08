@@ -13,6 +13,7 @@ const PHONE3 = '10000000-0000-4000-8000-000000000003';
 function element() {
   const classes = new Set();
   const listeners = {};
+  const descendants = new Map();
   return {
     textContent: '', disabled: false, hidden: false, dataset: {}, style: {}, children: [],
     offsetWidth: 200, offsetLeft: 0, offsetTop: 0,
@@ -28,6 +29,7 @@ function element() {
     append(child) { this.children.push(child); },
     appendChild(child) { this.children.push(child); },
     replaceChildren(...children) { this.children = children; },
+    querySelector(selector) { if (!descendants.has(selector)) descendants.set(selector, element()); return descendants.get(selector); },
     reset() {}, focus() { this.focused = true; },
     hasPointerCapture() { return false; }, releasePointerCapture() {},
     getBoundingClientRect() { return { left: 0, top: 0, right: 400, bottom: 400 }; },
@@ -366,4 +368,167 @@ test('El mando necesita menos recorrido del pulgar y envía reposo al soltar', (
   assert.equal(env.sent.at(-1).payload.x, 0);
   env.advance(300);
   assert.equal(env.sent.at(-1).payload.x, 0);
+});
+
+
+test('Medio mantiene los niveles originales; fácil y difícil ajustan todos los niveles', () => {
+  const env = gameEnvironment();
+  for (let i = 0; i < 3; i++) {
+    env.run('estado.dificultad = "medio";');
+    const base = JSON.parse(env.run('JSON.stringify(NIVELES[' + i + '])'));
+    assert.deepEqual(JSON.parse(env.run('JSON.stringify(obtenerConfiguracionNivel(' + i + '))')), base);
+    const mediumBoss = JSON.parse(env.run('JSON.stringify(obtenerConfiguracionJefe(' + i + '))'));
+    env.run('seleccionarDificultad("facil");');
+    const easy = JSON.parse(env.run('JSON.stringify(obtenerConfiguracionNivel(' + i + '))'));
+    const easyBoss = JSON.parse(env.run('JSON.stringify(obtenerConfiguracionJefe(' + i + '))'));
+    env.run('seleccionarDificultad("dificil");');
+    const hard = JSON.parse(env.run('JSON.stringify(obtenerConfiguracionNivel(' + i + '))'));
+    const hardBoss = JSON.parse(env.run('JSON.stringify(obtenerConfiguracionJefe(' + i + '))'));
+    assert.ok(easy.tiempoVidaVirus > base.tiempoVidaVirus && hard.tiempoVidaVirus < base.tiempoVidaVirus);
+    assert.ok(easy.tiempoVidaVirusMando > base.tiempoVidaVirusMando && hard.tiempoVidaVirusMando < base.tiempoVidaVirusMando);
+    assert.ok(easy.tiempoAparicion > base.tiempoAparicion && hard.tiempoAparicion < base.tiempoAparicion);
+    assert.ok(easy.velocidadMax < base.velocidadMax && hard.velocidadMax > base.velocidadMax);
+    assert.ok(easy.maxElementos < base.maxElementos && hard.maxElementos > base.maxElementos);
+    assert.ok(easyBoss.vidaMaxima < mediumBoss.vidaMaxima && hardBoss.vidaMaxima > mediumBoss.vidaMaxima);
+    assert.ok(easyBoss.tiempoAtaqueMando > mediumBoss.tiempoAtaqueMando && hardBoss.tiempoAtaqueMando < mediumBoss.tiempoAtaqueMando);
+    assert.deepEqual(JSON.parse(env.run('JSON.stringify(NIVELES[' + i + '])')), base, 'no mutar los niveles base');
+  }
+});
+
+test('Selección inválida o durante la partida no altera la dificultad; reintentar la conserva', () => {
+  const env = gameEnvironment();
+  env.run('seleccionarDificultad("facil"); seleccionarDificultad("constructor");');
+  assert.equal(env.run('estado.dificultad'), 'facil');
+  assert.equal(env.storage.get('eliminaMalware.dificultad'), 'facil');
+  env.screen('pantalla-juego');
+  env.run('seleccionarDificultad("dificil"); reiniciarEstado();');
+  assert.equal(env.run('estado.dificultad'), 'facil');
+  assert.equal(env.run('dificultadActual().escaner'), 3);
+  env.run('estado.dificultad = "dato-inválido";');
+  assert.equal(env.run('dificultadActual().nombre'), 'Medio');
+});
+
+function prepareStart(env) {
+  env.run('juegoPhaser.scene.stop = () => {}; juegoPhaser.scene.start = () => {}; ' +
+    'sincronizarClaseVistaMovil = () => {}; ajustarCanvasEscritorio = () => {}; programarAjusteCanvasEscritorio = () => {}; esVistaMovil = () => false;');
+}
+
+test('Los cinco modos arrancan en la dificultad seleccionada y reintentar conserva el modo', () => {
+  const env = gameEnvironment(); prepareStart(env);
+  for (const difficulty of ['facil', 'medio', 'dificil']) {
+    for (const mode of ['normal', 'mando', '2j', 'duo', 'hibrido']) {
+      env.screen('pantalla-inicio'); env.run('seleccionarDificultad(' + JSON.stringify(difficulty) + ');');
+      env.run('iniciarJuegoDesdeCero(' + JSON.stringify(mode) + ');');
+      assert.equal(env.run('estado.dificultad'), difficulty);
+      assert.equal(env.run('estado.modoMando'), ['mando','2j','hibrido'].includes(mode));
+      assert.equal(env.run('estado.multijugador'), mode === '2j');
+      assert.equal(env.run('estado.modoHibrido'), mode === 'hibrido');
+      const scene = env.run('new EscenaJuego()');
+      assert.equal(scene.jugadorActivo(1), mode === '2j');
+      env.run('iniciarJuegoDesdeCero();');
+      assert.equal(env.run('estado.modoHibrido'), mode === 'hibrido');
+      assert.equal(env.run('estado.dificultad'), difficulty);
+    }
+  }
+});
+
+test('La sala híbrida espera un teléfono, cancela la cuenta al perderlo y arranca con mando + mouse', () => {
+  const env = gameEnvironment();
+  env.run('window.controlJuego.remoto = true; esVistaMovil = () => false; ' +
+    'iniciarJuegoDesdeCero = (mode) => { globalThis.startedMode = mode; cerrarSalaEspera2j(); }; abrirSalaEsperaHibrida();');
+  assert.equal(env.run('window.controlJuego.estado().hybrid'), true);
+  assert.equal(env.run('window.controlJuego.estado().multi'), false);
+  assert.equal(env.run('estado.cuentaEspera'), null);
+  assert.equal(env.get('espera-j2').querySelector('.espera-estado').textContent, 'Listo en esta PC');
+  env.run('window.controlJuego.telefonos([1]);'); env.advance(1500);
+  env.run('window.controlJuego.telefonos([]);');
+  assert.equal(env.run('estado.cuentaEspera'), null);
+  env.advance(2000); env.run('actualizarSalaEspera();');
+  assert.equal(env.context.startedMode, undefined);
+  env.run('window.controlJuego.telefonos([1]);'); env.advance(3000); env.run('actualizarSalaEspera();');
+  assert.equal(env.context.startedMode, 'hibrido');
+});
+
+test('La sala de dos teléfonos sigue requiriendo ambos después de jugar híbrido', () => {
+  const env = gameEnvironment();
+  env.run('estado.modoHibrido = true; window.controlJuego.remoto = true; esVistaMovil = () => false; ' +
+    'iniciarJuegoDesdeCero = (mode) => { globalThis.startedMode = mode; cerrarSalaEspera2j(); }; abrirSalaEspera2j(); window.controlJuego.telefonos([1]);');
+  assert.equal(env.run('window.controlJuego.estado().hybrid'), false);
+  assert.equal(env.run('window.controlJuego.estado().multi'), true);
+  env.advance(4000); env.run('actualizarSalaEspera();'); assert.equal(env.context.startedMode, undefined);
+  env.run('window.controlJuego.telefonos([1,2]);'); env.advance(3000); env.run('actualizarSalaEspera();');
+  assert.equal(env.context.startedMode, '2j');
+});
+
+test('Híbrido reserva un solo mando y bloquea los ataques de otro teléfono', () => {
+  const env = channelEnvironment('remote-host.js');
+  env.context.controlJuego.estado = () => ({ multi: false, hybrid: true });
+  env.screen('pantalla-juego');
+  env.receive('hello', { id: PHONE1 }); env.receive('hello', { id: PHONE2 });
+  const state = env.sent.filter((m) => m.event === 'state').at(-1).payload;
+  assert.equal(state.capacity, 1);
+  assert.deepEqual(JSON.parse(JSON.stringify(state.players)), { [PHONE1]: 1 });
+  env.receive('attack', { id: PHONE2, letter: 'A' });
+  env.receive('move', { id: PHONE2, x: 1, y: 0 });
+  assert.equal(env.context.attacks.length, 0); assert.equal(env.context.moves.length, 0);
+  env.receive('attack', { id: PHONE1, letter: 'A' }); assert.deepEqual(env.context.attacks, [['A',1]]);
+});
+
+test('Un teléfono conectado antes del híbrido queda en espera y puede tomar el puesto al desconectar J1', () => {
+  const env = channelEnvironment('remote-host.js');
+  env.receive('hello', { id: PHONE1 }); env.receive('hello', { id: PHONE2 });
+  env.context.controlJuego.estado = () => ({ multi: false, hybrid: true }); env.screen('pantalla-juego');
+  env.receive('attack', { id: PHONE2, letter: 'A' }); assert.equal(env.context.attacks.length, 0);
+  env.advance(6000); env.receive('ping', { id: PHONE2 }); env.advance(1100);
+  env.receive('ping', { id: PHONE1 });
+  const state = env.sent.filter((m) => m.event === 'state').at(-1).payload;
+  assert.deepEqual(JSON.parse(JSON.stringify(state.players)), { [PHONE2]: 1 });
+  env.receive('attack', { id: PHONE2, letter: 'A' }); assert.deepEqual(env.context.attacks, [['A',1]]);
+});
+
+test('El mando ocupado en híbrido muestra la explicación y bloquea los controles', () => {
+  const env = channelEnvironment('control.js');
+  env.receive('state', { screen: 'pantalla-juego', mando: true, hybrid: true, capacity: 1, players: { [PHONE1]: 1 } });
+  assert.match(env.get('connection').textContent, /Mando ocupado/); assert.ok(env.buttons.every((b) => b.disabled));
+  env.receive('state', { screen: 'pantalla-espera', mando: true, hybrid: true, capacity: 1, players: { [PHONE3]: 1 }, espera: { cuenta: 3 } });
+  assert.match(env.get('combat-hint').textContent, /Mando y mouse listos/);
+  assert.equal(env.get('switch-player').hidden, true);
+});
+
+test('El mouse elimina con clic, el mando con su letra y los puntos se asignan al jugador correcto', () => {
+  const env = aimEnvironment();
+  env.run('estado.modoHibrido = true; delete aimScene.objetivoControl; aimScene.jugadores[0].ultimoAtaque = -Infinity; ' +
+    'aimScene.avisarControl = () => {}; aimScene.eliminarVirus = function(e) { e.procesado = true; this.sumarPuntos(10); }; ' +
+    'globalThis.target = { tipo: "normal", letra: "A", procesado: false, contenedor: { x: 500, y: 500, scaleX: 1 } }; ' +
+    'estado.virusActivos = [target]; aimScene.clicHibrido(target); aimScene.clicHibrido(target);');
+  assert.deepEqual(JSON.parse(env.run('JSON.stringify(estado.puntosJugadores)')), [0,10]);
+  env.run('target = { tipo: "normal", letra: "A", procesado: false, contenedor: { x: 500, y: 500, scaleX: 1 } }; estado.virusActivos = [target]; aimScene.atacarControl("B", 0);');
+  assert.equal(env.run('target.procesado'), false);
+  env.advance(120); env.run('aimScene.atacarControl("A", 0);');
+  assert.deepEqual(JSON.parse(env.run('JSON.stringify(estado.puntosJugadores)')), [10,10]);
+  assert.equal(env.run('estado.puntuacion'), 20);
+});
+
+test('El clic del mouse respeta protección y punto débil del jefe y renueva la combinación', () => {
+  const env = aimEnvironment();
+  env.run('estado.modoHibrido = true; aimScene.jefe = { vida: 3, protegido: false, destruido: false, secuencia: ["A","B"], progresoCombinacion: 1, contenedor: { alpha: 1 }, puntoDebil: { circulo: { visible: false } } }; ' +
+    'aimScene.actualizarCombinacionJefe = () => {}; aimScene.golpearJefe = function() { this.jefe.vida--; this.jefe.protegido = true; }; aimScene.clicJefeHibrido();');
+  assert.equal(env.run('aimScene.jefe.vida'), 3);
+  env.run('aimScene.jefe.puntoDebil.circulo.visible = true; aimScene.clicJefeHibrido();');
+  assert.equal(env.run('aimScene.jefe.vida'), 2);
+  assert.equal(env.run('aimScene.jefe.progresoCombinacion'), 0);
+  assert.notEqual(env.run('aimScene.jefe.secuencia.join("")'), 'AB');
+  assert.equal(env.run('aimScene.ultimoGolpeadorJefe'), 1);
+  env.run('aimScene.clicJefeHibrido();'); assert.equal(env.run('aimScene.jefe.vida'), 2);
+});
+
+
+test('La bonificación compartida mantiene la suma de los marcadores en todos los modos', () => {
+  const env = gameEnvironment();
+  for (const mode of ['normal', 'mando', '2j', 'duo', 'hibrido']) {
+    env.run('estado.multijugador = '+(mode === '2j')+'; estado.modoDuo = '+(mode === 'duo')+'; estado.modoHibrido = '+(mode === 'hibrido')+'; estado.puntuacion = 0; estado.puntosJugadores = [0, 0]; var constBonusScene = new EscenaJuego(); constBonusScene.jugadorAtacante = 1; constBonusScene.sumarBonoPregunta(25);');
+    const points = JSON.parse(env.run('JSON.stringify(estado.puntosJugadores)'));
+    assert.equal(points[0]+points[1], env.run('estado.puntuacion'));
+    assert.deepEqual(points, ['2j','duo','hibrido'].includes(mode) ? [12,13] : [25,0]);
+  }
 });

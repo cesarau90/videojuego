@@ -12,7 +12,7 @@
     rel="stylesheet"
   />
 
-  <link rel="stylesheet" href="style.css?v=26" />
+  <link rel="stylesheet" href="style.css?v=27" />
 </head>
 <body>
 
@@ -51,6 +51,16 @@
             antes de que comprometan la red.
           </p>
 
+          <fieldset class="dificultad-selector" aria-describedby="descripcion-dificultad">
+            <legend>Elige la dificultad</legend>
+            <div class="dificultad-opciones">
+              <label><input type="radio" name="dificultad" value="facil"><span class="dificultad-opcion"><strong>Fácil</strong><small>Más tiempo</small></span></label>
+              <label><input type="radio" name="dificultad" value="medio" checked><span class="dificultad-opcion"><strong>Medio</strong><small>Equilibrado</small></span></label>
+              <label><input type="radio" name="dificultad" value="dificil"><span class="dificultad-opcion"><strong>Difícil</strong><small>Más desafío</small></span></label>
+            </div>
+            <p id="descripcion-dificultad" class="dificultad-descripcion" role="status">El ritmo original del juego, con 2 usos de escáner por nivel.</p>
+          </fieldset>
+
           <div class="botones-inicio">
             <button id="btn-jugar" class="boton-primario">
               Iniciar defensa
@@ -69,6 +79,9 @@
             <!-- Dos jugadores en la misma PC, sin teléfono: uno con el lado izquierdo del teclado y otro con el mouse -->
             <button id="btn-jugar-duo" class="boton-primario boton-secundario" title="2 jugadores en esta PC: uno pulsa la tecla de cada enemigo (lado izquierdo del teclado) y el otro hace clic en los enemigos sin tecla">
               Teclado + mouse
+            </button>
+            <button id="btn-jugar-hibrido" class="boton-primario boton-secundario" title="2 jugadores: un teléfono con joystick y A/B/X/Y, y otro jugador con clics del mouse">
+              Mando + mouse
             </button>
           </div>
 
@@ -178,9 +191,9 @@
   <!-- ============================================= -->
   <div id="pantalla-espera" class="pantalla">
     <div class="panel panel-espera">
-      <p class="espera-etiqueta">Modo 2 jugadores</p>
-      <h1 class="panel-titulo">Conecta los dos teléfonos</h1>
-      <p class="panel-texto">Cada jugador escanea este QR con su teléfono. La partida empieza sola cuando estén los dos conectados.</p>
+      <p id="espera-etiqueta" class="espera-etiqueta">Modo 2 jugadores</p>
+      <h1 id="espera-titulo" class="panel-titulo">Conecta los dos teléfonos</h1>
+      <p id="espera-descripcion" class="panel-texto">Cada jugador escanea este QR con su teléfono. La partida empieza sola cuando estén los dos conectados.</p>
       <div class="espera-contenido">
         <div class="espera-qr">
           <div id="qr-control-espera" class="qr-img"></div>
@@ -202,7 +215,7 @@
         <button id="btn-empezar-ya" class="boton-primario" type="button">Empezar ya</button>
         <button id="btn-cancelar-espera" class="boton-primario boton-secundario" type="button">Volver</button>
       </div>
-      <p class="espera-nota">¿Sin teléfono? Con «Empezar ya», J1 juega con mouse o flechas + A B X Y y J2 con I J K L + 7 8 9 0.</p>
+      <p id="espera-nota" class="espera-nota">¿Sin teléfono? Con «Empezar ya», J1 juega con mouse o flechas + A B X Y y J2 con I J K L + 7 8 9 0.</p>
     </div>
   </div>
 
@@ -221,6 +234,8 @@
       </button>
       <button id="btn-ver-qr" class="boton-escaner" type="button">Conectar teléfono</button>
       <span id="marcador-jugadores" class="marcador-jugadores" hidden></span>
+      <span id="dificultad-partida" class="dificultad-partida">Dificultad: Medio</span>
+      <p class="guia-hibrido"><span class="guia-rol rol-teclado">Mando</span> joystick + letra del enemigo <span class="guia-sep" aria-hidden="true">·</span> <span class="guia-rol rol-mouse">Mouse</span> clic directo. Comparten servidores y amenazas.</p>
       <!-- Teclado + mouse: qué hace cada jugador (solo se ve en ese modo) -->
       <p id="guia-duo" class="guia-duo">
         <span class="guia-rol rol-teclado">
@@ -397,7 +412,7 @@
   <!-- Lógica del juego -->
   <!-- Sin zoom accidental en el teléfono (jugar directo en el celular); en la PC no hace nada -->
   <script src="sin-zoom.js?v=1"></script>
-  <script src="game.js?v=35"></script>
-  <script src="remote-host.js?v=10"></script>
+  <script src="game.js?v=36"></script>
+  <script src="remote-host.js?v=11"></script>
 </body>
 </html>

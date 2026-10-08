@@ -258,7 +258,22 @@ body {
   filter: brightness(1.05);
 }
 
-/* Botones de la portada: "Iniciar defensa" y "2 jugadores" */
+/* Dificultad de la partida: controles de radio accesibles con teclado y toque. */
+.dificultad-selector { border: 0; padding: 0; margin: 24px 0; min-width: 0; }
+.dificultad-selector legend { margin-bottom: 10px; font-family: var(--fuente-mono); font-size: 0.75rem; color: var(--texto-sec); }
+.dificultad-opciones { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; max-width: 420px; }
+.dificultad-opciones label { position: relative; cursor: pointer; min-width: 0; }
+.dificultad-opciones input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.dificultad-opcion { display: flex; flex-direction: column; gap: 4px; padding: 12px 10px; border: 1px solid var(--borde); border-radius: 10px; background: var(--superficie); }
+.dificultad-opcion strong { color: var(--texto); font-size: 0.9rem; }
+.dificultad-opcion small { color: var(--texto-sec); font-size: 0.72rem; }
+.dificultad-opciones input:checked + .dificultad-opcion { border-color: var(--verde); background: rgba(0, 217, 155, 0.08); }
+.dificultad-opciones input:checked + .dificultad-opcion strong { color: var(--verde); }
+.dificultad-opciones input:focus-visible + .dificultad-opcion { outline: 2px solid var(--verde); outline-offset: 3px; }
+.dificultad-descripcion { margin: 10px 0 0; max-width: 420px; min-height: 2.9em; font-size: 0.78rem; line-height: 1.45; color: var(--texto-sec); }
+.dificultad-partida { font-family: var(--fuente-mono); font-size: 0.75rem; color: var(--texto-sec); }
+
+/* Botones de modos de juego en la portada */
 .botones-inicio {
   display: flex;
   flex-wrap: wrap;
@@ -1155,6 +1170,8 @@ body {
   color: var(--texto-secundario, #91a8a0);
 }
 html.modo-duo .guia-duo { display: block; }
+.guia-hibrido { display: none; flex: 1 1 100%; margin: 2px 0 0; text-align: center; font-size: 0.8rem; line-height: 1.7; color: var(--texto-sec); }
+html.modo-hibrido .guia-hibrido { display: block; }
 .guia-rol {
   display: inline-flex;
   align-items: center;

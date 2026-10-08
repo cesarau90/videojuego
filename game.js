@@ -41,6 +41,67 @@ const NIVELES = [
   },
 ];
 
+
+// La dificultad se elige antes de empezar y se conserva al reintentar.
+// Los valores medios dejan intactos los niveles originales.
+const DIFICULTADES = {
+  facil: { nombre: 'Fácil', vidaVirus: 1.3, aparicion: 1.2, velocidad: 0.75, elementosExtra: -1, vidaJefe: 0.75, tiempoJefe: 1.25, escaner: 3,
+    descripcion: 'Más tiempo para reaccionar, menos enemigos y 3 usos de escáner por nivel.' },
+  medio: { nombre: 'Medio', vidaVirus: 1, aparicion: 1, velocidad: 1, elementosExtra: 0, vidaJefe: 1, tiempoJefe: 1, escaner: 2,
+    descripcion: 'El ritmo original del juego, con 2 usos de escáner por nivel.' },
+  dificil: { nombre: 'Difícil', vidaVirus: 0.8, aparicion: 0.85, velocidad: 1.25, elementosExtra: 1, vidaJefe: 1.25, tiempoJefe: 0.85, escaner: 1,
+    descripcion: 'Menos tiempo, enemigos más rápidos y jefes más resistentes. 1 uso de escáner por nivel.' },
+};
+const CLAVE_DIFICULTAD = 'eliminaMalware.dificultad';
+
+function dificultadActual() {
+  return Object.prototype.hasOwnProperty.call(DIFICULTADES, estado.dificultad)
+    ? DIFICULTADES[estado.dificultad] : DIFICULTADES.medio;
+}
+
+function obtenerConfiguracionNivel(indice = estado.indiceNivel) {
+  const base = NIVELES[indice];
+  if (!base) return null;
+  const dificultad = dificultadActual();
+  return {
+    ...base,
+    tiempoAparicion: Math.round(base.tiempoAparicion * dificultad.aparicion),
+    tiempoVidaVirus: Math.round(base.tiempoVidaVirus * dificultad.vidaVirus),
+    tiempoVidaVirusMando: Math.round(base.tiempoVidaVirusMando * dificultad.vidaVirus),
+    maxElementos: Math.max(1, base.maxElementos + dificultad.elementosExtra),
+    velocidadMin: base.velocidadMin * dificultad.velocidad,
+    velocidadMax: base.velocidadMax * dificultad.velocidad,
+  };
+}
+
+function obtenerConfiguracionJefe(indice = estado.indiceNivel) {
+  const base = JEFES[indice];
+  if (!base) return null;
+  const dificultad = dificultadActual();
+  const vidaMaxima = Math.max(1, Math.round(base.vidaMaxima * dificultad.vidaJefe));
+  return {
+    ...base, vidaMaxima,
+    tiempoAtaque: Math.round(base.tiempoAtaque * dificultad.tiempoJefe),
+    tiempoAtaqueMando: Math.round(base.tiempoAtaqueMando * dificultad.tiempoJefe),
+    faseCambioVida: base.faseCambioVida ? Math.max(1, Math.round(vidaMaxima / 2)) : 0,
+  };
+}
+
+function sincronizarDificultadUI() {
+  document.querySelectorAll('input[name="dificultad"]').forEach((input) => {
+    input.checked = input.value === estado.dificultad;
+  });
+  document.getElementById('descripcion-dificultad').textContent = dificultadActual().descripcion;
+  document.getElementById('dificultad-partida').textContent = 'Dificultad: ' + dificultadActual().nombre;
+}
+
+function seleccionarDificultad(valor) {
+  if (!Object.prototype.hasOwnProperty.call(DIFICULTADES, valor) || !document.getElementById('pantalla-inicio').classList.contains('activa')) return;
+  estado.dificultad = valor;
+  try { localStorage.setItem(CLAVE_DIFICULTAD, valor); } catch (e) { /* recordar es opcional */ }
+  sincronizarDificultadUI();
+}
+
 const VIDAS_INICIALES = 3;
 
 /* ------------------------------------------------------------------
@@ -617,8 +678,10 @@ const estado = {
   modoMando: false,
   multijugador: false, // true en el modo cooperativo de 2 jugadores (siempre con mando)
   modoDuo: false, // true en el modo teclado + mouse (2 jugadores en la misma PC, sin mando)
-  esperando2j: false, // true en la sala de espera de "2 jugadores" (aún no empieza la partida)
-  cuentaEspera: null, // segundos que faltan para empezar cuando ya están los dos teléfonos
+  modoHibrido: false, // J1 usa un teléfono, J2 hace clic con el mouse
+  dificultad: 'medio',
+  esperando2j: false, // sala de espera cooperativa, de dos mandos o mando + mouse
+  cuentaEspera: null, // segundos para empezar cuando los mandos necesarios están conectados
   puntosJugadores: [0, 0], // puntos conseguidos por cada jugador
 };
 
@@ -1483,7 +1546,7 @@ class EscenaJuego extends Phaser.Scene {
     this.temporizadorSpawn = null;
     this.puntuacionInicioNivel = 0;
     this.jefe = null;
-    this.escanerCargas = 2;
+    this.escanerCargas = dificultadActual().escaner;
     this.escanerActivo = false;
     this.escanerActivoHasta = 0;
     this.temporizadorEscaner = null;
@@ -1519,7 +1582,7 @@ class EscenaJuego extends Phaser.Scene {
   // Jugador 2 (solo en modo 2 jugadores): I/J/K/L, teclas 7/8/9/0 o un teléfono.
   crearControlMira() {
     this.jugadores = JUGADORES.map((config) => {
-      const texto = this.add.text(0, 0, config.etiqueta, {
+      const texto = this.add.text(0, 0, estado.modoHibrido && config.etiqueta === 'J1' ? 'MANDO' : config.etiqueta, {
         fontFamily: 'monospace', fontSize: '13px', fontStyle: 'bold', color: config.colorTexto,
       }).setOrigin(0.5);
       const grafico = this.add.graphics();
@@ -1540,9 +1603,11 @@ class EscenaJuego extends Phaser.Scene {
     // Sin captura, para no bloquear esas letras al escribir el gamertag.
     this.teclasJugador2 = this.input.keyboard.addKeys('I,J,K,L', false);
     this.input.on('pointermove', (pointer) => {
-      if (pointer.event?.pointerType === 'mouse') this.apuntarA(pointer.x / this.factorResolucion, pointer.y / this.factorResolucion);
+      if (!estado.modoHibrido && pointer.event?.pointerType === 'mouse') this.apuntarA(pointer.x / this.factorResolucion, pointer.y / this.factorResolucion);
     });
-    this.input.on('pointerdown', (pointer) => this.apuntarA(pointer.x / this.factorResolucion, pointer.y / this.factorResolucion));
+    this.input.on('pointerdown', (pointer) => {
+      if (!estado.modoHibrido) this.apuntarA(pointer.x / this.factorResolucion, pointer.y / this.factorResolucion);
+    });
   }
 
   // Con dos jugadores, cada mira empieza en una mitad del tablero.
@@ -1595,7 +1660,7 @@ class EscenaJuego extends Phaser.Scene {
     this.jugadores.forEach((jugador, i) => {
       const visible = jugando && this.jugadorActivo(i);
       jugador.grafico.setVisible(visible);
-      jugador.texto.setVisible(visible && estado.multijugador);
+      jugador.texto.setVisible(visible && (estado.multijugador || estado.modoHibrido));
       if (!visible) { jugador.velocidad.x = 0; jugador.velocidad.y = 0; return; }
       const [der, izq, abajo, arriba] = teclado[i];
       const dt = Math.min(delta, 50);
@@ -1669,6 +1734,15 @@ class EscenaJuego extends Phaser.Scene {
   sumarPuntos(puntos, indice = this.jugadorAtacante) {
     estado.puntuacion += puntos;
     estado.puntosJugadores[indice] += puntos;
+  }
+
+  // La pregunta es compartida: su bonificación se reparte entre los dos jugadores.
+  sumarBonoPregunta(puntos) {
+    if (estado.multijugador || estado.modoDuo || estado.modoHibrido) {
+      const mitad = Math.floor(puntos / 2);
+      this.sumarPuntos(mitad, 0);
+      this.sumarPuntos(puntos - mitad, 1);
+    } else this.sumarPuntos(puntos, 0);
   }
 
   atacarControl(letra, indice = 0) {
@@ -2667,7 +2741,7 @@ class EscenaJuego extends Phaser.Scene {
     estado.combo = 0;
     this.contadorElementosNivel = 0;
     this.puntuacionInicioNivel = estado.puntuacion;
-    this.escanerCargas = 2;
+    this.escanerCargas = dificultadActual().escaner;
     this.escanerActivo = false;
 
     // Reinicia las mecánicas nuevas al comenzar cada nivel
@@ -2697,7 +2771,7 @@ class EscenaJuego extends Phaser.Scene {
   // nivel. Si el tablero ya está lleno, simplemente lo intenta de nuevo
   // en el siguiente intervalo (generación procedural continua).
   iniciarGeneracionElementos() {
-    const configuracionNivel = NIVELES[estado.indiceNivel];
+    const configuracionNivel = obtenerConfiguracionNivel();
     this.reiniciarTemporizadorSpawn(this.intervaloAparicion(configuracionNivel));
   }
 
@@ -2726,13 +2800,13 @@ class EscenaJuego extends Phaser.Scene {
   // Máximo de elementos simultáneos permitido ahora mismo: el del nivel,
   // más uno mientras la sobrecarga de red está activa y uno más en 2 jugadores.
   maxElementosActual() {
-    return NIVELES[estado.indiceNivel].maxElementos + (this.limiteElementosExtra || 0) +
-      (estado.multijugador ? ELEMENTOS_EXTRA_2J : 0) + (estado.modoDuo ? ELEMENTOS_EXTRA_DUO : 0);
+    return obtenerConfiguracionNivel().maxElementos + (this.limiteElementosExtra || 0) +
+      ((estado.multijugador || estado.modoHibrido) ? ELEMENTOS_EXTRA_2J : 0) + (estado.modoDuo ? ELEMENTOS_EXTRA_DUO : 0);
   }
 
   intentarGenerarElemento() {
     if (!estado.juegoActivo || estado.jefeActivo || this.introNivelActiva) return;
-    const configuracionNivel = NIVELES[estado.indiceNivel];
+    const configuracionNivel = obtenerConfiguracionNivel();
     // Ya se alcanzó el objetivo del nivel: se detiene la generación
     // (el jefe se encarga de retirar lo que quede en pantalla).
     if (estado.virusEliminados >= configuracionNivel.virusRequeridos) return;
@@ -2863,7 +2937,7 @@ class EscenaJuego extends Phaser.Scene {
   generarVirus() {
     if (!estado.juegoActivo || estado.jefeActivo) return;
 
-    const configuracionNivel = NIVELES[estado.indiceNivel];
+    const configuracionNivel = obtenerConfiguracionNivel();
     const area = this.areaJuego;
 
     // Posición aleatoria dentro del área de juego (generación procedural)
@@ -2904,7 +2978,7 @@ class EscenaJuego extends Phaser.Scene {
   // (generarVirus) como las mecánicas nuevas: reparación de servidor y las
   // dos amenazas pequeñas en las que se divide el malware duplicador.
   crearElementoVisual(tipo, x, y, opciones = {}) {
-    const configuracionNivel = NIVELES[estado.indiceNivel];
+    const configuracionNivel = obtenerConfiguracionNivel();
     const escalaVisual = opciones.escalaVisual || 1;
     const letra = !estado.modoMando || tipo === 'seguro' ? null : tipo === 'reparacion' ? 'A'
       : opciones.letra || Phaser.Utils.Array.GetRandom(Object.keys(BOTONES_ATAQUE));
@@ -3040,7 +3114,8 @@ class EscenaJuego extends Phaser.Scene {
     // Teclado + mouse: el clic es del jugador del mouse y solo vale en los
     // enemigos sin tecla (ver clicDuo).
     circuloFondo.on('pointerdown', () => {
-      if (estado.modoMando) this.apuntarA(contenedor.x, contenedor.y);
+      if (estado.modoHibrido) this.clicHibrido(elemento);
+      else if (estado.modoMando) this.apuntarA(contenedor.x, contenedor.y);
       else if (estado.modoDuo) this.clicDuo(elemento);
       else this.accionSobreElemento(elemento);
     });
@@ -3065,6 +3140,28 @@ class EscenaJuego extends Phaser.Scene {
     }
 
     return elemento;
+  }
+
+  // El mouse golpea directamente y sus acciones nunca reposicionan la mira del mando.
+  clicHibrido(elemento) {
+    if (!estado.modoHibrido || !estado.juegoActivo || this.introNivelActiva || elemento.procesado) return;
+    this.jugadorAtacante = 1;
+    this.accionSobreElemento(elemento);
+  }
+
+  clicJefeHibrido() {
+    const jefe = this.jefe;
+    if (!estado.modoHibrido || !estado.juegoActivo || this.introNivelActiva ||
+        !jefe || jefe.destruido || jefe.protegido || jefe.contenedor.alpha < 1 ||
+        (jefe.puntoDebil && !jefe.puntoDebil.circulo.visible)) return;
+    this.jugadorAtacante = 1;
+    this.ultimoGolpeadorJefe = 1;
+    this.golpearJefe();
+    if (!jefe.destruido) {
+      jefe.progresoCombinacion = 0;
+      if (COMBINACION_NUEVA_POR_GOLPE) jefe.secuencia = generarCombinacionJefe(jefe.secuencia.length, jefe.secuencia);
+      this.actualizarCombinacionJefe(true);
+    }
   }
 
   /* ---------------- TECLADO + MOUSE (2 jugadores en la misma PC) ---------------- */
@@ -3366,7 +3463,7 @@ class EscenaJuego extends Phaser.Scene {
       });
     }
 
-    const configuracionNivel = NIVELES[estado.indiceNivel];
+    const configuracionNivel = obtenerConfiguracionNivel();
     const grupo = { perdidoServidor: false };
     const duracionPequenas = Math.round(vidaVirusNivel(configuracionNivel) * 0.9);
     const area = this.areaJuego;
@@ -3439,7 +3536,7 @@ class EscenaJuego extends Phaser.Scene {
     if (estado.jefeActivo || this.sobrecargaActiva) return;
     const umbrales = UMBRALES_SOBRECARGA[estado.indiceNivel] || [];
     if (this.sobrecargaIndice >= umbrales.length) return;
-    const configuracionNivel = NIVELES[estado.indiceNivel];
+    const configuracionNivel = obtenerConfiguracionNivel();
     const progreso = estado.virusEliminados / configuracionNivel.virusRequeridos;
     if (progreso < umbrales[this.sobrecargaIndice]) return;
     this.activarSobrecarga(configuracionNivel);
@@ -3751,16 +3848,17 @@ class EscenaJuego extends Phaser.Scene {
   // Marcador HTML bajo el tablero con los puntos de cada jugador.
   actualizarMarcadorJugadores() {
     const marcador = document.getElementById('marcador-jugadores');
-    const conMarcador = estado.multijugador || estado.modoDuo;
+    const conMarcador = estado.multijugador || estado.modoDuo || estado.modoHibrido;
     marcador.hidden = !conMarcador;
     if (!conMarcador) return;
     // Teclado + mouse: el jugador 1 es el del teclado y el 2, el del mouse.
-    const [nombre1, nombre2] = estado.modoDuo ? ['TECLADO', 'MOUSE'] : ['J1', 'J2'];
+    const [nombre1, nombre2] = estado.modoDuo ? ['TECLADO', 'MOUSE']
+      : estado.modoHibrido ? ['MANDO', 'MOUSE'] : ['J1', 'J2'];
     marcador.innerHTML = `<span class="j1">${nombre1} ${estado.puntosJugadores[0]}</span> · <span class="j2">${nombre2} ${estado.puntosJugadores[1]}</span>`;
   }
 
   actualizarHUD() {
-    const configuracionNivel = NIVELES[estado.indiceNivel];
+    const configuracionNivel = obtenerConfiguracionNivel();
 
     this.textoPuntuacion.setText(`${estado.puntuacion}`);
     this.actualizarMarcadorJugadores();
@@ -3774,7 +3872,7 @@ class EscenaJuego extends Phaser.Scene {
     this.textoCombo.setText(`${estado.combo} (x${multiplicador})`);
     this.etiquetaCombo.x = this.textoCombo.x - this.textoCombo.width - 10;
 
-    this.textoEscaner.setText(`${this.escanerCargas}/2`);
+    this.textoEscaner.setText(`${this.escanerCargas}/${dificultadActual().escaner}`);
 
     // Barra de progreso (amenazas eliminadas / objetivo del nivel)
     const proporcion = Phaser.Math.Clamp(
@@ -3783,7 +3881,7 @@ class EscenaJuego extends Phaser.Scene {
     this.dibujarBarraProgreso(proporcion);
   }
 
-  /* ---------------- ESCÁNER (2 usos por nivel) ---------------- */
+  /* ---------------- ESCÁNER (usos según la dificultad) ---------------- */
 
   // Activa el escáner: ralentiza el movimiento y los temporizadores de
   // expiración de los elementos activos (y el movimiento del jefe, si
@@ -3860,7 +3958,7 @@ class EscenaJuego extends Phaser.Scene {
     // derrotan (ver derrotarJefe()), no por volver a alcanzar el objetivo.
     if (estado.jefeActivo) return;
 
-    const configuracionNivel = NIVELES[estado.indiceNivel];
+    const configuracionNivel = obtenerConfiguracionNivel();
     if (estado.virusEliminados >= configuracionNivel.virusRequeridos) {
       this.iniciarCombateJefe();
     }
@@ -3985,7 +4083,7 @@ class EscenaJuego extends Phaser.Scene {
       // servidor (ver mostrarPreguntaNivel), así que hay que revisar las
       // vidas después de responder por si eso provoca una derrota.
       mostrarPreguntaNivel(estado.indiceNivel, this, (bonoPregunta) => {
-        estado.puntuacion += bonoPregunta;
+        this.sumarBonoPregunta(bonoPregunta);
         this.overlayOscurecer.setAlpha(0);
 
         if (estado.vidas <= 0) {
@@ -4000,7 +4098,7 @@ class EscenaJuego extends Phaser.Scene {
           prepararClasificacionVictoria();
           mostrarPantalla('pantalla-victoria');
         } else {
-          const configuracionNivel = NIVELES[estado.indiceNivel];
+          const configuracionNivel = obtenerConfiguracionNivel();
           document.getElementById('texto-nivel-completado').textContent =
             `Superaste el nivel ${configuracionNivel.numero} con ${estado.puntuacion} puntos.${textoPuntosJugadores()}`;
           animarConteoPuntos(puntuacionInicial, estado.puntuacion);
@@ -4023,7 +4121,7 @@ class EscenaJuego extends Phaser.Scene {
     estado.jefeActivo = true;
     this.limpiarVirusActivos();
 
-    const configuracionJefe = JEFES[estado.indiceNivel];
+    const configuracionJefe = obtenerConfiguracionJefe();
     reproducirSonido('alertaJefe');
     this.mostrarAlertaJefe(() => this.crearJefe(configuracionJefe));
   }
@@ -4097,7 +4195,7 @@ class EscenaJuego extends Phaser.Scene {
     contenedor.setScale(0.7);
     contenedor.setAlpha(0);
 
-    const factorVida = estado.multijugador ? FACTOR_VIDA_JEFE_2J : 1;
+    const factorVida = (estado.multijugador || estado.modoHibrido) ? FACTOR_VIDA_JEFE_2J : 1;
     const vidaJefe = Math.round(configuracionJefe.vidaMaxima * factorVida);
     this.jefe = {
       config: configuracionJefe,
@@ -4148,7 +4246,8 @@ class EscenaJuego extends Phaser.Scene {
     } else {
       circuloBase.setInteractive({ useHandCursor: true });
       circuloBase.on('pointerdown', () => {
-        if (estado.modoMando) this.apuntarA(contenedor.x, contenedor.y);
+        if (estado.modoHibrido) this.clicJefeHibrido();
+        else if (estado.modoMando) this.apuntarA(contenedor.x, contenedor.y);
         else if (estado.modoDuo) this.clicJefeDuo();
         else this.golpearJefe();
       });
@@ -4183,7 +4282,8 @@ class EscenaJuego extends Phaser.Scene {
     this.jefe.contenedor.add(g);
     this.jefe.puntoDebil = { circulo: g };
     g.on('pointerdown', () => {
-      if (estado.modoMando) this.apuntarA(this.jefe.contenedor.x, this.jefe.contenedor.y);
+      if (estado.modoHibrido) this.clicJefeHibrido();
+      else if (estado.modoMando) this.apuntarA(this.jefe.contenedor.x, this.jefe.contenedor.y);
       else if (estado.modoDuo) this.clicJefeDuo();
       else this.golpearJefe();
     });
@@ -4558,7 +4658,11 @@ class EscenaJuego extends Phaser.Scene {
 
     const trampa = { contenedor, temporizador: null, procesado: false };
     circuloFondo.on('pointerdown', () => {
-      if (estado.modoMando) this.apuntarA(contenedor.x, contenedor.y);
+      if (estado.modoHibrido) {
+        if (!estado.juegoActivo || this.introNivelActiva) return;
+        this.jugadorAtacante = 1;
+        this.resolverTrampaJefe(trampa, true);
+      } else if (estado.modoMando) this.apuntarA(contenedor.x, contenedor.y);
       else this.resolverTrampaJefe(trampa, true);
     });
     const vida = Phaser.Math.Between(2600, 3400);
@@ -4645,7 +4749,7 @@ class EscenaJuego extends Phaser.Scene {
 
     // 4) Puntos adicionales (en teclado + mouse se reparten entre los dos
     // jugadores: el mouse da el golpe final, pero el teclado abrió cada escudo)
-    if (estado.modoDuo) {
+    if (estado.modoDuo || estado.modoHibrido) {
       const mitad = Math.floor(recompensa / 2);
       this.sumarPuntos(mitad, 0);
       this.sumarPuntos(recompensa - mitad, 1);
@@ -4754,7 +4858,9 @@ window.controlJuego = {
     return {
       charges: escena?.escanerCargas ?? 0,
       // En la sala de espera los teléfonos ya se presentan como J1 y J2.
-      multi: estado.multijugador || estado.esperando2j,
+      multi: estado.esperando2j ? sala2j.modo === '2j' : estado.multijugador,
+      hybrid: estado.esperando2j ? sala2j.modo === 'hibrido' : estado.modoHibrido,
+      difficulty: dificultadActual().nombre,
       espera: estado.esperando2j ? { cuenta: estado.cuentaEspera } : null,
       mando: estado.modoMando,
       duo: estado.modoDuo, // teclado + mouse en la PC: el mando no se usa
@@ -4791,6 +4897,7 @@ function reiniciarEstado() {
 
 // Texto con el reparto de puntos del equipo (solo en los modos de 2 jugadores).
 function textoPuntosJugadores() {
+  if (estado.modoHibrido) return ` (Mando: ${estado.puntosJugadores[0]} · Mouse: ${estado.puntosJugadores[1]})`;
   if (estado.modoDuo) return ` (Teclado: ${estado.puntosJugadores[0]} · Mouse: ${estado.puntosJugadores[1]})`;
   if (!estado.multijugador) return '';
   return ` (J1: ${estado.puntosJugadores[0]} · J2: ${estado.puntosJugadores[1]})`;
@@ -4808,18 +4915,30 @@ function textoPuntosJugadores() {
    ------------------------------------------------------------------ */
 const CUENTA_ATRAS_2J = 3; // segundos entre "ya están los dos" y el inicio
 const sala2j = {
+  modo: '2j', // también puede esperar un teléfono para mando + mouse
   jugadores: [], // jugadores (1 y/o 2) que ya tienen teléfono conectado
   inicio: 0,     // instante (ms) en que termina la cuenta atrás; 0 = no está contando
   reloj: null,   // temporizador que revisa la cuenta atrás
 };
 
-function abrirSalaEspera2j() {
-  // Sin conexión con teléfonos (la página abierta sin servidor) o jugando desde
-  // un teléfono no hay nada que esperar: se empieza como antes.
-  if (!window.controlJuego.remoto || esVistaMovil()) { iniciarJuegoDesdeCero('2j'); return; }
+function abrirSalaEspera2j() { abrirSalaEspera('2j'); }
+function abrirSalaEsperaHibrida() { abrirSalaEspera('hibrido'); }
+
+function abrirSalaEspera(modo) {
+  if (!window.controlJuego.remoto || esVistaMovil()) { iniciarJuegoDesdeCero(modo); return; }
   activarAudio();
+  sala2j.modo = modo;
   estado.esperando2j = true;
   sala2j.inicio = 0;
+  const hibrido = modo === 'hibrido';
+  document.getElementById('espera-etiqueta').textContent = hibrido ? 'Modo híbrido · Mando + mouse' : 'Modo 2 jugadores';
+  document.getElementById('espera-titulo').textContent = hibrido ? 'Conecta un teléfono' : 'Conecta los dos teléfonos';
+  document.getElementById('espera-descripcion').textContent = hibrido
+    ? 'J1 escanea el QR para usar el mando. J2 usa el mouse de esta PC. La partida comienza cuando se conecta el teléfono.'
+    : 'Cada jugador escanea este QR con su teléfono. La partida empieza sola cuando estén los dos conectados.';
+  document.getElementById('espera-nota').textContent = hibrido
+    ? 'Con «Empezar ya», J1 puede usar flechas + A B X Y mientras J2 juega con el mouse.'
+    : '¿Sin teléfono? Con «Empezar ya», J1 juega con mouse o flechas + A B X Y y J2 con I J K L + 7 8 9 0.';
   mostrarPantalla('pantalla-espera');
   clearInterval(sala2j.reloj);
   sala2j.reloj = setInterval(actualizarSalaEspera, 250);
@@ -4843,25 +4962,32 @@ function cancelarSalaEspera2j() {
 // Pinta el estado de cada jugador y lleva la cuenta atrás cuando ya están los dos.
 function actualizarSalaEspera() {
   if (!estado.esperando2j) return;
-  const conectado = [sala2j.jugadores.includes(1), sala2j.jugadores.includes(2)];
+  const hibrido = sala2j.modo === 'hibrido';
+  const conectado = hibrido ? [sala2j.jugadores.length > 0, true]
+    : [sala2j.jugadores.includes(1), sala2j.jugadores.includes(2)];
   conectado.forEach((listo, i) => {
     const tarjeta = document.getElementById(`espera-j${i + 1}`);
     tarjeta.classList.toggle('listo', listo);
+    tarjeta.querySelector('.espera-nombre').textContent = hibrido
+      ? (i === 0 ? 'Jugador 1 · Mando' : 'Jugador 2 · Mouse') : `Jugador ${i + 1}`;
     const celda = tarjeta.querySelector('.espera-estado');
-    const texto = listo ? 'Teléfono conectado' : 'Esperando teléfono…';
+    const texto = hibrido && i === 1 ? 'Listo en esta PC'
+      : listo ? 'Teléfono conectado' : 'Esperando teléfono…';
     if (celda.textContent !== texto) celda.textContent = texto;
   });
   let mensaje;
   if (conectado[0] && conectado[1]) {
     if (!sala2j.inicio) sala2j.inicio = Date.now() + CUENTA_ATRAS_2J * 1000;
     const faltan = Math.ceil((sala2j.inicio - Date.now()) / 1000);
-    if (faltan <= 0) { iniciarJuegoDesdeCero('2j'); return; }
+    if (faltan <= 0) { iniciarJuegoDesdeCero(sala2j.modo); return; }
     estado.cuentaEspera = faltan;
-    mensaje = `¡Los dos conectados! Empieza en ${faltan}…`;
+    mensaje = hibrido ? `¡Mando y mouse listos! Empieza en ${faltan}…`
+      : `¡Los dos conectados! Empieza en ${faltan}…`;
   } else {
     sala2j.inicio = 0; // si uno se desconecta, la cuenta atrás se cancela
     estado.cuentaEspera = null;
-    mensaje = conectado[0] || conectado[1]
+    mensaje = hibrido ? 'Esperando el teléfono del jugador 1; el mouse ya está listo.'
+      : conectado[0] || conectado[1]
       ? `Falta el teléfono del jugador ${conectado[0] ? 2 : 1}.`
       : 'Esperando a los dos teléfonos…';
   }
@@ -4878,12 +5004,15 @@ function actualizarSalaEspera() {
 function iniciarJuegoDesdeCero(modo) {
   cerrarSalaEspera2j(); // por si se empieza desde la sala de espera
   if (modo) {
-    estado.modoMando = modo === 'mando' || modo === '2j';
+    estado.modoMando = modo === 'mando' || modo === '2j' || modo === 'hibrido';
     estado.multijugador = modo === '2j';
     estado.modoDuo = modo === 'duo';
+    estado.modoHibrido = modo === 'hibrido';
   }
   document.documentElement.classList.toggle('modo-mando', estado.modoMando);
   document.documentElement.classList.toggle('modo-duo', estado.modoDuo);
+  document.documentElement.classList.toggle('modo-hibrido', estado.modoHibrido);
+  sincronizarDificultadUI();
   activarAudio();
   reiniciarEstado();
   sincronizarClaseVistaMovil();
@@ -5158,9 +5287,10 @@ function activarEscanerDesdeUI() {
 document.getElementById('btn-jugar').addEventListener('click', () => iniciarJuegoDesdeCero('normal'));
 document.getElementById('btn-jugar-mando').addEventListener('click', () => iniciarJuegoDesdeCero('mando'));
 document.getElementById('btn-jugar-2').addEventListener('click', abrirSalaEspera2j);
-document.getElementById('btn-empezar-ya').addEventListener('click', () => iniciarJuegoDesdeCero('2j'));
+document.getElementById('btn-empezar-ya').addEventListener('click', () => iniciarJuegoDesdeCero(sala2j.modo));
 document.getElementById('btn-cancelar-espera').addEventListener('click', cancelarSalaEspera2j);
 document.getElementById('btn-jugar-duo').addEventListener('click', () => iniciarJuegoDesdeCero('duo'));
+document.getElementById('btn-jugar-hibrido').addEventListener('click', abrirSalaEsperaHibrida);
 document.getElementById('btn-siguiente-nivel').addEventListener('click', continuarAlSiguienteNivel);
 document.getElementById('btn-reintentar').addEventListener('click', () => iniciarJuegoDesdeCero());
 document.getElementById('btn-jugar-de-nuevo').addEventListener('click', () => iniciarJuegoDesdeCero());
@@ -5224,4 +5354,14 @@ window.addEventListener('keydown', (evento) => {
   if (evento.key.toLowerCase() !== 's') return;
   if (!document.getElementById('pantalla-juego').classList.contains('activa')) return;
   activarEscanerDesdeUI();
+});
+
+// La selección se restaura únicamente al cargar; reiniciar mantiene la partida elegida.
+try {
+  const recordada = localStorage.getItem(CLAVE_DIFICULTAD);
+  if (Object.prototype.hasOwnProperty.call(DIFICULTADES, recordada)) estado.dificultad = recordada;
+} catch (e) { /* almacenamiento deshabilitado: dificultad media */ }
+sincronizarDificultadUI();
+document.querySelectorAll('input[name="dificultad"]').forEach((input) => {
+  input.addEventListener('change', () => { if (input.checked) seleccionarDificultad(input.value); });
 });

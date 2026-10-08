@@ -6,11 +6,11 @@ sincroniza ni debe usarse como fuente para publicar los cambios actuales.
 
 ## Modos de juego
 
-En la portada hay cuatro botones:
+En la portada hay cinco botones y un selector de dificultad:
 
 - **Iniciar defensa — modo normal (el juego original):** se hace clic (o se toca,
   en el celular) directamente sobre las amenazas y el jefe. Sin mira ni letras,
-  con los tiempos originales.
+  con los tiempos de la dificultad elegida.
 - **Jugar con mando:** se mueve una mira y se ataca con la letra A, B, X o Y que
   lleva cada enemigo, usando el teléfono como mando o el teclado.
 - **2 jugadores:** cooperativo con dos miras (ver más abajo). Al elegirlo aparece
@@ -19,6 +19,22 @@ En la portada hay cuatro botones:
   espera y se juega con el teclado.
 - **Teclado + mouse:** dos jugadores en la misma PC, sin teléfono: uno con el lado
   izquierdo del teclado y otro con el mouse (ver más abajo).
+- **Mando + mouse:** uno usa un teléfono con joystick y A/B/X/Y; el otro hace
+  clic en las amenazas desde la PC. La sala espera un solo teléfono.
+
+## Dificultad
+
+Antes de iniciar, elige **Fácil**, **Medio** o **Difícil**. La selección se guarda
+si el navegador permite almacenamiento y se conserva al reintentar, en los cinco modos.
+
+| Dificultad | Tiempo de las amenazas | Aparición | Velocidad | Elementos simultáneos | Vida del jefe | Tiempo para su ataque | Escáner por nivel |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Fácil | +30% | Intervalo +20% | −25% | Uno menos (mínimo 1) | −25% | +25% | 3 |
+| Medio | Original | Original | Original | Original | Original | Original | 2 |
+| Difícil | −20% | Intervalo −15% | +25% | Uno más | +25% | −15% | 1 |
+
+Los valores se calculan sobre cada nivel; las vidas del jefe se redondean.
+Los ajustes cooperativos se añaden a la dificultad elegida.
 
 **Sonido:** los navegadores solo dejan sonar el audio después de un clic o una
 tecla en la página de la PC. Si vas a iniciar desde el teléfono, haz **un clic en
@@ -89,13 +105,13 @@ el prefijo para que puedas esperar y completar el golpe apuntando al jefe.
 
 En PC también puedes jugar con mouse o flechas para mover la mira y las teclas
 **A, B, X, Y** para atacar. Un clic solo apunta, ya no elimina.
-Los tiempos de vida normal son 7, 6 y 5.2 segundos por nivel para permitir
+En dificultad media, los tiempos de vida normal son 7, 6 y 5.2 segundos por nivel para permitir
 llegar con el joystick; los ciclos de los jefes son 10, 10 y 12 segundos.
 
 La PC y el teléfono necesitan Internet. La conexión usa un canal temporal de
 Supabase Realtime con un identificador aleatorio en el QR; se crea uno nuevo al
-recargar la página de la PC. La sala admite como máximo dos teléfonos: si
-un tercero escanea el QR, muestra «Sala llena» y sus controles quedan bloqueados.
+recargar la página de la PC. En el híbrido la sala admite un teléfono; en los demás modos, como máximo dos. Si
+otro teléfono intenta entrar cuando está llena, muestra un aviso y sus controles quedan bloqueados.
 Puede entrar automáticamente cuando se libere un puesto; los teléfonos que
 dejan de enviar mensajes durante más de 7 segundos liberan su puesto.
 En el proyecto de Supabase debe estar habilitado
@@ -141,9 +157,27 @@ cada jugador (se muestra bajo el tablero y al final de cada nivel). El escáner
 y los servidores son compartidos. "Volver a intentar" conserva el modo elegido.
 
 Para que dos jugadores sigan teniendo reto, en este modo los **jefes tienen 50%
-más de vida** (Troyano 5, Botnet 8, Ransomware 12; el Ransomware pasa a su fase
-rápida a la mitad) y cabe **un elemento más** en pantalla a la vez. El modo de
-1 jugador no cambia.
+más de vida** (en dificultad media: Troyano 5, Botnet 8, Ransomware 12; el Ransomware pasa a su fase
+rápida a la mitad) y cabe **un elemento más** en pantalla a la vez. Estos ajustes se suman a la dificultad seleccionada.
+
+## Modo mando + mouse (híbrido)
+
+Elige la dificultad y pulsa **Mando + mouse**. Escanea el QR con un solo teléfono:
+la partida comienza tras una cuenta atrás de tres segundos. **Empezar ya** permite
+usar flechas y A/B/X/Y en lugar del teléfono.
+
+- **MANDO:** mueve la mira con el joystick y pulsa la letra del enemigo. Contra el
+  jefe, completa la combinación mostrada.
+- **MOUSE:** hace clic directamente en las amenazas o en el jefe. El mouse no mueve
+  la mira del mando. En Ransomware hay que pulsar su punto débil cuando esté visible.
+
+Ambos pueden atacar las mismas amenazas; no toquen los archivos seguros. Comparten
+servidores, objetivo, escáner y puntuación del equipo, con un marcador para cada uno.
+El jefe tiene 50% más de vida y cabe un elemento más, como en el cooperativo de dos
+mandos. La combinación se renueva tras cada golpe del jefe, también con mouse.
+Su recompensa y el bono de la pregunta se reparten entre ambos.
+Si el teléfono se desconecta, escanea de nuevo el QR o pulsa **Conectar teléfono**
+en la PC. Reintentar conserva el modo y la dificultad.
 
 ## Modo teclado + mouse (2 jugadores en la misma PC)
 
@@ -226,7 +260,7 @@ tres quedan fuera de línea, aparece la pantalla de derrota.
 ## Escáner
 
 Botón "ESCÁNER" en la esquina del tablero, también activable con la tecla
-**S**. Cada nivel da **2 usos**. Al activarlo, durante 2 segundos:
+**S**. Cada nivel da **3 usos en fácil, 2 en medio y 1 en difícil**. Al activarlo, durante 2 segundos:
 
 - Ralentiza el movimiento de los elementos activos (y el del jefe, si se
   está desplazando).

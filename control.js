@@ -79,15 +79,17 @@
     const previousSlot = mySlot;
     mySlot = payload.players?.[phoneId] || 0;
     if (previousSlot && !mySlot) reset();
-    const full = !mySlot && Object.keys(payload.players || {}).length >= 2;
+    const full = !mySlot && Object.keys(payload.players || {}).length >= (payload.capacity || 2);
     status.textContent = mySlot ? 'Conectado a la PC'
-      : full ? 'Sala llena: ya hay dos mandos. Espera a que se libere un puesto.'
+      : full ? (payload.hybrid ? 'Mando ocupado: este modo usa un teléfono y un mouse.'
+        : 'Sala llena: ya hay dos mandos. Espera a que se libere un puesto.')
       : 'Esperando un puesto en la PC…';
     status.classList.toggle('connected', !!mySlot);
     if (!mySlot && Date.now() - lastHello > 1500) { send('hello'); lastHello = Date.now(); }
     const player = payload.multi ? mySlot : 1;
     playerBadge.hidden = !mySlot;
-    playerBadge.textContent = payload.multi ? 'JUGADOR ' + player : 'JUGADOR 1 · MODO 1 JUGADOR';
+    playerBadge.textContent = payload.hybrid ? 'MANDO · HÍBRIDO'
+      : payload.multi ? 'JUGADOR ' + player : 'JUGADOR 1 · MODO 1 JUGADOR';
     playerBadge.className = 'player-badge j' + player;
     switchButton.hidden = !payload.multi || !mySlot;
     switchButton.textContent = 'Cambiar a J' + (mySlot === 1 ? 2 : 1);
@@ -101,7 +103,7 @@
     const waiting = payload.screen === 'pantalla-espera';
     const countdown = payload.espera?.cuenta;
     document.getElementById('combat-title').textContent = question ? 'PREGUNTA DE SEGURIDAD'
-      : waiting ? (countdown ? '¡LISTOS!' : 'ESPERANDO A LOS 2 TELÉFONOS')
+      : waiting ? (countdown ? '¡LISTOS!' : payload.hybrid ? 'ESPERANDO AL MANDO' : 'ESPERANDO A LOS 2 TELÉFONOS')
       : silent ? 'ANTES DE INICIAR' : lobby ? 'LISTO PARA DEFENDER'
       : boss ? boss.name + ' · COMBINACIÓN' : 'APUNTA Y ATACA';
     const feedback = Array.isArray(payload.feedback) ? payload.feedback[player - 1] : '';
@@ -109,7 +111,9 @@
     const hint = document.getElementById('combat-hint');
     hint.classList.toggle('warn', silent);
     hint.textContent = waiting
-      ? (countdown ? `Los dos teléfonos están conectados. Empieza en ${countdown}…`
+      ? (payload.hybrid
+        ? (countdown ? `¡Mando y mouse listos! Empieza en ${countdown}…` : 'El jugador del mouse está listo en la PC. La partida empieza al conectar este mando.')
+        : countdown ? `Los dos teléfonos están conectados. Empieza en ${countdown}…`
         : 'Falta el otro teléfono: que escanee el mismo QR que se ve en la PC. Cuando estén los dos, la partida empieza sola.')
       : normalMode
       ? (payload.duo
@@ -120,9 +124,11 @@
       : silent
       ? 'Haz clic en cualquier parte de la PC para activar el sonido. Después podrás iniciar desde aquí.'
       : lobby
-      ? 'Pulsa INICIAR para jugar con el mando o 2 JUGADORES para jugar en cooperativo.'
+      ? 'Pulsa INICIAR o 2 JUGADORES. Para jugar con mando + mouse, elige ese modo en la PC.'
       : feedback || (boss
-      ? 'Apunta al jefe y pulsa en orden. Cada combinación completa le quita una vida y la siguiente es distinta.'
+      ? (payload.hybrid ? 'Completa la combinación apuntando al jefe. Tu compañero también puede golpearlo con el mouse; cada golpe cambia la combinación.'
+        : 'Apunta al jefe y pulsa en orden. Cada combinación completa le quita una vida y la siguiente es distinta.')
+      : payload.hybrid ? 'Tú apuntas y pulsas la letra; tu compañero hace clic con el mouse. No ataquen los archivos seguros (azules).'
       : 'Pulsa la letra que muestra el enemigo. No ataques los archivos seguros (azules).');
     const sequence = document.getElementById('boss-sequence');
     sequence.replaceChildren();

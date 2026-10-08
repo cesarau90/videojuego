@@ -43,7 +43,7 @@
     text: controlUrl.href, width: 192, height: 192,
     correctLevel: QRCode.CorrectLevel.M,
   });
-  // Con la conexión lista, "2 jugadores" espera a los dos teléfonos antes de empezar.
+  // Con la conexión lista, las partidas cooperativas pueden esperar sus mandos.
   if (window.controlJuego) window.controlJuego.remoto = true;
 
   document.getElementById('btn-ver-qr').addEventListener('click', () => dialog.showModal());
@@ -59,15 +59,21 @@
   const phones = new Map();
   const PHONE_TIMEOUT = 7000;
   const multi = () => window.controlJuego?.estado().multi === true;
+  const hybrid = () => window.controlJuego?.estado().hybrid === true;
+  const activePhones = () => {
+    const entries = [...phones];
+    return hybrid() ? entries.sort((a, b) => a[1].slot - b[1].slot).slice(0, 1) : entries;
+  };
   // En modo de 1 jugador todos los teléfonos manejan al jugador 1.
-  const playerOf = (phone) => (multi() ? phone.slot : 1);
+  const playerOf = (phone) => (hybrid() ? 1 : multi() ? phone.slot : 1);
   const gameState = () => ({
     screen: currentScreen(), ...window.controlJuego?.estado(),
-    players: Object.fromEntries([...phones].map(([id, phone]) => [id, phone.slot])),
+    capacity: hybrid() ? 1 : 2,
+    players: Object.fromEntries(activePhones().map(([id, phone]) => [id, hybrid() ? 1 : phone.slot])),
   });
   const sendState = () => send('state', gameState());
   // La sala de espera de 2 jugadores necesita saber qué jugadores (1 y/o 2) ya tienen teléfono.
-  const connectedPlayers = () => [...new Set([...phones.values()].map((phone) => phone.slot))];
+  const connectedPlayers = () => [...new Set(activePhones().map(([, phone]) => hybrid() ? 1 : phone.slot))];
   const tellGame = () => window.controlJuego?.telefonos(connectedPlayers());
 
   const send = (event, payload = {}) => {
@@ -86,14 +92,14 @@
   }
 
   function updateStatus() {
-    const count = phones.size;
+    const count = activePhones().length;
     showStatus(count === 0 ? 'Esperando al teléfono…'
       : count === 1 ? 'Teléfono conectado'
       : `${count} teléfonos conectados`);
   }
 
   // Devuelve el teléfono que envió el mensaje (si es válido y sigue activo).
-  function phoneFrom(payload) {
+  function phoneFrom(payload, requiresControl = false) {
     const phone = typeof payload?.id === 'string' ? phones.get(payload.id) : null;
     if (!phone) return null;
     if (Date.now() - phone.last > PHONE_TIMEOUT) {
@@ -101,15 +107,17 @@
       return null;
     }
     phone.last = Date.now();
+    if (requiresControl && hybrid() && activePhones()[0]?.[0] !== payload.id) return null;
     return phone;
   }
 
   // Libera puestos antes de admitir otro mando y detiene el movimiento vencido.
   function removeExpiredPhones() {
     let removed = false;
+    const activeIds = new Set(activePhones().map(([id]) => id));
     phones.forEach((phone, id) => {
       if (Date.now() - phone.last > PHONE_TIMEOUT) {
-        window.controlJuego?.mover(0, 0, playerOf(phone));
+        if (activeIds.has(id)) window.controlJuego?.mover(0, 0, playerOf(phone));
         phones.delete(id);
         removed = true;
       }
@@ -186,6 +194,7 @@
       const id = payload?.id;
       if (typeof id !== 'string' || !/^[a-f0-9-]{36}$/i.test(id)) return;
       removeExpiredPhones();
+      if (hybrid() && !phones.has(id) && phones.size >= 1) { sendState(); return; }
       const slot = phones.get(id)?.slot ?? freeSlot(id);
       if (slot === null) { sendState(); return; } // sala llena: no duplica J1
       const phone = phones.get(id) || { slot, lastAttack: 0, lastMove: 0 };
@@ -200,8 +209,8 @@
     })
     .on('broadcast', { event: 'choose' }, ({ payload }) => {
       // El teléfono pide cambiar de jugador; se intercambia con el otro si está ocupado.
-      const phone = phoneFrom(payload);
-      if (!phone || ![1, 2].includes(payload.slot) || phone.slot === payload.slot) return;
+      const phone = phoneFrom(payload, true);
+      if (!phone || hybrid() || ![1, 2].includes(payload.slot) || phone.slot === payload.slot) return;
       const other = [...phones.values()].find((p) => p !== phone && p.slot === payload.slot);
       // Las dos miras se detienen: quien deja de tener teléfono no debe seguir
       // corriendo con la última orden de joystick (los dedos puestos reanudan
@@ -214,7 +223,7 @@
       sendState();
     })
     .on('broadcast', { event: 'move' }, ({ payload }) => {
-      const phone = phoneFrom(payload);
+      const phone = phoneFrom(payload, true);
       if (!phone) return;
       if (!Number.isFinite(payload.x) || !Number.isFinite(payload.y) || Math.abs(payload.x) > 1 || Math.abs(payload.y) > 1) return;
       // Cada mensaje del joystick lleva un número creciente. El canal a veces
@@ -229,7 +238,7 @@
       else if (currentScreen() === 'pantalla-juego') window.controlJuego?.mover(payload.x, payload.y, playerOf(phone));
     })
     .on('broadcast', { event: 'attack' }, ({ payload }) => {
-      const phone = phoneFrom(payload);
+      const phone = phoneFrom(payload, true);
       if (!phone || !['A', 'B', 'X', 'Y'].includes(payload.letter) || Date.now() - phone.lastAttack < 110) return;
       if (currentScreen() === 'pantalla-pregunta') {
         if (payload.letter === 'A') { phone.lastAttack = Date.now(); questionConfirm(); }
@@ -241,7 +250,7 @@
       sendState();
     })
     .on('broadcast', { event: 'button' }, ({ payload }) => {
-      if (phoneFrom(payload)) pressButton(payload.action);
+      if (phoneFrom(payload, true)) pressButton(payload.action);
     })
     .subscribe((state) => {
       subscribed = state === 'SUBSCRIBED';
