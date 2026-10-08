@@ -39,7 +39,11 @@ Apunta al enemigo y pulsa la letra (**A, B, X o Y**) que aparece encima de él.
 La letra incorrecta no lo elimina. Puedes mantener el joystick con un dedo y atacar con otro.
 El joystick es **flotante**: el centro es donde apoyas el pulgar (todo el lado
 izquierdo del mando es zona táctil), así que no hace falta mirar el teléfono ni
-buscar el círculo, y la mira empieza a moverse solo cuando desplazas el dedo.
+buscar el círculo, y la mira empieza a moverse solo cuando desplazas el dedo. Necesita menos
+recorrido del pulgar para acelerar y responde mejor a inclinaciones medias.
+La velocidad máxima del joystick es de 840 px/s (antes 600); al apuntar a un
+enemigo conserva el 70% para afinar sin quedarse demasiado lenta. Las teclas
+de movimiento mantienen su velocidad anterior.
 El mando no hace zoom aunque se toque muchas veces o con dos dedos. Si aun así
 la pantalla queda ampliada, se puede deshacer pellizcando, se corrige sola y,
 como último recurso, aparece un botón **Quitar zoom**.
@@ -52,8 +56,10 @@ El mando se adapta a vertical y horizontal. En teléfonos en horizontal
 con hasta **600 px de alto**, el joystick queda a la izquierda, A/B/X/Y
 a la derecha y los avisos, la combinación del jefe y las respuestas en
 el centro. Las tabletas con mayor altura mantienen la distribución amplia
-original. La cabecera y las acciones son compactas; las letras conservan
-al menos 44×44 px y las combinaciones
+original. La cabecera y las acciones son compactas. En horizontal A/B/X/Y
+se organizan en dos filas (Y/B arriba, X/A abajo), con botones de al menos
+64×64 px; en 568×320 alcanzan 72×72 px y en 844×390, 106×106 px.
+Las combinaciones
 pueden ocupar varias filas. Se respeta el espacio de las muescas y la
 barra del sistema (`safe-area-inset-*`) y el alto visible (`100dvh`, con
 respaldo `100vh`). Si la pantalla es demasiado baja, se puede desplazar
@@ -361,7 +367,9 @@ node --test tests/regressions.cjs
 
 Las pruebas cubren continuación repetida, límites de nivel, cancelación de
 transiciones al reiniciar, límite de dos mandos, reconexión/cambio de puesto,
-aviso de sala llena y respuestas obsoletas del ranking. No contactan Supabase.
+aviso de sala llena, respuestas obsoletas del ranking y respuesta del joystick
+(inclinación media, soltar, pérdida de mensajes y velocidad del teclado).
+No contactan Supabase.
 Para probar los dispositivos reales, abre dos mandos y un tercero: este último
 debe quedar bloqueado; tras cerrar uno y esperar más de 7 segundos, debe entrar.
 

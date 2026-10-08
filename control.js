@@ -27,7 +27,7 @@
   const STICK_GAP = 40;          // ms mínimos entre mensajes al mover (máx. 25 por segundo)
   const STICK_GAP_FAST = 16;     // ...y para un cambio grande (arrancar, invertir el sentido)
   const STICK_KEEPALIVE = 100;   // ms: con el dedo quieto se repite la posición
-  const STICK_DEAD_IN = .08, STICK_DEAD_OUT = .14; // zona muerta (con histéresis)
+  const STICK_DEAD_IN = .05, STICK_DEAD_OUT = .10; // zona muerta (con histéresis)
   let lastSequence = '';         // combinación del jefe que se mostró la última vez
   let origin = { x: 0, y: 0 };
   let stickOn = false;
@@ -189,7 +189,8 @@
   // Los ejes se envían en cuanto cambian (máximo 25 mensajes por segundo, para
   // no saturar el canal) y se repiten cada 100 ms mientras sigan inclinados.
   // Cada mensaje lleva un número: la PC descarta los que lleguen desordenados.
-  const stickRadius = () => Math.min(64, Math.max(32, pad.offsetWidth * .25)); // px hasta la inclinación completa
+  // Menos recorrido del pulgar para alcanzar la velocidad máxima, incluso en horizontal.
+  const stickRadius = () => Math.min(48, Math.max(28, pad.offsetWidth * .20));
   // El joystick solo se envía donde la PC lo usa: el juego con mando y la pregunta.
   const canSteer = () => joystickScreens.includes(hostState.screen)
     && !(hostState.screen === 'pantalla-juego' && hostState.mando === false);

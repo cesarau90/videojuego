@@ -77,8 +77,8 @@ button:focus-visible, .joystick:focus-visible { outline: 2px solid #e7f5ef; outl
     padding-bottom: var(--pad-bottom);
   }
   .controller {
-    --status-width: clamp(168px, 28vw, 280px);
-    --pad-size: clamp(144px, calc(100vh - 170px), 224px);
+    --status-width: clamp(168px, 23vw, 232px);
+    --pad-size: clamp(154px, calc(100vh - 168px), 256px);
     width: min(100%, 1100px);
     min-height: calc(100vh - var(--pad-top) - var(--pad-bottom));
     min-height: calc(100dvh - var(--pad-top) - var(--pad-bottom));
@@ -99,6 +99,13 @@ button:focus-visible, .joystick:focus-visible { outline: 2px solid #e7f5ef; outl
   .combat { grid-column: 3; }
   .movement, .combat { gap: 6px; align-content: center; height: 100%; }
   .joystick, .face-buttons { width: min(100%, var(--pad-size)); }
+  /* Dos filas aprovechan el área del pulgar: cada letra tiene un botón grande. */
+  .face-buttons { grid-template: repeat(2, minmax(0, 1fr)) / repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .face { min-width: 64px; min-height: 64px; }
+  .face-y { grid-area: 1 / 1; }
+  .face-b { grid-area: 1 / 2; }
+  .face-x { grid-area: 2 / 1; }
+  .face-a { grid-area: 2 / 2; }
   .controller-status { grid-column: 2; grid-row: 2; align-self: center; min-width: 0; padding: 8px; z-index: 1; }
   .boss-panel { margin: 0; padding: 8px; border-radius: 12px; background: #0d1b18; overflow-wrap: anywhere; }
   .boss-panel > .control-label { display: block; line-height: 1.3; }
@@ -113,7 +120,7 @@ button:focus-visible, .joystick:focus-visible { outline: 2px solid #e7f5ef; outl
   .face strong { font-size: clamp(1.25rem, 6vh, 2rem); }
   .face small { margin-top: 2px; font-size: .36rem; }
   @supports (height: 100dvh) {
-    .controller { --pad-size: clamp(144px, calc(100dvh - 170px), 224px); }
+    .controller { --pad-size: clamp(154px, calc(100dvh - 168px), 256px); }
   }
 }
 @media (orientation: landscape) and (max-height: 600px) and (max-width: 760px) {

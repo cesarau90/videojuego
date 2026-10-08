@@ -339,9 +339,10 @@ const JUGADORES = [
   { etiqueta: 'J2', color: 0xffd34e, colorTexto: '#ffd34e' },
 ];
 // Movimiento de la mira con el joystick del teléfono (ver actualizarControlMira).
-const MIRA_VELOCIDAD = 600;   // px por segundo con el joystick inclinado al máximo
-const MIRA_CURVA = 1.6;       // mayor = más fino con poca inclinación
-const MIRA_ACELERA_MS = 25;   // al acelerar en el mismo sentido: arranque suave
+const MIRA_VELOCIDAD = 600;   // px por segundo con las teclas de movimiento
+const MIRA_VELOCIDAD_JOYSTICK = 840; // recorre el tablero más rápido con el teléfono
+const MIRA_CURVA = 1.2;       // inclinaciones medias responden sin perder el ajuste fino
+const MIRA_ACELERA_MS = 20;   // al acelerar en el mismo sentido: arranque suave
 const MIRA_FRENA_MS = 15;     // al frenar o cambiar de sentido: casi inmediato
 const MIRA_FRESCO_MS = 250;   // sin mensajes del mando durante este tiempo se empieza a frenar...
 const MIRA_CADUCA_MS = 650;   // ...y a los 650 ms la mira se detiene por completo
@@ -1599,8 +1600,9 @@ class EscenaJuego extends Phaser.Scene {
       const [der, izq, abajo, arriba] = teclado[i];
       const dt = Math.min(delta, 50);
       const sobreObjetivo = this.objetivoControl(i);
-      // Sobre un objetivo la mira frena a la mitad, para no pasarse de largo.
-      const freno = sobreObjetivo ? 0.5 : 1;
+      // Mantiene precisión al apuntar, sin que el joystick se quede demasiado lento.
+      const freno = sobreObjetivo ? 0.5 : 1; // teclado
+      const frenoJoystick = sobreObjetivo ? 0.7 : 1;
 
       // Joystick del teléfono. Si dejan de llegar mensajes (red lenta, teléfono
       // apagado) la mira no se corta de golpe ni sigue para siempre: la
@@ -1615,8 +1617,8 @@ class EscenaJuego extends Phaser.Scene {
       const fuerza = Math.hypot(ejeX, ejeY);
       const curva = fuerza > 0 ? Math.pow(fuerza, MIRA_CURVA) / fuerza : 0;
       const velocidad = jugador.velocidad;
-      velocidad.x = this.suavizarVelocidad(velocidad.x, ejeX * curva * MIRA_VELOCIDAD * freno, dt);
-      velocidad.y = this.suavizarVelocidad(velocidad.y, ejeY * curva * MIRA_VELOCIDAD * freno, dt);
+      velocidad.x = this.suavizarVelocidad(velocidad.x, ejeX * curva * MIRA_VELOCIDAD_JOYSTICK * frenoJoystick, dt);
+      velocidad.y = this.suavizarVelocidad(velocidad.y, ejeY * curva * MIRA_VELOCIDAD_JOYSTICK * frenoJoystick, dt);
 
       // El teclado (flechas / I-J-K-L) se suma sin suavizar: cada tecla es una inclinación completa.
       const teclaX = Number(der.isDown) - Number(izq.isDown);
@@ -1625,7 +1627,8 @@ class EscenaJuego extends Phaser.Scene {
       let x = velocidad.x + teclaX / largoTecla * MIRA_VELOCIDAD * freno;
       let y = velocidad.y + teclaY / largoTecla * MIRA_VELOCIDAD * freno;
       const rapidez = Math.hypot(x, y);
-      if (rapidez > MIRA_VELOCIDAD) { x *= MIRA_VELOCIDAD / rapidez; y *= MIRA_VELOCIDAD / rapidez; }
+      const limiteVelocidad = Math.max(MIRA_VELOCIDAD, MIRA_VELOCIDAD_JOYSTICK);
+      if (rapidez > limiteVelocidad) { x *= limiteVelocidad / rapidez; y *= limiteVelocidad / rapidez; }
       const mira = jugador.mira;
       this.apuntarA(mira.x + x * dt / 1000, mira.y + y * dt / 1000, i);
       const color = sobreObjetivo ? PALETA.verde : jugador.color;

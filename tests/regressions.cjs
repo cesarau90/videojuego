@@ -297,3 +297,73 @@ test('Un error vigente permite editar el gamertag y reintentar', async () => {
   assert.equal(env.get('btn-guardar-gamertag').disabled, false);
   assert.equal(env.run('guardandoPuntuacionGlobal'), false);
 });
+
+
+function aimEnvironment(onTarget = false, keyboardRight = false) {
+  const env = gameEnvironment();
+  env.screen('pantalla-juego');
+  env.context.onTarget = onTarget;
+  env.context.keyboardRight = keyboardRight;
+  env.run(
+    'estado.modoMando = true; estado.juegoActivo = true; ' +
+    'Phaser.Math = { Clamp: (value, min, max) => Math.min(max, Math.max(min, value)) }; ' +
+    'globalThis.aimScene = new EscenaJuego(); ' +
+    'aimScene.areaJuego = { xMin: 0, xMax: 5000, yMin: 0, yMax: 5000 }; ' +
+    'const graphic = { setVisible() {}, clear() {}, lineStyle() {}, strokeCircle() {}, lineBetween() {} }; ' +
+    'aimScene.jugadores = [{ mira: { x: 500, y: 500 }, ejes: { x: 0, y: 0, recibido: 0 }, velocidad: { x: 0, y: 0 }, grafico: graphic, texto: { setVisible() {}, setPosition() {} } }]; ' +
+    'aimScene.flechasControl = { right: { isDown: keyboardRight }, left: { isDown: false }, up: { isDown: false }, down: { isDown: false } }; ' +
+    'aimScene.teclasJugador2 = {}; aimScene.mundo = { bringToTop() {} }; ' +
+    'aimScene.objetivoControl = () => onTarget ? {} : null;'
+  );
+  return env;
+}
+
+function travel(env, x, y = 0) {
+  env.run('aimScene.moverControl(' + x + ', ' + y + ');');
+  for (let frame = 0; frame < 10; frame++) {
+    env.advance(20);
+    env.run('aimScene.actualizarControlMira(20);');
+  }
+  return env.run('aimScene.jugadores[0].mira.x - 500');
+}
+
+test('El joystick responde a inclinación media y cruza el tablero más rápido', () => {
+  const half = travel(aimEnvironment(), 0.5);
+  const full = travel(aimEnvironment(), 1);
+  assert.ok(full / 0.2 > 700, 'velocidad sostenida demasiado baja');
+  assert.ok(half / full > 0.4, 'inclinación media demasiado lenta');
+  const targeted = travel(aimEnvironment(true), 1);
+  assert.ok(targeted / full > 0.6 && targeted / full < 0.8, 'freno al apuntar excesivo');
+});
+
+test('Soltar y perder mensajes detienen la mira; el teclado conserva su velocidad', () => {
+  const env = aimEnvironment();
+  travel(env, 1);
+  const before = env.run('aimScene.jugadores[0].mira.x');
+  env.run('aimScene.moverControl(0, 0); aimScene.actualizarControlMira(20);');
+  assert.equal(env.run('aimScene.jugadores[0].mira.x'), before);
+  env.run('aimScene.moverControl(1, 0);');
+  env.advance(700);
+  env.run('aimScene.actualizarControlMira(20);');
+  assert.equal(env.run('aimScene.jugadores[0].mira.x'), before);
+  assert.equal(travel(aimEnvironment(false, true), 0), 120);
+});
+
+test('El mando necesita menos recorrido del pulgar y envía reposo al soltar', () => {
+  const env = channelEnvironment('control.js');
+  env.receive('state', { screen: 'pantalla-juego', mando: true, multi: true, players: { [PHONE3]: 1 } });
+  const zone = env.get('.movement');
+  const pointer = (x) => ({ pointerId: 1, clientX: x, clientY: 200, preventDefault() {} });
+  zone.dispatch('pointerdown', pointer(200));
+  assert.equal(env.sent.filter((m) => m.event === 'move').length, 0, 'apoyar el dedo no debe mover');
+  zone.dispatch('pointermove', pointer(202));
+  assert.equal(env.sent.filter((m) => m.event === 'move').length, 0, 'mantener una zona muerta');
+  zone.dispatch('pointermove', pointer(220));
+  const move = env.sent.filter((m) => m.event === 'move').at(-1);
+  assert.ok(move.payload.x >= 0.45 && move.payload.x <= 0.6);
+  assert.equal(move.payload.y, 0);
+  zone.dispatch('pointerup', pointer(220));
+  assert.equal(env.sent.at(-1).payload.x, 0);
+  env.advance(300);
+  assert.equal(env.sent.at(-1).payload.x, 0);
+});
