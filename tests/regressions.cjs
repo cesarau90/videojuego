@@ -384,6 +384,8 @@ test('Medio mantiene los niveles originales; fácil y difícil ajustan todos los
     env.run('seleccionarDificultad("dificil");');
     const hard = JSON.parse(env.run('JSON.stringify(obtenerConfiguracionNivel(' + i + '))'));
     const hardBoss = JSON.parse(env.run('JSON.stringify(obtenerConfiguracionJefe(' + i + '))'));
+    assert.equal(easy.virusRequeridos, i === 2 ? 20 : base.virusRequeridos);
+    assert.equal(hard.virusRequeridos, base.virusRequeridos);
     assert.ok(easy.tiempoVidaVirus > base.tiempoVidaVirus && hard.tiempoVidaVirus < base.tiempoVidaVirus);
     assert.ok(easy.tiempoVidaVirusMando > base.tiempoVidaVirusMando && hard.tiempoVidaVirusMando < base.tiempoVidaVirusMando);
     assert.ok(easy.tiempoAparicion > base.tiempoAparicion && hard.tiempoAparicion < base.tiempoAparicion);

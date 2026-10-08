@@ -65,6 +65,7 @@ function obtenerConfiguracionNivel(indice = estado.indiceNivel) {
   const dificultad = dificultadActual();
   return {
     ...base,
+    virusRequeridos: estado.dificultad === 'facil' && indice === NIVELES.length - 1 ? 20 : base.virusRequeridos,
     tiempoAparicion: Math.round(base.tiempoAparicion * dificultad.aparicion),
     tiempoVidaVirus: Math.round(base.tiempoVidaVirus * dificultad.vidaVirus),
     tiempoVidaVirusMando: Math.round(base.tiempoVidaVirusMando * dificultad.vidaVirus),

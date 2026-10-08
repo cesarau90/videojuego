@@ -33,6 +33,9 @@ si el navegador permite almacenamiento y se conserva al reintentar, en los cinco
 | Medio | Original | Original | Original | Original | Original | Original | 2 |
 | Difícil | −20% | Intervalo −15% | +25% | Uno más | +25% | −15% | 1 |
 
+En fácil, los objetivos son **10, 15 y 20 amenazas** por nivel; en medio y
+difícil siguen siendo **10, 15 y 25**. Al alcanzar el objetivo aparece el jefe.
+
 Los valores se calculan sobre cada nivel; las vidas del jefe se redondean.
 Los ajustes cooperativos se añaden a la dificultad elegida. En fácil, si solo
 quedan archivos seguros azules, el siguiente turno de generación produce una
